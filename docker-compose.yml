@@ -1,0 +1,85 @@
+services:
+  # ─── Backend API (Express + Prisma + Socket.IO) ───
+  backend:
+    build:
+      context: ./Testictour_be
+      dockerfile: Dockerfile.backend
+    container_name: testictour-backend
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - FRONTEND_URL=http://localhost:3000
+      - RIOT_API_KEY=${RIOT_API_KEY}
+      - MOCK_RIOT_API=${MOCK_RIOT_API:-false}
+      - RIOT_API_REQUEST_INTERVAL_MS=${RIOT_API_REQUEST_INTERVAL_MS:-1200}
+      - BACKEND_SERVICE_URL=http://backend:4000
+      # Uncomment when Redis is available:
+      # - REDIS_URL=redis://redis:6379
+    # depends_on:
+    #   - redis
+    networks:
+      - testictour-net
+
+  # ─── Frontend (Next.js) ───
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.frontend
+      args:
+        - NEXT_PUBLIC_API_URL=http://localhost:4000
+        - NEXT_PUBLIC_BACKEND_URL=http://localhost:4000
+    container_name: testictour-frontend
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - INTERNAL_BACKEND_URL=http://backend:4000/api
+      - NEXT_PUBLIC_API_URL=http://localhost:4000
+      - NEXT_PUBLIC_BACKEND_URL=http://localhost:4000
+    depends_on:
+      - backend
+    networks:
+      - testictour-net
+
+  # ─── Redis (Optional – uncomment when needed) ───
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: testictour-redis
+  #   restart: unless-stopped
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis-data:/data
+  #   networks:
+  #     - testictour-net
+
+  # ─── Worker (Optional – uncomment when Redis is enabled) ───
+  # worker:
+  #   build:
+  #     context: ./Testictour_be
+  #     dockerfile: Dockerfile.backend
+  #   container_name: testictour-worker
+  #   restart: unless-stopped
+  #   command: ["node", "dist/worker.js"]
+  #   environment:
+  #     - NODE_ENV=production
+  #     - DATABASE_URL=${DATABASE_URL}
+  #     - REDIS_URL=redis://redis:6379
+  #     - BACKEND_SERVICE_URL=http://backend:4000
+  #   depends_on:
+  #     - backend
+  #     - redis
+  #   networks:
+  #     - testictour-net
+
+networks:
+  testictour-net:
+    driver: bridge
+
+# volumes:
+#   redis-data:
