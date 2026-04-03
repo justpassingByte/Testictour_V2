@@ -1,0 +1,235 @@
+{
+	"info": {
+		"_postman_id": "b3e3e3e3-e3e3-e3e3-e3e3-e3e3e3e3e3e3",
+		"name": "TesTicTour MiniTour Lobby API",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_collection_link": "https://www.postman.com/collections/b3e3e3e3-e3e3-e3e3-e3e3-e3e3e3e3e3e3"
+	},
+	"item": [
+		{
+			"name": "Create MiniTour Lobby",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"My Awesome MiniTour Lobby\",\n    \"description\": \"Join for a quick and fun match!\",\n    \"image\": null,\n    \"maxPlayers\": 8,\n    \"entryFee\": 100,\n    \"entryType\": \"coins\",\n    \"gameMode\": \"TFT\",\n    \"skillLevel\": \"all\",\n    \"theme\": \"default\",\n    \"tags\": [\"casual\", \"quickplay\"],\n    \"rules\": \"No griefing, have fun\",\n    \"autoStart\": true,\n    \"privateMode\": false,\n    \"prizeDistribution\": \"standard\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/minitour-lobbies",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"minitour-lobbies"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get All MiniTour Lobbies",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/api/minitour-lobbies",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"minitour-lobbies"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get MiniTour Lobby By ID",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/api/minitour-lobbies/{{lobby_id}}",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"minitour-lobbies",
+						"{{lobby_id}}"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Join MiniTour Lobby",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"userId\": \"{{user_id}}\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/minitour-lobbies/{{lobby_id}}/join",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"minitour-lobbies",
+						"{{lobby_id}}",
+						"join"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Start MiniTour Lobby",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/minitour-lobbies/{{lobby_id}}/start",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"minitour-lobbies",
+						"{{lobby_id}}",
+						"start"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Fetch MiniTour Lobby Result",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/minitour-lobbies/{{lobby_id}}/fetch-result",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"minitour-lobbies",
+						"{{lobby_id}}",
+						"fetch-result"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:3000",
+			"type": "string"
+		},
+		{
+			"key": "lobby_id",
+			"value": "ENTER_LOBBY_ID_HERE",
+			"type": "string"
+		},
+		{
+			"key": "user_id",
+			"value": "ENTER_USER_ID_HERE",
+			"type": "string"
+		},
+		{
+			"key": "auth_token",
+			"value": "YOUR_AUTH_TOKEN_HERE",
+			"type": "string"
+		}
+	]
+}

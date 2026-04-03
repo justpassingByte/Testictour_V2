@@ -1,0 +1,125 @@
+{
+  "info": {
+    "_postman_id": "testictour-backend-collection",
+    "name": "TesTicTour Backend API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "url": {"raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"]},
+            "body": {"mode": "raw", "raw": "{\n  \"username\": \"testuser\",\n  \"email\": \"test@example.com\",\n  \"password\": \"12345678\"\n}"}
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "url": {"raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"]},
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"12345678\"\n}"}
+          }
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {"raw": "{{baseUrl}}/api/auth/me", "host": ["{{baseUrl}}"], "path": ["api", "auth", "me"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tournament",
+      "item": [
+        {"name": "List Tournaments (GET)", "request": {"method": "GET", "url": {"raw": "{{baseUrl}}/api/tournaments", "host": ["{{baseUrl}}"], "path": ["api", "tournaments"]}}},
+        {"name": "Create Tournament (POST)", "request": {"method": "POST", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Content-Type", "value": "application/json"}], "url": {"raw": "{{baseUrl}}/api/tournaments", "host": ["{{baseUrl}}"], "path": ["api", "tournaments"]}, "body": {"mode": "raw", "raw": "{\n  \"name\": \"Test Tournament from Phases\",\n  \"startTime\": \"2024-07-01T12:00:00Z\",\n  \"maxPlayers\": 16,\n  \"entryFee\": 50,\n  \"registrationDeadline\": \"2024-07-01T11:00:00Z\",\n  \"phases\": [\n    {\n      \"name\": \"Group Stage\",\n      \"type\": \"points\",\n      \"numberOfRounds\": 3,\n      \"matchesPerRound\": 1,\n      \"lobbySize\": 8,\n      \"advancementCondition\": {\"top\": 4}\n    },\n    {\n      \"name\": \"Finals\",\n      \"type\": \"elimination\",\n      \"numberOfRounds\": 1,\n      \"matchesPerRound\": 1,\n      \"lobbySize\": 4\n    }\n  ]\n}"}}},
+        {"name": "Get Tournament Detail (GET)", "request": {"method": "GET", "url": {"raw": "{{baseUrl}}/api/tournaments/{{tournamentId}}", "host": ["{{baseUrl}}"], "path": ["api", "tournaments", "{{tournamentId}}"]}}},
+        {"name": "Update Tournament (PUT)", "request": {"method": "PUT", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Content-Type", "value": "application/json"}], "url": {"raw": "{{baseUrl}}/api/tournaments/{{tournamentId}}", "host": ["{{baseUrl}}"], "path": ["api", "tournaments", "{{tournamentId}}"]}, "body": {"mode": "raw", "raw": "{\n  \"name\": \"Updated Tournament\"\n}"}}},
+        {"name": "Delete Tournament (DELETE)", "request": {"method": "DELETE", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}], "url": {"raw": "{{baseUrl}}/api/tournaments/{{tournamentId}}", "host": ["{{baseUrl}}"], "path": ["api", "tournaments", "{{tournamentId}}"]}}},
+        {
+          "name": "Trigger Auto Tournament (POST)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "url": {"raw": "{{baseUrl}}/api/tournaments/auto", "host": ["{{baseUrl}}"], "path": ["api", "tournaments", "auto"]},
+            "body": {"mode": "raw", "raw": "{\n  \"templateId\": \"YOUR_TEMPLATE_ID\"\n}"}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Template",
+      "item": [
+        {"name": "List Templates (GET)", "request": {"method": "GET", "url": {"raw": "{{baseUrl}}/api/tournament-templates", "host": ["{{baseUrl}}"], "path": ["api", "tournament-templates"]}}},
+        {
+          "name": "Create Template (POST)", 
+          "request": {
+            "method": "POST", 
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Content-Type", "value": "application/json"}], 
+            "url": {"raw": "{{baseUrl}}/api/tournament-templates", "host": ["{{baseUrl}}"], "path": ["api", "tournament-templates"]}, 
+            "body": {
+              "mode": "raw", 
+              "raw": "{\n  \"name\": \"Giải Đấu 3 Giai Đoạn (Mẫu)\",\n  \"maxPlayers\": 128,\n  \"entryFee\": 100,\n  \"prizeStructure\": {\n    \"1\": 0.5,\n    \"2\": 0.25,\n    \"3\": 0.15,\n    \"4\": 0.1\n  },\n  \"hostFeePercent\": 0.1,\n  \"expectedParticipants\": 128,\n  \"scheduleType\": \"automated\",\n  \"startTime\": \"2024-09-01T19:00:00Z\",\n  \"phases\": [\n    {\n      \"phaseNumber\": 1,\n      \"name\": \"Vòng Loại (128 -> 64)\",\n      \"type\": \"elimination\",\n      \"status\": \"pending\",\n      \"numberOfRounds\": 1,\n      \"matchesPerRound\": 1,\n      \"lobbySize\": 8,\n      \"lobbyAssignment\": \"snake\",\n      \"pointsMapping\": [10, 8, 7, 6, 5, 4, 3, 1],\n      \"carryOverScores\": false,\n      \"tieBreakerRule\": { \"type\": \"highest_placement_in_last_game\" },\n      \"advancementCondition\": {\n        \"type\": \"placement\",\n        \"value\": 4 \n      }\n    },\n    {\n      \"phaseNumber\": 2,\n      \"name\": \"Vòng Bảng (64 -> 8)\",\n      \"type\": \"swiss\",\n      \"status\": \"pending\",\n      \"numberOfRounds\": 3,\n      \"matchesPerRound\": 1,\n      \"lobbySize\": 8,\n      \"lobbyAssignment\": \"swiss\",\n      \"pointsMapping\": [10, 8, 7, 6, 5, 4, 3, 1],\n      \"carryOverScores\": true,\n      \"tieBreakerRule\": { \"type\": \"sum_of_placements\" },\n      \"advancementCondition\": {\n        \"type\": \"top_n_scores\",\n        \"value\": 8\n      }\n    },\n    {\n      \"phaseNumber\": 3,\n      \"name\": \"Vòng Chung Kết (Checkmate)\",\n      \"type\": \"checkmate\",\n      \"status\": \"pending\",\n      \"numberOfRounds\": 5,\n      \"matchesPerRound\": 1,\n      \"lobbySize\": 8,\n      \"lobbyAssignment\": \"seeded\",\n      \"pointsMapping\": [10, 8, 7, 6, 5, 4, 3, 1],\n      \"carryOverScores\": true,\n      \"tieBreakerRule\": { \"type\": \"highest_placement_in_last_game\" },\n      \"advancementCondition\": {\n        \"pointsToActivate\": 18,\n        \"winCondition\": \"placement_1\"\n      }\n    }\n  ]\n}"
+            }
+          }
+        },
+        {"name": "Get Template Detail (GET)", "request": {"method": "GET", "url": {"raw": "{{baseUrl}}/api/tournament-templates/{{templateId}}", "host": ["{{baseUrl}}"], "path": ["api", "tournament-templates", "{{templateId}}"]}}},
+        {"name": "Update Template (PUT)", "request": {"method": "PUT", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Content-Type", "value": "application/json"}], "url": {"raw": "{{baseUrl}}/api/tournament-templates/{{templateId}}", "host": ["{{baseUrl}}"], "path": ["api", "tournament-templates", "{{templateId}}"]}, "body": {"mode": "raw", "raw": "{\n  \"name\": \"Template Updated\"\n}"}}},
+        {"name": "Delete Template (DELETE)", "request": {"method": "DELETE", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}], "url": {"raw": "{{baseUrl}}/api/tournament-templates/{{templateId}}", "host": ["{{baseUrl}}"], "path": ["api", "tournament-templates", "{{templateId}}"]}}}
+      ]
+    },
+    {
+      "name": "Participant",
+      "item": [
+        {"name": "Join Tournament", "request": {"method": "POST", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Content-Type", "value": "application/json"}], "url": {"raw": "{{baseUrl}}/api/tournaments/{{tournamentId}}/join", "host": ["{{baseUrl}}"], "path": ["api", "tournaments", "{{tournamentId}}", "join"]}}},
+        {"name": "List Participants", "request": {"method": "GET", "url": {"raw": "{{baseUrl}}/api/tournaments/{{tournamentId}}/participants", "host": ["{{baseUrl}}"], "path": ["api", "tournaments", "{{tournamentId}}", "participants"]}}},
+        {"name": "Update Participant", "request": {"method": "PUT", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Content-Type", "value": "application/json"}], "url": {"raw": "{{baseUrl}}/api/tournaments/{{tournamentId}}/participants/{{participantId}}", "host": ["{{baseUrl}}"], "path": ["api", "tournaments", "{{tournamentId}}", "participants", "{{participantId}}"]}, "body": {"mode": "raw", "raw": "{\n  \"scoreTotal\": 100\n}"}}},
+        {"name": "Remove Participant", "request": {"method": "DELETE", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}], "url": {"raw": "{{baseUrl}}/api/tournaments/{{tournamentId}}/participants/{{participantId}}", "host": ["{{baseUrl}}"], "path": ["api", "tournaments", "{{tournamentId}}", "participants", "{{participantId}}"]}}}
+      ]
+    },
+    {
+      "name": "Round",
+      "item": [
+        {"name": "List Rounds", "request": {"method": "GET", "url": {"raw": "{{baseUrl}}/api/phases/{{phaseId}}/rounds", "host": ["{{baseUrl}}"], "path": ["api", "phases", "{{phaseId}}", "rounds"]}}},
+        {"name": "Create Round", "request": {"method": "POST", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Content-Type", "value": "application/json"}], "url": {"raw": "{{baseUrl}}/api/phases/{{phaseId}}/rounds", "host": ["{{baseUrl}}"], "path": ["api", "phases", "{{phaseId}}", "rounds"]}, "body": {"mode": "raw", "raw": "{\n  \"roundNumber\": 1,\n  \"startTime\": \"2024-07-01T12:05:00Z\"\n}"}}},
+        {"name": "Auto Advance Round", "request": {"method": "POST", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}], "url": {"raw": "{{baseUrl}}/api/rounds/{{roundId}}/auto-advance", "host": ["{{baseUrl}}"], "path": ["api", "rounds", "{{roundId}}", "auto-advance"]}}},
+        {"name": "List Lobbies in Round", "request": {"method": "GET", "url": {"raw": "{{baseUrl}}/api/rounds/{{roundId}}/lobbies", "host": ["{{baseUrl}}"], "path": ["api", "rounds", "{{roundId}}", "lobbies"]}}}
+      ]
+    },
+    {
+      "name": "Lobby",
+      "item": [
+        {"name": "List Lobbies", "request": {"method": "GET", "url": {"raw": "{{baseUrl}}/api/rounds/{{roundId}}/lobbies", "host": ["{{baseUrl}}"], "path": ["api", "rounds", "{{roundId}}", "lobbies"]}}},
+        {"name": "Create Lobby", "request": {"method": "POST", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Content-Type", "value": "application/json"}], "url": {"raw": "{{baseUrl}}/api/rounds/{{roundId}}/lobbies", "host": ["{{baseUrl}}"], "path": ["api", "rounds", "{{roundId}}", "lobbies"]}, "body": {"mode": "raw", "raw": "{\n  \"name\": \"Lobby 1\"\n}"}}}
+      ]
+    },
+    {
+      "name": "Match",
+      "item": [
+        {"name": "List Matches (GET)", "request": {"method": "GET", "url": {"raw": "{{baseUrl}}/api/lobbies/{{lobbyId}}/matches", "host": ["{{baseUrl}}"], "path": ["api", "lobbies", "{{lobbyId}}", "matches"]}}},
+        {"name": "Create Match (POST)", "request": {"method": "POST", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Content-Type", "value": "application/json"}], "url": {"raw": "{{baseUrl}}/api/lobbies/{{lobbyId}}/matches", "host": ["{{baseUrl}}"], "path": ["api", "lobbies", "{{lobbyId}}", "matches"]}, "body": {"mode": "raw", "raw": "{\n  \"name\": \"Match 1\"\n}"}}},
+        {"name": "Get Match Results (GET)", "request": {"method": "GET", "url": {"raw": "{{baseUrl}}/api/matches/{{matchId}}/results", "host": ["{{baseUrl}}"], "path": ["api", "matches", "{{matchId}}", "results"]}}},
+        {"name": "Fetch & Save Match Data (Riot API, POST)", "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "url": {"raw": "{{baseUrl}}/api/matches/fetchAndSaveMatchData", "host": ["{{baseUrl}}"], "path": ["api", "matches", "fetchAndSaveMatchData"]}, "body": {"mode": "raw", "raw": "{\n  \"matchId\": \"MATCH_ID\",\n  \"region\": \"asia\"\n}"}}}
+      ]
+    },
+    {
+      "name": "Balance",
+      "item": [
+        {"name": "Deposit (POST)", "request": {"method": "POST", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Content-Type", "value": "application/json"}], "url": {"raw": "{{baseUrl}}/api/balance/deposit", "host": ["{{baseUrl}}"], "path": ["api", "balance", "deposit"]}, "body": {"mode": "raw", "raw": "{\n  \"amount\": 100000\n}"}}},
+        {"name": "Get Balance (GET)", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}], "url": {"raw": "{{baseUrl}}/api/balance", "host": ["{{baseUrl}}"], "path": ["api", "balance"]}}},
+        {"name": "Get Transactions (GET)", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}], "url": {"raw": "{{baseUrl}}/api/transactions", "host": ["{{baseUrl}}"], "path": ["api", "transactions"]}}}
+      ]
+    }
+  ]
+} 

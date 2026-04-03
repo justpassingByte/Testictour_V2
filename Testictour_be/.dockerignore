@@ -1,0 +1,10 @@
+node_modules
+dist
+.git
+.gitignore
+.env*
+*.md
+.vscode
+.idea
+.agent
+.ai-devkit.json

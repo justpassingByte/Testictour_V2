@@ -1,0 +1,447 @@
+// Prisma schema generated from AutoTour.md
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------
+// Core Models
+// ----------------------
+model User {
+  id                         String                  @id @default(uuid())
+  username                   String                  @unique
+  email                      String                  @unique
+  password                   String
+  role                       String                  @default("user")
+  puuid                      String?                 @unique
+  riotGameName               String
+  riotGameTag                String
+  region                     String
+  referrer                   String? // Optional referrer code or username
+  isActive                   Boolean                 @default(true)
+  createdAt                  DateTime                @default(now())
+  participants               Participant[]
+  balance                    Balance?
+  transactions               Transaction[]
+  createdTournamentTemplates TournamentTemplate[]    @relation("UserCreatedTournamentTemplates")
+  organizedTournaments       Tournament[]            @relation("UserOrganizedTournaments")
+  matchResults               MatchResult[]
+  playerMatchSummaries       PlayerMatchSummary[]
+  userTournamentSummaries    UserTournamentSummary[]
+  partnerSubscription        PartnerSubscription?
+
+  // MiniTour Relations
+  miniTourMatchResults      MiniTourMatchResult[]
+  miniTourLobbyParticipants MiniTourLobbyParticipant[]
+  createdMiniTourLobbies    MiniTourLobby[]            @relation("CreatedMiniTourLobbies")
+
+  // Admin settings relations
+  sentNotifications         Notification[]
+
+  // Stats cache fields
+  rank               String?
+  rankUpdatedAt      DateTime?
+  totalMatchesPlayed Int       @default(0)
+  averagePlacement   Float     @default(0)
+  topFourRate        Float     @default(0)
+  firstPlaceRate     Float     @default(0)
+  tournamentsPlayed  Int       @default(0)
+  tournamentsWon     Int       @default(0)
+  totalPoints        Int       @default(0)
+  lobbiesPlayed      Int       @default(0)
+  lastUpdatedStats   DateTime?
+}
+
+model TournamentTemplate {
+  id                   String       @id @default(uuid())
+  name                 String
+  maxPlayers           Int
+  entryFee             Float
+  prizeStructure       Json
+  hostFeePercent       Float        @default(0.1)
+  expectedParticipants Int
+  scheduleType         String
+  startTime            String
+  phases               Json?        @default("[]")
+  createdBy            User         @relation("UserCreatedTournamentTemplates", fields: [createdById], references: [id])
+  createdById          String
+  createdAt            DateTime     @default(now())
+  tournaments          Tournament[]
+
+  @@unique([name])
+}
+
+model Tournament {
+  id                      String                  @id @default(uuid())
+  name                    String
+  description             String?
+  image                   String?
+  region                  String?
+  startTime               DateTime
+  endTime                 DateTime?
+  entryFee                Float                   @default(0)
+  organizer               User                    @relation("UserOrganizedTournaments", fields: [organizerId], references: [id])
+  organizerId             String
+  status                  String                  @default("pending")
+  maxPlayers              Int
+  createdAt               DateTime                @default(now())
+  template                TournamentTemplate?     @relation(fields: [templateId], references: [id])
+  templateId              String?
+  auto                    Boolean                 @default(false)
+  registrationDeadline    DateTime
+  participants            Participant[]
+  phases                  Phase[]
+  rewards                 Reward[]
+  prizeStructure          Json
+  hostFeePercent          Float                   @default(0.1)
+  expectedParticipants    Int
+  actualParticipantsCount Int?
+  adjustedPrizeStructure  Json?
+  registered              Boolean?
+  userTournamentSummaries UserTournamentSummary[]
+
+  // Sync status
+  lastSyncTime            DateTime?
+  syncStatus              String?                 @default("IDLE") // e.g., IDLE, SYNCING, SUCCESS, FAILED
+}
+
+model Phase {
+  id                   String     @id @default(uuid())
+  tournament           Tournament @relation(fields: [tournamentId], references: [id])
+  tournamentId         String
+  name                 String
+  phaseNumber          Int
+  type                 String
+  lobbySize            Int?
+  lobbyAssignment      String?
+  advancementCondition Json?
+  advancementDetails   Json? // New: For multi-round advancement, e.g., [{"round": 1, "advances": 32}, {"round": 2, "advances": 8}]
+  matchesPerRound      Int?
+  numberOfRounds       Int?
+  tieBreakerRule       Json? // New: Defines how to resolve ties. e.g. { "type": "highest_last_placement" }
+  pointsMapping        Json? // New: Defines points for placements, e.g. [8,7,6,5,4,3,2,1]
+  carryOverScores      Boolean    @default(false) // New: determines if scores are reset
+  status               String
+  rounds               Round[]
+
+  @@unique([tournamentId, phaseNumber])
+}
+
+model Participant {
+  id              String         @id @default(uuid())
+  tournament      Tournament     @relation(fields: [tournamentId], references: [id])
+  tournamentId    String
+  user            User           @relation(fields: [userId], references: [id])
+  userId          String
+  joinedAt        DateTime       @default(now())
+  scoreTotal      Float          @default(0)
+  eliminated      Boolean        @default(false)
+  checkmateActive Boolean        @default(false)
+  paid            Boolean        @default(false)
+  rewarded        Boolean        @default(false)
+  rewards         Reward[]
+  roundOutcomes   RoundOutcome[]
+
+  @@unique([userId, tournamentId])
+  @@index([userId]) // Added index for faster user-tournament lookups
+}
+
+model Reward {
+  id            String      @id @default(uuid())
+  participant   Participant @relation(fields: [participantId], references: [id])
+  participantId String
+  tournament    Tournament  @relation(fields: [tournamentId], references: [id])
+  tournamentId  String
+  amount        Float
+  status        String
+  sentAt        DateTime?
+}
+
+model Round {
+  id          String         @id @default(uuid())
+  phase       Phase          @relation(fields: [phaseId], references: [id])
+  phaseId     String
+  roundNumber Int
+  startTime   DateTime
+  endTime     DateTime?
+  status      String
+  lobbies     Lobby[]
+  outcomes    RoundOutcome[]
+
+  @@unique([phaseId, roundNumber])
+}
+
+model Lobby {
+  id                    String  @id @default(uuid())
+  round                 Round   @relation(fields: [roundId], references: [id])
+  roundId               String
+  name                  String
+  participants          Json
+  matchId               String?
+  fetchedResult         Boolean @default(false)
+  matches               Match[]
+  completedMatchesCount Int     @default(0)
+}
+
+model Match {
+  id                   String               @id @default(uuid())
+  matchIdRiotApi       String               @unique
+  lobby                Lobby                @relation(fields: [lobbyId], references: [id])
+  lobbyId              String
+  createdAt            DateTime             @default(now())
+  fetchedAt            DateTime?
+  matchData            Json?
+  matchResults         MatchResult[]
+  playerMatchSummaries PlayerMatchSummary[]
+}
+
+model MatchResult {
+  id        String @id @default(uuid())
+  match     Match  @relation(fields: [matchId], references: [id])
+  matchId   String
+  user      User   @relation(fields: [userId], references: [id])
+  userId    String
+  placement Int
+  points    Float
+
+  @@unique([matchId, userId])
+}
+
+model Balance {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String   @unique
+  amount    Float    @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+model Transaction {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  type      String // deposit, withdraw, refund, entry_fee, reward
+  amount    Float
+  status    String // pending, success, failed
+  refId     String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model RoundOutcome {
+  id            String      @id @default(cuid())
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  participantId String
+  round         Round       @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  roundId       String
+  status        String // "advanced", "eliminated"
+  scoreInRound  Int         @default(0)
+
+  @@unique([participantId, roundId])
+}
+
+// New models for performance optimization
+
+model PlayerMatchSummary {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  matchId        String
+  match          Match    @relation(fields: [matchId], references: [id])
+  tournamentId   String
+  tournamentName String
+  roundNumber    Int
+  placement      Int
+  points         Float
+  playedAt       DateTime
+
+  @@unique([userId, matchId])
+  @@index([userId])
+}
+
+model UserTournamentSummary {
+  id           String     @id @default(uuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id])
+  tournamentId String
+  tournament   Tournament @relation(fields: [tournamentId], references: [id])
+  joinedAt     DateTime
+  placement    Int?
+  points       Float      @default(0)
+  eliminated   Boolean    @default(false)
+
+  @@unique([userId, tournamentId])
+  @@index([userId])
+}
+
+// New enum for MiniTourLobby status
+enum MiniTourLobbyStatus {
+  WAITING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+// New model for MiniTour Lobbies
+model MiniTourLobby {
+  id                String              @id @default(uuid())
+  name              String
+  description       String?
+  image             String?
+  status            MiniTourLobbyStatus @default(WAITING)
+  currentPlayers    Int                 @default(0)
+  maxPlayers        Int                 @default(8)
+  entryFee          Float               @default(0)
+  entryType         String              @default("coins")
+  prizePool         Float               @default(0)
+  gameMode          String              @default("Normal")
+  skillLevel        String              @default("Any")
+  theme             String?
+  customLogoUrl     String?
+  partnerRevenueShare Float             @default(0)
+  averageRating     Float               @default(0)
+  totalMatches      Int                 @default(0)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  tags              String[]            @default([])
+  rules             String[]            @default([])
+  prizeDistribution Json?
+  settings          Json?
+
+  // Relations (no explicit host, any player can start/end)
+  creator           User                     @relation("CreatedMiniTourLobbies", fields: [creatorId], references: [id])
+  creatorId         String
+  participants      MiniTourLobbyParticipant[]
+
+  matches MiniTourMatch[]
+}
+
+// New model for Matches within MiniTour Lobbies
+model MiniTourMatch {
+  id                   String                @id @default(uuid())
+  matchIdRiotApi       String?               @unique
+  miniTourLobby        MiniTourLobby         @relation(fields: [miniTourLobbyId], references: [id])
+  miniTourLobbyId      String
+  status               String                @default("PENDING") // PENDING, COMPLETED, FAILED
+  startTime            DateTime?             // Thời điểm trận đấu được bấm nút "Start"
+  fetchedAt            DateTime?
+  matchData            Json?
+  miniTourMatchResults MiniTourMatchResult[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// New model for MiniTourMatch results
+model MiniTourMatchResult {
+  id                String        @id @default(uuid())
+  miniTourMatch     MiniTourMatch @relation(fields: [miniTourMatchId], references: [id], onDelete: Cascade)
+  miniTourMatchId   String
+  user              User          @relation(fields: [userId], references: [id])
+  userId            String
+  placement         Int
+  points            Float
+  prize             Float?
+
+  @@unique([miniTourMatchId, userId])
+}
+
+// New model to link Users to MiniTourLobbies
+model MiniTourLobbyParticipant {
+  id              String        @id @default(uuid())
+  miniTourLobby   MiniTourLobby @relation(fields: [miniTourLobbyId], references: [id], onDelete: Cascade)
+  miniTourLobbyId String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          String
+  joinedAt        DateTime      @default(now())
+  isHost          Boolean       @default(false) // This can be used for UI distinction if needed, but not for control
+
+  totalPoints      Int      @default(0)
+  matchesPlayed    Int      @default(0)
+  averagePlacement Float    @default(0.0)
+  lastFivePlacements Int[]
+  @@unique([miniTourLobbyId, userId])
+}
+
+// Partner Subscription Model
+model PartnerSubscription {
+  id           String    @id @default(uuid())
+  user         User      @relation(fields: [userId], references: [id])
+  userId       String    @unique
+  plan         String    @default("FREE") // FREE, PRO, ENTERPRISE
+  status       String    @default("ACTIVE")
+  startDate    DateTime  @default(now())
+  endDate      DateTime?
+  features     Json      @default("{}")
+  monthlyPrice Float?
+  annualPrice  Float?
+  autoRenew    Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+// ─── Admin Settings Models ───────────────────────────────────────────
+
+model Notification {
+  id          String   @id @default(cuid())
+  title       String
+  body        String
+  targetType  String   // "all" | "players" | "partners" | "tier:PRO" | "tier:ENTERPRISE"
+  sentBy      String
+  sentAt      DateTime @default(now())
+  status      String   @default("sent") // "sent" | "cancelled"
+
+  sender      User     @relation(fields: [sentBy], references: [id])
+}
+
+model PlatformSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  type      String   // "boolean" | "number" | "string"
+  label     String
+  group     String   // "general" | "financial" | "limits"
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+}
+
+model FeatureFlag {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  enabled     Boolean  @default(false)
+  description String
+  updatedAt   DateTime @updatedAt
+  updatedBy   String?
+}
+
+model NotificationTemplate {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  title     String
+  body      String
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Replaces hardcoded plan prices/limits in AdminPartnerSubscriptionTab.tsx
+model SubscriptionPlanConfig {
+  id                    String   @id @default(cuid())
+  plan                  String   @unique // "FREE" | "PRO" | "ENTERPRISE"
+  monthlyPrice          Float    @default(0)
+  annualPrice           Float    @default(0)
+  maxLobbies            Int      @default(1)
+  maxPlayersPerLobby    Int      @default(8)
+  maxTournamentsPerMonth Int     @default(5)
+  features              Json     @default("{}")
+  updatedAt             DateTime @updatedAt
+  updatedBy             String?
+}
+
