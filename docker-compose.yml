@@ -13,10 +13,7 @@ services:
       - NODE_ENV=production
       - DATABASE_URL=${DATABASE_URL}
       - JWT_SECRET=${JWT_SECRET}
-      - FRONTEND_URL=http://<IP_CỦA_VPS>
-      - RIOT_API_KEY=${RIOT_API_KEY}
-      - MOCK_RIOT_API=${MOCK_RIOT_API:-false}
-      - RIOT_API_REQUEST_INTERVAL_MS=${RIOT_API_REQUEST_INTERVAL_MS:-1200}
+      - FRONTEND_URL=http://${VPS_IP:-localhost}
       - BACKEND_SERVICE_URL=http://testictour-backend:4000
       - GRIMOIRE_API_URL=http://grimoire-backend:3001
       # Uncomment when Redis is available:
@@ -32,8 +29,8 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.frontend
       args:
-        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:4000}
-        - NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL:-http://localhost:4000}
+        - NEXT_PUBLIC_API_URL=http://${VPS_IP:-localhost}:4000
+        - NEXT_PUBLIC_BACKEND_URL=http://${VPS_IP:-localhost}:4000
     container_name: testictour-frontend
     restart: unless-stopped
     # Đưa lại về port 80 để truy cập IP là vào web luôn
@@ -41,8 +38,8 @@ services:
       - "80:3000" 
     environment:
       - INTERNAL_BACKEND_URL=http://testictour-backend:4000/api
-      - NEXT_PUBLIC_API_URL=http://<IP_CỦA_VPS>:4000
-      - NEXT_PUBLIC_BACKEND_URL=http://<IP_CỦA_VPS>:4000
+      - NEXT_PUBLIC_API_URL=http://${VPS_IP:-localhost}:4000
+      - NEXT_PUBLIC_BACKEND_URL=http://${VPS_IP:-localhost}:4000
     depends_on:
       - backend
     networks:

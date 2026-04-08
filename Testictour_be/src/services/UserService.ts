@@ -2,7 +2,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { prisma } from './prisma';
 import ApiError from '../utils/ApiError';
-import RiotApiService from './RiotApiService';
+import GrimoireService from './GrimoireService';
 import { getRegionalRoutingValue, getPlatformIdentifier } from '../utils/RegionMapper';
 
 const SALT_ROUNDS = 10;
@@ -30,7 +30,7 @@ export default class UserService {
       const regionalRouting = getRegionalRoutingValue(region);
       platformRegion = getPlatformIdentifier(region);
       try {
-        puuid = await RiotApiService.getSummonerPuuid(gameName, tagName, regionalRouting);
+        puuid = await GrimoireService.fetchPuuid(gameName, tagName, region);
       } catch (error: any) {
         console.warn('Could not fetch PUUID for user', username, ':', error.message);
         // Continue registration without PUUID if fetching fails
@@ -124,7 +124,7 @@ export default class UserService {
 
             if (userData.username && userData.tagName && userData.region) {
               try {
-                puuid = await RiotApiService.getSummonerPuuid(userData.username, userData.tagName, regionalRouting);
+                puuid = await GrimoireService.fetchPuuid(userData.username, userData.tagName, userData.region);
               } catch (error: any) {
                 console.warn('Could not fetch PUUID for imported user', userData.username, ':', error.message);
                 // Continue without PUUID if fetching fails

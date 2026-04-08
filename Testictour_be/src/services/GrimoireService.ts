@@ -72,6 +72,7 @@ export default class GrimoireService {
     startTime?: number,
     endTime?: number,
     allPuuids?: string[],
+    matchId?: string
   ): Promise<{ match: GrimoireMatchData | null; matchIds?: string[]; message?: string }> {
     try {
       logger.info(`[GrimoireService] Calling Grimoire API to fetch latest match for ${puuids.length} PUUIDs`);
@@ -83,6 +84,7 @@ export default class GrimoireService {
         endTime,
         count: 5,
         allPuuids,
+        matchId,
       }, {
         timeout: 30000, // 30s timeout — Riot API calls take time
       });
@@ -103,6 +105,79 @@ export default class GrimoireService {
         const message = error.response?.data?.error || error.message;
         logger.error(`[GrimoireService] Grimoire API error (${status}): ${message}`);
         throw new ApiError(status, `Grimoire API error: ${message}`);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Fetch a player's PUUID from Grimoire's internal API using their Riot ID.
+   * 
+   * @param gameName - Riot game name
+   * @param tagLine - Riot tag line
+   * @param region - Platform region (e.g., vn2, sg2) or continental region 
+   * @returns PUUID string
+   */
+  static async fetchPuuid(gameName: string, tagLine: string, region: string): Promise<string> {
+    try {
+      logger.info(`[GrimoireService] Fetching PUUID for ${gameName}#${tagLine} from Grimoire API`);
+
+      const response = await axios.post(`${GRIMOIRE_API_URL}/api/internal/summoner/puuid`, {
+        gameName,
+        tagLine,
+        region,
+      }, {
+        timeout: 15000, 
+      });
+
+      if (!response.data.success || !response.data.puuid) {
+        throw new ApiError(500, response.data.error || 'Grimoire API failed to return PUUID');
+      }
+
+      return response.data.puuid;
+
+    } catch (error: any) {
+      if (error.isAxiosError) {
+        const status = error.response?.status || 500;
+        const message = error.response?.data?.error || error.message;
+        logger.warn(`[GrimoireService] Failed to fetch PUUID (${status}): ${message}`);
+        throw new ApiError(status, `Failed to fetch PUUID: ${message}`);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Fetch raw Riot match data proxied through Grimoire's internal API.
+   * This is used for backward compatibility with existing parsers (MatchResultService, etc).
+   * 
+   * @param matchId - Riot match ID
+   * @param region - Platform region
+   * @returns Raw Riot Match Data
+   */
+  static async fetchRawRiotMatch(matchId: string, region: string): Promise<any> {
+    try {
+      logger.info(`[GrimoireService] Fetching raw Riot match data for ${matchId} from Grimoire API`);
+
+      const response = await axios.post(`${GRIMOIRE_API_URL}/api/internal/riot/match`, {
+        matchId,
+        region,
+      }, {
+        timeout: 15000, 
+      });
+
+      if (!response.data.success || !response.data.data) {
+        throw new ApiError(500, response.data.error || 'Grimoire API failed to return raw match data');
+      }
+
+      return response.data.data;
+
+    } catch (error: any) {
+      if (error.isAxiosError) {
+        const status = error.response?.status || 500;
+        const message = error.response?.data?.error || error.message;
+        logger.warn(`[GrimoireService] Failed to fetch raw match (${status}): ${message}`);
+        throw new ApiError(status, `Failed to fetch raw match: ${message}`);
       }
       throw error;
     }

@@ -1,5 +1,5 @@
 import { Job } from 'bullmq';
-import RiotApiService from '../services/RiotApiService';
+import GrimoireService from '../services/GrimoireService';
 import logger from '../utils/logger';
 import { prisma } from '../services/prisma';
 import MiniTourMatchResultService from '../services/MiniTourMatchResultService';
@@ -40,11 +40,9 @@ export default async function (job: Job<FetchMiniTourMatchDataJobData>, ioClient
     // Default to 'sea' if no region is set on the lobby
     const region = 'sea'; 
 
-    const riotMatchData = await RiotApiService.fetchMatchData(
+    const riotMatchData = await GrimoireService.fetchRawRiotMatch(
       miniTourMatch.matchIdRiotApi,
-      region,
-      miniTourMatch.miniTourLobbyId,
-      miniTourMatch.miniTourLobby.participants
+      region
     );
 
     // Create a summarized version of the match data

@@ -5,7 +5,7 @@ import SummaryManagerService from './SummaryManagerService';
 import ApiError from '../utils/ApiError';
 import logger from '../utils/logger';
 import { fetchMatchDataQueue, fetchMiniTourMatchDataQueue } from '../lib/queues';
-import RiotApiService from './RiotApiService';
+import GrimoireService from './GrimoireService';
 
 export default class MatchService {
   static async list(lobbyId: string) {
@@ -278,59 +278,26 @@ export default class MatchService {
     if (targetParticipantsPuids.length === 0) {
       throw new ApiError(400, 'targetParticipantsPuids cannot be empty');
     }
-    const mainPuuid = targetParticipantsPuids[1];
-    logger.debug(`findMatchByCriteria: Using mainPuuid: ${mainPuuid} for Riot API call.`);
     try {
-      const matchIds = await RiotApiService.fetchMatchIdsByPuuid(
-        mainPuuid,
+      logger.info(`findMatchByCriteria: Calling GrimoireService for target participants.`);
+      const response = await GrimoireService.fetchLatestMatch(
+        targetParticipantsPuids, // pass all puuids, Grimoire will use the first one to poll
         region,
         startTime,
         endTime,
-        maxMatchesToSearch,
-        0
+        targetParticipantsPuids // all targets to verify
       );
 
-      if (matchIds.length === 0) {
-        logger.debug('No match IDs found for the main PUUID in the given criteria.');
-        return null;
-      }
-      logger.info(`Fetched potential match IDs for ${mainPuuid}: ${matchIds.join(', ')}`); // Log all fetched match IDs
-
-      for (const matchIdToProcess of matchIds) {
-        logger.info(`Checking match: ${matchIdToProcess} for all target participants.`);
-
-        // Introduce a delay to avoid hitting Riot API rate limits
-        await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay
-
-        let riotMatchData;
-        try {
-          riotMatchData = await RiotApiService.fetchMatchData(matchIdToProcess, region, undefined, []);
-        } catch (fetchError: any) {
-          logger.warn(`Failed to fetch data for match ${matchIdToProcess}: ${fetchError.message}. Skipping.`);
-          continue; // Skip to the next match if data fetching fails
-        }
-        
-        const riotParticipantsPuids = riotMatchData.info.participants.map((p: any) => p.puuid);
-
-        logger.info(`Comparing participants for Match ID ${matchIdToProcess}:`);
-        logger.info(`  Local Lobby PUUIDs: ${targetParticipantsPuids.join(', ')}`);
-        logger.info(`  Riot Match PUUIDs: ${riotParticipantsPuids.join(', ')}`);
-
-        const allParticipantsFound = targetParticipantsPuids.every(targetPuuid =>
-          riotParticipantsPuids.includes(targetPuuid)
-        );
-
-        if (allParticipantsFound) {
-          logger.info(`Found matching Riot API match: ${matchIdToProcess}`);
-          return matchIdToProcess; // Return the match ID as soon as a match is found
-        }
+      if (response.match && response.match.matchId) {
+        logger.info(`Found matching match via Grimoire: ${response.match.matchId}`);
+        return response.match.matchId;
       }
 
       logger.info('None of the fetched matches contained all target participants.');
-      return null; // No matching match found after checking all IDs
+      return null;
     } catch (error: any) {
-      logger.error('Error in findMatchByCriteria:', error.response ? error.response.data : error.message);
-      throw new ApiError(error.response ? error.response.status : 500, `Failed to fetch match IDs from Riot API: ${error.message}`);
+      logger.error('Error in findMatchByCriteria:', error.message);
+      throw new ApiError(500, `Failed to fetch match from Grimoire API: ${error.message}`);
     }
   }
 

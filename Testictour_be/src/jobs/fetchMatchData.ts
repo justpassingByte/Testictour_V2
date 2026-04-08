@@ -1,7 +1,7 @@
 import { Job } from 'bullmq';
 import MatchService from '../services/MatchService';
 import MatchResultService from '../services/MatchResultService';
-import RiotApiService from '../services/RiotApiService';
+import GrimoireService from '../services/GrimoireService';
 import logger from '../utils/logger';
 import { prisma } from '../services/prisma';
 import { Socket } from 'socket.io-client';
@@ -43,8 +43,12 @@ export default async function (job: Job<FetchMatchDataJobData>, ioClient: Socket
       orderBy: { scoreTotal: 'desc' }
     });
 
-    // Fetch match data from Riot API (or mock) using the specific lobby participants
-    const riotMatchData = await RiotApiService.fetchMatchData(riotMatchId, region, lobbyId, lobbyParticipants);
+    // Fetch match data from Grimoire API using the specific matchId
+    const riotMatchData = await GrimoireService.fetchRawRiotMatch(riotMatchId, region);
+
+    if (!riotMatchData) {
+      throw new Error(`Failed to fetch match ${riotMatchId} from Grimoire API`);
+    }
 
     // Save the fetched match data to the database (reintroduced logic)
     let dbMatch;
