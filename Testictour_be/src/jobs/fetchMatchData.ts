@@ -1,89 +1,131 @@
 import { Job } from 'bullmq';
-import MatchService from '../services/MatchService';
 import MatchResultService from '../services/MatchResultService';
 import GrimoireService from '../services/GrimoireService';
+import LobbyStateService from '../services/LobbyStateService';
+import { LOBBY_STATE } from '../constants/lobbyStates';
 import logger from '../utils/logger';
 import { prisma } from '../services/prisma';
 import { Socket } from 'socket.io-client';
 import { fetchMatchDataQueue } from '../lib/queues';
 
 interface FetchMatchDataJobData {
-  matchId: string;
-  riotMatchId: string;
-  region: string;
   lobbyId: string;
+  puuids?: string[];      // provided for context but fetched dynamically at runtime
+  region: string;
+  candidateMatchId?: string;
 }
 
-export default async function (job: Job<FetchMatchDataJobData>, ioClient: Socket) {
+export default async function fetchMatchData(job: Job<FetchMatchDataJobData>, ioClient: Socket) {
   logger.info(`MatchDataWorker: Processing job ${job.id} of type ${job.name}`);
-  const { matchId, riotMatchId, region, lobbyId } = job.data;
+  const { lobbyId, region, candidateMatchId } = job.data;
 
-  try {
-    // Fetch the match and its related lobby
-    const match = await prisma.match.findUnique({
-      where: { id: matchId },
-      include: {
-        lobby: true, // Only include the lobby itself
+  // 1. Fetch lobby + current state
+  const lobby = await prisma.lobby.findUnique({
+    where: { id: lobbyId },
+    include: {
+      round: {
+        include: { phase: { include: { tournament: { select: { region: true } } } } }
       }
-    });
-
-    if (!match || !match.lobby) {
-      logger.error(`Match ${matchId} or its lobby not found for processing.`);
-      throw new Error(`Match ${matchId} or its lobby not found.`);
     }
+  });
 
-    // Fetch participants for the specific lobby using the participants JSON field on Lobby
-    const lobbyParticipantUserIds = match.lobby.participants as string[]; // Assuming it's an array of user IDs
-
-    const lobbyParticipants = await prisma.participant.findMany({
-      where: {
-        userId: { in: lobbyParticipantUserIds }, // Filter by userId present in the lobby's participants list
-        eliminated: false // Only active participants
-      },
-      orderBy: { scoreTotal: 'desc' }
-    });
-
-    // Fetch match data from Grimoire API using the specific matchId
-    const riotMatchData = await GrimoireService.fetchRawRiotMatch(riotMatchId, region);
-
-    if (!riotMatchData) {
-      throw new Error(`Failed to fetch match ${riotMatchId} from Grimoire API`);
-    }
-
-    // Save the fetched match data to the database (reintroduced logic)
-    let dbMatch;
-    const existingMatch = await prisma.match.findUnique({ where: { id: matchId } });
-
-    if (existingMatch) {
-      logger.info(`Updating existing match ${existingMatch.id} with new data.`);
-      dbMatch = await prisma.match.update({
-        where: { id: existingMatch.id },
-        data: { matchData: riotMatchData as any, fetchedAt: new Date() }, // Cast to any to avoid JsonValue type issues
-      });
-    } else {
-      logger.info(`Creating new match with matchIdRiotApi: ${riotMatchId}, lobbyId: ${lobbyId}, Prisma match ID: ${matchId}.`);
-      dbMatch = await prisma.match.create({
-        data: {
-          id: matchId,
-          matchIdRiotApi: riotMatchId,
-          lobbyId: lobbyId,
-          fetchedAt: new Date(),
-          matchData: riotMatchData as any, // Cast to any to avoid JsonValue type issues
-        },
-      });
-    }
-
-    const processResult = await MatchResultService.processMatchResults(dbMatch.id, riotMatchData, ioClient);
-
-    // If MatchResultService returned a new job to queue (e.g., for next checkmate match)
-    if (processResult.newJob) {
-      logger.info(`Queueing new job ${processResult.newJob.name} from MatchResultService for match ID: ${dbMatch.id}`);
-      await fetchMatchDataQueue.add(processResult.newJob.name, processResult.newJob.data);
-    }
-
-    logger.info(`MatchDataWorker: Job ${job.id} completed successfully.`);
-  } catch (error) {
-    logger.error(`MatchDataWorker: Job ${job.id} failed with error: ${error instanceof Error ? error.message : String(error)}`, error instanceof Error ? error : new Error(String(error)));
-    throw error;
+  if (!lobby) {
+    logger.error(`MatchDataWorker: lobby ${lobbyId} not found`);
+    return;
   }
-} 
+
+  if (lobby.state !== LOBBY_STATE.PLAYING) {
+    logger.warn(`MatchDataWorker: lobby ${lobbyId} is not in PLAYING state (state=${lobby.state}). Aborting poll.`);
+    return;
+  }
+
+  // 2. Get CURRENT active participants (dynamically — accounts for post-assignment dropouts)
+  const participantUserIds = lobby.participants as string[];
+  const participants = await prisma.participant.findMany({
+    where: { userId: { in: participantUserIds }, eliminated: false },
+    include: { user: { select: { puuid: true } } },
+  });
+  const puuids = participants
+    .map(p => p.user?.puuid)
+    .filter((puuid): puuid is string => Boolean(puuid));
+
+  if (puuids.length === 0) {
+    logger.warn(`MatchDataWorker: lobby ${lobbyId} — no PUUIDs found for participants. Flagging for admin review.`);
+    await LobbyStateService.flagForAdminReview(lobbyId, 'no_puuids');
+    return;
+  }
+
+  // 3. Smart polling delay calculation based on elapsed since matchStartedAt
+  //    matchStartedAt is set to now + 90s when lobby enters PLAYING (loading screen offset)
+  const matchStartedAt = lobby.matchStartedAt ? new Date(lobby.matchStartedAt).getTime() : Date.now();
+  const elapsedMin = (Date.now() - matchStartedAt) / 60_000;
+
+  // 4. Check 50-min max polling timeout → flag for admin review
+  if (elapsedMin > 50) {
+    logger.warn(`MatchDataWorker: lobby ${lobbyId} exceeded 50-min polling limit. Flagging for admin review.`);
+    await LobbyStateService.flagForAdminReview(lobbyId, 'match_timeout');
+    return;
+  }
+
+  // 5. Determine effective region (from tournament if not in job data)
+  const effectiveRegion = region
+    || lobby.round.phase.tournament?.region
+    || 'sea';
+
+  // 6. Call Grimoire /validate — throws on Grimoire API errors (handled by BullMQ retry)
+  let result: Awaited<ReturnType<typeof GrimoireService.validateMatch>>;
+  try {
+    result = await GrimoireService.validateMatch(
+      puuids,
+      Math.floor(matchStartedAt / 1000),  // epoch seconds
+      effectiveRegion,
+      candidateMatchId,
+    );
+  } catch (grimoireError: any) {
+    // Grimoire API error (5xx / timeout) → throw → BullMQ retries with exponential backoff
+    logger.warn(`MatchDataWorker: Grimoire API error for lobby ${lobbyId}: ${grimoireError.message}`);
+    throw grimoireError;
+  }
+
+  if (result.status === 'pending') {
+    // No valid match found yet — re-queue with smart polling delay
+    let retryDelay: number;
+    if (elapsedMin < 10) retryDelay = 60_000;
+    else if (elapsedMin < 25) retryDelay = 20_000;
+    else if (elapsedMin < 40) retryDelay = 8_000;
+    else retryDelay = 5_000;
+
+    logger.info(`MatchDataWorker: lobby ${lobbyId} — no match yet (${elapsedMin.toFixed(1)}min elapsed). Re-queuing in ${retryDelay}ms`);
+    await fetchMatchDataQueue.add('fetchMatchData', job.data, { delay: retryDelay });
+    await prisma.lobby.update({ where: { id: lobbyId }, data: { lastPolledAt: new Date() } });
+    return;
+  }
+
+  if (result.status === 'invalid') {
+    // Match found but failed validation — log and keep polling
+    logger.warn(`MatchDataWorker: lobby ${lobbyId} — match invalid: ${result.reason}. Re-polling in 10s.`);
+    await fetchMatchDataQueue.add('fetchMatchData', job.data, { delay: 10_000 });
+    return;
+  }
+
+  // 7. status === 'valid' — create Match record NOW (not at lobby creation)
+  const match = await prisma.match.create({
+    data: {
+      matchIdRiotApi: result.matchId!,
+      lobbyId,
+      fetchedAt: new Date(),
+      matchData: result.enrichedMatch as any,
+    },
+  });
+
+  logger.info(`MatchDataWorker: lobby ${lobbyId} — match ${result.matchId} validated and created (Match.id=${match.id})`);
+
+  // 8. Process results via MatchResultService (awards points, emits events)
+  await MatchResultService.processMatchResults(match.id, result.enrichedMatch as any, ioClient);
+
+  // 9. Transition lobby to FINISHED
+  await LobbyStateService.transitionPhase(lobbyId, LOBBY_STATE.PLAYING, LOBBY_STATE.FINISHED);
+
+  logger.info(`MatchDataWorker: job ${job.id} completed — lobby ${lobbyId} → FINISHED`);
+}
+

@@ -37,7 +37,7 @@ export function TournamentCard({ tournament, index }: { tournament: ITournament;
 
   return (
     <Card 
-      className="overflow-hidden transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1 animate-fade-in-up bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20"
+      className="overflow-hidden transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1 animate-fade-in-up bg-card shadow-sm border border-white/10"
       style={{ animationDelay: `${(index || 0) * 100}ms` }}
     >
       <CardHeader className="p-0">
@@ -93,7 +93,7 @@ export function TournamentCard({ tournament, index }: { tournament: ITournament;
       </CardContent>
       <CardFooter className="flex justify-between p-6 pt-0">
         <Link href={`/tournaments/${tournament.id}`}>
-          <Button variant="ghost" className="flex items-center gap-1">
+          <Button variant="ghost" className="btn-zodiac flex items-center justify-center gap-1 px-6">
             {t('view')}
             <ArrowRight className="ml-1 h-4 w-4" />
           </Button>

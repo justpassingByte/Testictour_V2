@@ -5,12 +5,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { IRound, PlayerRoundStats, ITournament } from "@/app/types/tournament"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Trophy, Medal, Star } from "lucide-react"
+import { Trophy, Medal, Star, ChevronDown, ChevronUp } from "lucide-react"
 import { format } from "date-fns"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { Button } from "@/components/ui/button"
 
 import { ResultsTab } from "./tabs/ResultsTab"
 import { LobbiesTab } from "./tabs/LobbiesTab"
 import { StatisticsTab } from "./tabs/StatisticsTab"
+import { MatchCompPanel, isGrimoireMatchData } from "@/components/match/MatchCompPanel"
+import { GrimoireMatchData } from "@/app/types/riot"
 
 interface RoundTabsProps {
   round: IRound
@@ -83,9 +87,9 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
               
               const endTime = matchInfo.gameEndTimestamp
                 ? new Date(matchInfo.gameEndTimestamp)
-                : new Date(startTime.getTime() + matchInfo.gameDuration * 1000);
+                : new Date(startTime.getTime() + (matchInfo.gameDuration || 1800) * 1000);
               
-              const durationInSeconds = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
+              const durationInSeconds = matchInfo.gameDuration || Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
 
               const formatDuration = (seconds: number) => {
                 const minutes = Math.floor(seconds / 60);
@@ -147,46 +151,72 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
                       </div>
                     </div>
                     
-                    {/* Player results table */}
-                    <div className="border rounded-md">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b bg-muted/50">
-                            <th className="py-2 px-4 text-left">Player</th>
-                            <th className="py-2 px-4 text-center">Placement</th>
-                            <th className="py-2 px-4 text-center">Points</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {tournamentMatchResults
-                            .sort((a, b) => a.placement - b.placement)
-                            .map((result) => {
-                              const participant = tournament.participants?.find(p => p.userId === result.participantId);
-                              return (
-                                <tr key={result.participantId} className="border-b last:border-0">
-                                  <td className="py-2 px-4">
-                                    {participant?.user?.riotGameName || "Unknown"}
-                                  </td>
-                                  <td className="py-2 px-4 text-center">
-                                    <span className={`
-                                      inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium
-                                      ${result.placement === 1 ? "bg-yellow-500/20 text-yellow-500" : ""}
-                                      ${result.placement === 2 ? "bg-gray-400/20 text-gray-400" : ""}
-                                      ${result.placement === 3 ? "bg-amber-700/20 text-amber-700" : ""}
-                                      ${result.placement > 3 ? "bg-secondary" : ""}
-                                    `}>
-                                      {result.placement}
-                                    </span>
-                                  </td>
-                                  <td className="py-2 px-4 text-center font-medium">
-                                    {result.points} pts
-                                  </td>
+                    {/* Collapsible Player results — rich comp view if Grimoire data present */}
+                    <Collapsible>
+                      <div className="flex justify-center mb-4">
+                        <CollapsibleTrigger asChild>
+                          <Button variant="outline" size="sm" className="w-full text-muted-foreground hover:text-primary transition-colors hover:bg-primary/5">
+                            Show Details <ChevronDown className="h-4 w-4 ml-2" />
+                          </Button>
+                        </CollapsibleTrigger>
+                      </div>
+                      <CollapsibleContent className="animate-in fade-in zoom-in-95 duration-200">
+                        {isGrimoireMatchData(match.matchData) ? (
+                          // Rich enriched view — traits, units, items, augments
+                          <MatchCompPanel
+                            matchData={match.matchData as GrimoireMatchData}
+                            resultMap={Object.fromEntries(
+                              tournamentMatchResults.map(r => [
+                                // We need puuid here; fall back to participantId as key
+                                tournament.participants?.find(p => p.userId === r.participantId)?.user?.puuid ?? r.participantId,
+                                { placement: r.placement, points: r.points }
+                              ])
+                            )}
+                          />
+                        ) : (
+                          // Legacy simple table fallback
+                          <div className="border rounded-md">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b bg-muted/50">
+                                  <th className="py-2 px-4 text-left">Player</th>
+                                  <th className="py-2 px-4 text-center">Placement</th>
+                                  <th className="py-2 px-4 text-center">Points</th>
                                 </tr>
-                              );
-                            })}
-                        </tbody>
-                      </table>
-                    </div>
+                              </thead>
+                              <tbody>
+                                {tournamentMatchResults
+                                  .sort((a, b) => a.placement - b.placement)
+                                  .map((result) => {
+                                    const participant = tournament.participants?.find(p => p.userId === result.participantId);
+                                    return (
+                                      <tr key={result.participantId} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
+                                        <td className="py-2 px-4">
+                                          {participant?.user?.riotGameName || "Unknown"}
+                                        </td>
+                                        <td className="py-2 px-4 text-center">
+                                          <span className={`
+                                            inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium
+                                            ${result.placement === 1 ? "bg-yellow-500/20 text-yellow-500" : ""}
+                                            ${result.placement === 2 ? "bg-gray-400/20 text-gray-400" : ""}
+                                            ${result.placement === 3 ? "bg-amber-700/20 text-amber-700" : ""}
+                                            ${result.placement > 3 ? "bg-secondary" : ""}
+                                          `}>
+                                            {result.placement}
+                                          </span>
+                                        </td>
+                                        <td className="py-2 px-4 text-center font-medium">
+                                          {result.points} pts
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </CollapsibleContent>
+                    </Collapsible>
                   </CardContent>
                 </Card>
               );
@@ -215,7 +245,7 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
         )}
       </TabsContent>
       <TabsContent value="lobbies">
-        <LobbiesTab round={round} allPlayers={allPlayers} numMatches={numMatches} />
+        <LobbiesTab round={round} allPlayers={allPlayers} numMatches={numMatches} tournamentId={tournament.id} />
       </TabsContent>
       <TabsContent value="statistics">
         <StatisticsTab allPlayers={allPlayers} />

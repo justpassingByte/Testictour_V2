@@ -13,7 +13,13 @@ import { MiniTourLobby } from "@/app/stores/miniTourLobbyStore"
 import TournamentDirectoryClient from "./TournamentDirectoryClient"
 import { useTranslations } from 'next-intl';
 
-const defaultTFTImage = "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80"
+const defaultTFTImage = "/tft_user_upload.png"
+
+const DiscordIcon = ({ className }: { className?: string }) => (
+  <svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" className={className}>
+    <path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z" />
+  </svg>
+)
 
 interface HomePageClientProps {
   tournaments: ITournament[];
@@ -35,42 +41,78 @@ export default function HomePageClient({ tournaments, lobbies }: HomePageClientP
   return (
     <div>
       {/* Hero Section */}
-      <section className="hero-pattern py-16 md:py-24 border-b">
-        <div className="container">
-          <div className="grid gap-8 md:grid-cols-2 items-center">
-            <div className="space-y-6 animate-fade-in">
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight">
-                <span className="gradient-text">{t('hero_title_part1')}</span> {t('hero_title_part2')}
-              </h1>
-              <p className="text-xl text-muted-foreground">
-                {t('hero_description')}
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <Button size="lg" asChild>
-                  <Link href="/tournaments">{t('browse_tournaments')}</Link>
-                </Button>
-                <Button size="lg" variant="outline" asChild>
-                  <Link href="/leaderboard">{t('leaderboard')}</Link>
-                </Button>
-              </div>
-            </div>
-            <div className="relative animate-slide-up">
-              <div className="aspect-[4/3] rounded-lg overflow-hidden border shadow-lg">
+      <section className="hero-pattern py-8 md:py-16 border-b overflow-hidden relative">
+        <div className="w-full px-4 sm:px-8 xl:px-12 mx-auto max-w-[2560px]">
+          <div className="flex flex-col lg:flex-row gap-8 xl:gap-16 items-center w-full">
+            {/* Left Column: Text content wrapped in Vegas Background Panel */}
+            <div className="w-full lg:w-[68%] xl:w-[72%] relative p-8 md:p-14 lg:p-20 xl:p-24 rounded-[3rem] overflow-hidden shadow-2xl border border-primary/20 group min-h-[550px] md:min-h-[650px] xl:min-h-[750px] flex flex-col justify-center">
+              {/* Vegas Background Layer */}
+              <div className="absolute inset-0 z-0 bg-background/80">
                 <Image
-                  width={800}
-                  height={600}
-                  src={defaultTFTImage}
-                  alt="TFT Tournament"
-                  className="w-full h-full object-cover"
+                  fill
+                  src="/hero-bg.png"
+                  alt="Vegas Stage Background"
+                  className="object-cover transition-transform duration-[10s] ease-out group-hover:scale-105 opacity-60"
                   priority
                 />
+                {/* Uniform subtle darkening to ensure text readability without hiding the image */}
+                <div className="absolute inset-0 bg-black/30 dark:bg-black/40 mix-blend-multiply"></div>
               </div>
-              <div className="absolute -bottom-4 -right-4 bg-transparent p-4 rounded-lg border shadow-md">
-                <div className="flex items-center gap-2">
-                  <div className="h-3 w-3 rounded-full bg-live-update animate-pulse"></div>
-                  <span className="font-medium">
-                    {t('live_tournaments')}: {tournaments.filter((t) => t.status === "in_progress").length}
-                  </span>
+
+              <div className="relative z-10 space-y-6 lg:space-y-8 animate-fade-in">
+                <h1 className="text-4xl md:text-5xl lg:text-6xl xl:text-[4.5rem] xl:leading-tight font-bold tracking-tight drop-shadow-md font-['var(--font-cinzel)']">
+                  <span className="gradient-text">{t('hero_title_part1')}</span> <br />
+                  <span className="text-white drop-shadow-lg">{t('hero_title_part2')}</span>
+                </h1>
+                <p className="text-xl lg:text-2xl text-white/90 drop-shadow">
+                  {t('hero_description')}
+                </p>
+                <div className="flex flex-col sm:flex-row items-center justify-center sm:gap-12 gap-6 pt-6 lg:pt-8">
+                  <Link
+                    href="/tournaments"
+                    className="text-xl lg:text-2xl font-medium text-white/90 hover:text-primary transition-all duration-300 flex items-center group drop-shadow"
+                  >
+                    Browse <ArrowRight className="ml-3 h-6 w-6 transition-transform group-hover:translate-x-2" />
+                  </Link>
+
+                  <Link
+                    href="https://discord.com/invite/R3rez3qDbf"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center text-[#5865F2] hover:text-[#5865F2] hover:scale-105 transition-all duration-300 drop-shadow group"
+                  >
+                    <DiscordIcon className="h-8 w-8 mr-3" />
+                    <span className="text-xl lg:text-2xl font-medium text-white/90 group-hover:text-white transition-colors">Join</span>
+                  </Link>
+                </div>
+              </div>
+            </div>
+            <div className="w-full lg:w-[32%] xl:w-[28%] relative animate-slide-up flex items-center justify-center p-4">
+              <div className="group relative aspect-square lg:aspect-[3/4] z-10 w-full flex items-center justify-center">
+                {/* Layer 1: Floating Characters Background Area (Transparent) */}                {/* Layer 2: Floating Stats Badge */}
+                <div
+                  className="absolute bottom-4 right-4 md:bottom-2 md:right-2 bg-background/95 backdrop-blur-md p-5 rounded-xl border border-white/10 shadow-[0_10px_20px_rgba(0,0,0,0.5)] z-20"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="relative flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                    </div>
+                    <span className="font-bold tracking-tight text-lg">
+                      {t('live_tournaments')}: <span className="text-primary ml-1">{tournaments.filter((t) => t.status === "in_progress").length}</span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Foreground Layer: Characters Cutout (Pops out in front) */}
+                <div className="absolute inset-0 z-50 pointer-events-none">
+                  <Image
+                    fill
+                    src="/foreground.png"
+                    alt="TFT Characters Cutout"
+                    className="object-contain drop-shadow-[0_25px_35px_rgba(0,0,0,0.9)] scale-[1.6] -translate-x-12 xl:-translate-x-24 -translate-y-8 transition-transform duration-500 ease-out group-hover:scale-[1.65]"
+                    priority
+                  />
                 </div>
               </div>
             </div>
@@ -128,7 +170,7 @@ export default function HomePageClient({ tournaments, lobbies }: HomePageClientP
               ))}
             </div>
           ) : (
-            <Card className="bg-card/95 dark:bg-card/40 shadow-sm backdrop-blur-lg border border-white/20">
+            <Card className="bg-card shadow-sm border border-white/10">
               <CardContent className="py-12 text-center">
                 <Gamepad2 className="mx-auto mb-4 h-12 w-12 text-muted-foreground/50" />
                 <p className="text-muted-foreground font-medium">
@@ -177,8 +219,8 @@ export default function HomePageClient({ tournaments, lobbies }: HomePageClientP
 function FeaturedTournamentCard({ tournament, index }: { tournament: ITournament, index: number }) {
   const t = useTranslations('common');
   return (
-    <Card 
-      className="overflow-hidden transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1 animate-fade-in-up bg-card/95 dark:bg-card/40 shadow-sm backdrop-blur-lg border border-white/20"
+    <Card
+      className="overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 animate-fade-in-up bg-card shadow-sm border border-white/10"
       style={{ animationDelay: `${index * 100}ms` }}
     >
       <Link href={`/tournaments/${tournament.id}`} className="block">
@@ -220,10 +262,10 @@ function FeaturedTournamentCard({ tournament, index }: { tournament: ITournament
           </div>
         </div>
       </CardContent>
-      <CardFooter className="p-6 pt-0">
-        <Button asChild className="w-full">
+      <CardFooter className="p-6 pt-0 flex justify-center">
+        <Button asChild className="btn-zodiac w-auto">
           <Link href={`/tournaments/${tournament.id}`}>{t('view_tournament')}
-            <ArrowRight className="ml-2 h-4 w-4" />
+            <ArrowRight className="ml-3 h-4 w-4" />
           </Link>
         </Button>
       </CardFooter>
@@ -245,7 +287,7 @@ function MiniTourLobbyCard({ lobby, index }: { lobby: MiniTourLobby, index: numb
 
   return (
     <Card
-      className="overflow-hidden card-hover-effect bg-card/95 dark:bg-card/40 shadow-sm backdrop-blur-lg border border-white/20 animate-fade-in-up"
+      className="overflow-hidden card-hover-effect bg-card shadow-sm border border-white/10 animate-fade-in-up"
       style={{ animationDelay: `${index * 100}ms` }}
     >
       <div className="h-1 bg-gradient-to-r from-primary/50 to-primary" />
@@ -292,15 +334,17 @@ function MiniTourLobbyCard({ lobby, index }: { lobby: MiniTourLobby, index: numb
           </div>
         </div>
 
-        <Button asChild className="w-full" variant={lobby.status === "IN_PROGRESS" ? "outline" : "default"}>
-          <Link href={`/minitour/lobbies/${lobby.id}`}>
-            {lobby.status === "WAITING"
-              ? t('join_lobby', { defaultValue: 'Join Lobby' })
-              : t('view_lobby', { defaultValue: 'View Lobby' })
-            }
-            <ArrowRight className="ml-2 h-4 w-4" />
-          </Link>
-        </Button>
+        <div className="flex pt-2 justify-center">
+          <Button asChild className={`btn-zodiac w-auto ${lobby.status === "IN_PROGRESS" ? "opacity-90" : ""}`}>
+            <Link href={`/minitour/lobbies/${lobby.id}`}>
+              {lobby.status === "WAITING"
+                ? t('join_lobby', { defaultValue: 'Join Lobby' })
+                : t('view_lobby', { defaultValue: 'View Lobby' })
+              }
+              <ArrowRight className="ml-3 h-4 w-4" />
+            </Link>
+          </Button>
+        </div>
       </CardContent>
     </Card>
   )

@@ -101,6 +101,17 @@ async function main() {
     }
   });
 
+  console.log('Cleaning up old lobbies and matches for this round...');
+  const existingLobbies = await prisma.lobby.findMany({ where: { roundId: round.id } });
+  const lobbyIds = existingLobbies.map(l => l.id);
+  const existingMatches = await prisma.match.findMany({ where: { lobbyId: { in: lobbyIds } } });
+  const matchIds = existingMatches.map(m => m.id);
+
+  await prisma.playerMatchSummary.deleteMany({ where: { matchId: { in: matchIds } } });
+  await prisma.matchResult.deleteMany({ where: { matchId: { in: matchIds } } });
+  await prisma.match.deleteMany({ where: { lobbyId: { in: lobbyIds } } });
+  await prisma.lobby.deleteMany({ where: { roundId: round.id } });
+
   // 6. Split Participants into Lobbies of 8
   const lobbyCount = Math.ceil(participants.length / 8);
   for (let i = 0; i < lobbyCount; i++) {
@@ -122,18 +133,54 @@ async function main() {
       }
     });
 
-    // Create Match
-    const match = await prisma.match.create({
-      data: {
-        lobbyId: lobby.id,
-        matchIdRiotApi: `VN_${uuidv4()}`,
-        fetchedAt: new Date(),
-      }
-    });
+    const matchIdRiotApi = `VN_${uuidv4()}`;
 
     // Generate random placements
     const placements = Array.from({ length: lobbyParticipants.length }, (_, i) => i + 1);
     placements.sort(() => Math.random() - 0.5);
+
+    // Build MatchData
+    const matchDataParticipants = lobbyParticipants.map((p, j) => {
+       const placement = placements[j];
+       const points = getPointsForPlacement(placement);
+       return {
+         puuid: p.userId, // Maps to participantId in the frontend store
+         placement,
+         points, // Injects tournament points into match data
+         level: 8,
+         gold_left: Math.floor(Math.random() * 50),
+         last_round: 30 + Math.floor(Math.random() * 10),
+         augments: ["TFT9_Augment_ArmorClad", "TFT9_Augment_Dedication", "TFT9_Augment_Medkit"],
+         traits: [
+           { name: "Set9_Demacia", tier_current: 2, tier_total: 3, style: 2, num_units: 5 },
+           { name: "Set9_Noxus", tier_current: 1, tier_total: 3, style: 1, num_units: 3 }
+         ],
+         units: [
+           { character_id: "TFT9_Garen", tier: 2, itemNames: ["TFT_Item_Bloodthirster", "TFT_Item_MadredsBloodrazor"] },
+           { character_id: "TFT9_Lux", tier: 2, itemNames: ["TFT_Item_JeweledGauntlet", "TFT_Item_ArchangelsStaff"] },
+           { character_id: "TFT9_Darius", tier: 2, itemNames: ["TFT_Item_InfinityEdge"] }
+         ]
+       };
+    });
+
+    const matchData = {
+      metadata: { match_id: matchIdRiotApi },
+      info: {
+         gameCreation: Date.now() - 30 * 60 * 1000,
+         gameDuration: 1800 + Math.floor(Math.random() * 400), // Random duration around 30-36 minutes
+         participants: matchDataParticipants
+      }
+    };
+
+    // Create Match
+    const match = await prisma.match.create({
+      data: {
+        lobbyId: lobby.id,
+        matchIdRiotApi,
+        matchData: matchData,
+        fetchedAt: new Date(),
+      }
+    });
 
     // Record Match Results
     for (let j = 0; j < lobbyParticipants.length; j++) {

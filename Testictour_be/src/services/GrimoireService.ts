@@ -182,4 +182,51 @@ export default class GrimoireService {
       throw error;
     }
   }
+
+  /**
+   * Validate whether a TFT match belongs to a tournament lobby.
+   * This is the single source of truth for match validation — all logic lives in Grimoire.
+   *
+   * @param puuids - CURRENT active lobby participants (not the hardcoded creation-time list)
+   * @param lobbyStartTime - Epoch seconds when lobby entered PLAYING state
+   * @param region - Platform region (e.g., 'vn2', 'sg2')
+   * @param candidateMatchId - Optional: validate a specific Riot match ID
+   */
+  static async validateMatch(
+    puuids: string[],
+    lobbyStartTime: number,   // epoch seconds
+    region: string,
+    candidateMatchId?: string,
+  ): Promise<{
+    status: 'valid' | 'invalid' | 'pending';
+    matchId?: string;
+    reason?: string;
+    placements?: { puuid: string; placement: number }[];
+    enrichedMatch?: GrimoireMatchData;
+  }> {
+    try {
+      logger.info(`[GrimoireService] Calling Grimoire /validate for ${puuids.length} PUUIDs, region=${region}, lobbyStartTime=${lobbyStartTime}`);
+
+      const response = await axios.post(`${GRIMOIRE_API_URL}/api/internal/match/validate`, {
+        puuids,
+        lobbyStartTime,
+        region,
+        candidateMatchId,
+      }, {
+        timeout: 30000, // 30s — Riot API calls take time
+      });
+
+      return response.data;
+
+    } catch (error: any) {
+      if (error.isAxiosError) {
+        const status = error.response?.status || 500;
+        const message = error.response?.data?.reason || error.response?.data?.error || error.message;
+        logger.error(`[GrimoireService] Grimoire /validate error (${status}): ${message}`);
+        throw new ApiError(status, `Grimoire validate error: ${message}`);
+      }
+      throw error;
+    }
+  }
 }
+

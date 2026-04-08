@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Trophy, Gift, Menu, X, BarChart3, Gamepad2, LayoutDashboard } from "lucide-react"
+import { Home, Trophy, Gift, Menu, X, BarChart3, Gamepad2, LayoutDashboard, UserCircle } from "lucide-react"
 import { useEffect } from "react"
 
 import { cn } from "@/lib/utils"
@@ -87,7 +87,12 @@ export function MainNav({
         href: "/dashboard",
         label: t("Dashboard"),
         icon: <LayoutDashboard className="h-5 w-5" />,
-      }
+      },
+      {
+        href: `/players/${currentUser.id}`,
+        label: t("profile", { defaultValue: 'Profile' }),
+        icon: <UserCircle className="h-5 w-5" />,
+      },
     ] : []),
   ];
 

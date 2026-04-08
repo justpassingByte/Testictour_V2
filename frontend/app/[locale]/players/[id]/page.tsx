@@ -263,7 +263,7 @@ export default function PlayerPage() {
             joinedDate={player.user?.createdAt ? new Date(player.user.createdAt).toLocaleDateString() : "N/A"}
             eliminated={player.eliminated}
           />
-          <PlayerUpcomingMatchesCard playerTournaments={playerTournaments} />
+          <PlayerUpcomingMatchesCard playerId={player.user?.id || player.userId || playerId} />
         </div>
       </div>
     </div>

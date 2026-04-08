@@ -17,5 +17,14 @@ export default {
     } catch (err) {
       next(err);
     }
+  },
+  async detail(req: Request, res: Response, next: NextFunction) {
+    try {
+      const lobby = await LobbyService.getById(req.params.id);
+      if (!lobby) return res.status(404).json({ error: 'Lobby not found' });
+      res.json({ data: lobby });
+    } catch (err) {
+      next(err);
+    }
   }
 }; 

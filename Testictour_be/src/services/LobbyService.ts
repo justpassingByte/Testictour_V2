@@ -1,8 +1,6 @@
 import { prisma } from './prisma';
 import { Prisma } from '@prisma/client';
 import logger from '../utils/logger';
-import MatchService from './MatchService';
-import crypto from 'crypto';
 
 export default class LobbyService {
   static async list(roundId: string) {
@@ -14,12 +12,62 @@ export default class LobbyService {
     return db.lobby.create({ data: { ...data, roundId } });
   }
 
+  static async getById(id: string) {
+    const lobby = await prisma.lobby.findUnique({
+      where: { id },
+      include: {
+        round: {
+          include: {
+            phase: {
+              include: {
+                tournament: true
+              }
+            }
+          }
+        },
+        matches: {
+          include: {
+            matchResults: {
+              include: {
+                user: {
+                  select: { id: true, username: true, puuid: true, riotGameName: true, riotGameTag: true }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!lobby) return null;
+
+    let users: any[] = [];
+    if (lobby.participants) {
+      // @ts-ignore
+      const rawParticipants = lobby.participants as any[];
+      if (Array.isArray(rawParticipants) && rawParticipants.length > 0) {
+        const validIds = rawParticipants.map(r => typeof r === 'string' ? r : (r.userId || r.id)).filter(Boolean);
+        if (validIds.length > 0) {
+          users = await prisma.user.findMany({
+            where: { id: { in: validIds } },
+            select: { id: true, username: true, puuid: true, riotGameName: true, riotGameTag: true }
+          });
+        }
+      }
+    }
+
+    return {
+      ...lobby,
+      participantDetails: users
+    };
+  }
+
   static async autoAssignLobbies(
-    roundId: string, 
-    participants: any[], 
+    roundId: string,
+    participants: any[],
     lobbySize: number = 8,
     assignmentType: 'random' | 'seeded' | 'swiss' | 'snake' = 'random',
-    matchesPerRound: number = 1,
+    _matchesPerRound: number = 1,  // kept for API compatibility — matches now created after validation
     tx?: Prisma.TransactionClient
   ) {
     const db = tx || prisma;
@@ -55,36 +103,33 @@ export default class LobbyService {
 
     const lobbies = [];
     let lobbyCount = 1;
-    const jobsToQueue: { matchId: string; riotMatchId: string; region: string; lobbyId: string }[] = [];
+
+    // Transitions to schedule OUTSIDE of transaction, after commit (LobbyTimerService requires committed lobby IDs)
+    const transitionsToSchedule: { lobbyId: string; target: string; delay: number }[] = [];
+
     for (let i = 0; i < assignedParticipants.length; i += lobbySize) {
       const lobbyParticipants = assignedParticipants.slice(i, i + lobbySize);
       const participantUserIds = lobbyParticipants.map(p => p.userId);
-      
+
       const newLobby = await db.lobby.create({
         data: {
           roundId,
           name: `Lobby ${lobbyCount++}`,
-          participants: participantUserIds
+          participants: participantUserIds,
+          // State machine initialization
+          state: 'WAITING',
+          phaseStartedAt: new Date(),
         }
       });
       lobbies.push(newLobby);
 
-      // Create multiple matches based on matchesPerRound
-      for (let j = 0; j < matchesPerRound; j++) {
-        const newMatch = await MatchService.create(newLobby.id, { 
-          matchIdRiotApi: crypto.randomUUID()
-        }, db);
+      // NOTE: Match records are created AFTER Grimoire validates the actual match.
+      // Do NOT pre-create Match records here (v2 spec change).
 
-        // Prepare job data to be queued later, outside of this transaction
-        jobsToQueue.push({
-          matchId: newMatch.id,
-          riotMatchId: newMatch.matchIdRiotApi as string,
-          region: 'asia', // Default region, needs to be derived from tournament later if dynamic
-          lobbyId: newLobby.id
-        });
-      }
+      // Schedule lobby timer: WAITING → READY_CHECK after 120s
+      transitionsToSchedule.push({ lobbyId: newLobby.id, target: 'READY_CHECK', delay: 120_000 });
     }
-    
-    return { lobbies, jobsToQueue }; // Return both lobbies and jobs to queue
+
+    return { lobbies, transitionsToSchedule }; // caller schedules LobbyTimerService after TX commit
   }
-}
+}

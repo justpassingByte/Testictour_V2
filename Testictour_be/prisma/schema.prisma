@@ -5,8 +5,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ----------------------
@@ -177,15 +178,27 @@ model Round {
 }
 
 model Lobby {
-  id                    String  @id @default(uuid())
-  round                 Round   @relation(fields: [roundId], references: [id])
+  id                    String    @id @default(uuid())
+  round                 Round     @relation(fields: [roundId], references: [id])
   roundId               String
   name                  String
   participants          Json
   matchId               String?
-  fetchedResult         Boolean @default(false)
+  fetchedResult         Boolean   @default(false)
   matches               Match[]
-  completedMatchesCount Int     @default(0)
+  completedMatchesCount Int       @default(0)
+
+  // State Machine
+  state                    String    @default("WAITING")
+  delayRequests            Json      @default("[]")   // DelayRequest[]
+  phaseStartedAt           DateTime?
+  matchStartedAt           DateTime?
+  totalDelaysUsed          Int       @default(0)
+  lastPolledAt             DateTime?
+
+  // Pause support
+  pausedFromState          String?
+  remainingDurationOnPause Int?      // seconds remaining when paused
 }
 
 model Match {

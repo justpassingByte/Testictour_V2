@@ -1,7 +1,8 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
-import { ChevronRight, Trophy, Medal, Star, Clock, Calendar, BarChart3, Users, Target, TrendingUp, Gift } from "lucide-react"
+import { ChevronRight, Trophy, Medal, Star, Clock, Calendar, BarChart3, Users, Target, TrendingUp, Gift, Timer, Wifi, Play, CheckCircle2 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -11,9 +12,107 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { IPlayerProfile } from "@/app/types/user"
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+
+const STATE_LABELS: Record<string, { label: string; color: string }> = {
+  WAITING:            { label: 'Waiting',       color: 'text-muted-foreground' },
+  READY_CHECK:        { label: 'Ready Check',   color: 'text-yellow-400' },
+  GRACE_PERIOD:       { label: 'Grace Period',  color: 'text-orange-400' },
+  STARTING:           { label: 'Starting!',     color: 'text-green-400' },
+  PLAYING:            { label: 'In Progress',   color: 'text-primary' },
+  FINISHED:           { label: 'Finished',      color: 'text-green-600' },
+  PAUSED:             { label: 'Paused',        color: 'text-orange-400' },
+  ADMIN_INTERVENTION: { label: 'Admin Review',  color: 'text-red-400' },
+};
+
+function useCountdown(phaseStartedAt: string | undefined, durationSeconds: number) {
+  const [remaining, setRemaining] = useState(0);
+  useEffect(() => {
+    if (!phaseStartedAt || !durationSeconds) return;
+    const tick = () => {
+      const endsAt = new Date(phaseStartedAt).getTime() + durationSeconds * 1000;
+      setRemaining(Math.max(0, Math.floor((endsAt - Date.now()) / 1000)));
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [phaseStartedAt, durationSeconds]);
+  const m = Math.floor(remaining / 60).toString().padStart(2, '0');
+  const s = (remaining % 60).toString().padStart(2, '0');
+  return { display: `${m}:${s}`, remaining };
+}
+
+interface IncomingMatch {
+  lobbyId: string;
+  lobbyName: string;
+  tournamentId?: string;
+  roundNumber: number;
+  phaseName: string;
+  state: string;
+  phaseStartedAt: string;
+  phaseDuration: number;
+}
+
+function IncomingMatchCard({ match }: { match: IncomingMatch }) {
+  const { display } = useCountdown(match.phaseStartedAt, match.phaseDuration);
+  const sc = STATE_LABELS[match.state] || { label: match.state, color: 'text-muted-foreground' };
+  const isActive = !['WAITING', 'FINISHED'].includes(match.state);
+
+  return (
+    <div className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${isActive ? 'border-primary/30 bg-primary/5' : 'border-white/10 bg-muted/10'}`}>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold truncate">{match.lobbyName}</p>
+        <p className="text-xs text-muted-foreground">
+          Round {match.roundNumber} · {match.phaseName}
+        </p>
+        <p className={`text-xs font-medium mt-0.5 ${sc.color} ${isActive ? 'animate-pulse' : ''}`}>
+          {sc.label}
+        </p>
+      </div>
+      {isActive && match.phaseDuration > 0 && (
+        <div className="flex items-center gap-1 font-mono text-sm font-bold tabular-nums shrink-0">
+          <Timer className="h-3.5 w-3.5 text-muted-foreground" />
+          {display}
+        </div>
+      )}
+      <Button asChild size="sm" variant={isActive ? 'default' : 'outline'} className="shrink-0">
+        <Link href={match.tournamentId
+          ? `/tournaments/${match.tournamentId}/lobbies/${match.lobbyId}`
+          : `/minitour/lobbies/${match.lobbyId}`}>
+          {match.state === 'PLAYING' ? <><Play className="h-3 w-3 mr-1" />Playing</> : 'View Lobby'}
+        </Link>
+      </Button>
+    </div>
+  );
+}
+
+function IncomingMatchesPanel({ userId }: { userId: string }) {
+  const [matches, setMatches] = useState<IncomingMatch[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!userId) return;
+    fetch(`${BACKEND_URL}/api/players/${userId}/incoming-matches`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(d => { if (d.success) setMatches(d.data || []); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [userId]);
+
+  if (loading) return <div className="text-xs text-muted-foreground py-2">Loading...</div>;
+  if (matches.length === 0) return <div className="text-xs text-muted-foreground py-2">No upcoming matches.</div>;
+
+  return (
+    <div className="space-y-2">
+      {matches.map(m => <IncomingMatchCard key={m.lobbyId} match={m} />)}
+    </div>
+  );
+}
+
 interface PlayerDashboardClientProps {
   user: IPlayerProfile;
 }
+
 
 export default function PlayerDashboardClient({ user: player }: PlayerDashboardClientProps) {
   return (
@@ -271,7 +370,21 @@ export default function PlayerDashboardClient({ user: player }: PlayerDashboardC
         </div>
 
         <div className="md:col-span-1 space-y-6">
+          {/* Incoming Matches */}
+          <Card className="border-primary/20">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Timer className="h-4 w-4 text-primary" />
+                Incoming Matches
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <IncomingMatchesPanel userId={player.id} />
+            </CardContent>
+          </Card>
+
           {/* Recent Activity */}
+
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-lg">Recent Activity</CardTitle>

@@ -29,7 +29,9 @@ export default function RoundResultsPage({ params }: { params: { id: string; rou
     }
 
     const participantIdsInRound = new Set(
-        roundData.lobbies?.flatMap(lobby => lobby.participants as string[] || [])
+        roundData.lobbies?.flatMap(lobby => {
+          return (lobby.participants || []).map((p: any) => p?.userId || p)
+        })
     );
 
     return currentTournament.participants
@@ -38,7 +40,7 @@ export default function RoundResultsPage({ params }: { params: { id: string; rou
         if (!participant || !participant.user) return null;
 
         const participantLobby = roundData.lobbies?.find(lobby => 
-            (lobby.participants as string[] || []).includes(participant.userId!)
+            (lobby.participants || []).some((p: any) => (p?.userId || p) === participant.userId)
         );
 
         // Ensure matches are sorted by creation time for correct column display

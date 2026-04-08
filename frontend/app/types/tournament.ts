@@ -1,5 +1,47 @@
 import { IUser } from "./user";
-import { IRiotMatchData } from './riot';
+import { IRiotMatchData, GrimoireMatchData } from './riot';
+
+// ── Lobby State Machine ──────────────────────────────────────────────────────
+
+export type LobbyState =
+  | 'WAITING'
+  | 'READY_CHECK'
+  | 'GRACE_PERIOD'
+  | 'STARTING'
+  | 'PLAYING'
+  | 'FINISHED'
+  | 'PAUSED'
+  | 'ADMIN_INTERVENTION';
+
+export interface IDelayRequest {
+  userId: string;
+  requestedAt: string;
+  extensionSeconds: 60;
+}
+
+export interface ILobbyStateSnapshot {
+  lobbyId: string;
+  state: LobbyState;
+  readyPlayerIds: string[];   // from Redis SMEMBERS
+  readyCount: number;
+  lobbySize: number;
+  phaseStartedAt: string;     // ISO timestamp
+  phaseDuration: number;      // seconds — countdown = phaseStartedAt + phaseDuration - now
+  delayRequests: IDelayRequest[];
+  totalDelaysUsed: number;
+  pausedAt?: string;
+  remainingDurationOnPause?: number; // seconds
+}
+
+export interface IIncomingMatch {
+  lobbyId: string;
+  lobbyName: string;
+  roundNumber: number;
+  phaseName: string;
+  state: LobbyState;
+  phaseStartedAt: string;
+  phaseDuration: number;
+}
 
 export interface IRoundOutcome {
   id: string;
@@ -114,14 +156,20 @@ export interface ILobby {
   matches?: IMatch[];
   matchId: string | null;
   fetchedResult: boolean;
+  // State machine fields
+  state?: LobbyState;
+  phaseStartedAt?: string;
+  totalDelaysUsed?: number;
 }
 
 export interface IMatch {
   id: string;
   lobbyId: string;
+  matchIdRiotApi?: string;
   riotMatchId?: string;
   status: string;
-  matchData?: IRiotMatchData;
+  matchData?: IRiotMatchData | GrimoireMatchData; // accepts both raw and enriched
+  fetchedAt?: string;
 }
 
 export interface IMatchResult {

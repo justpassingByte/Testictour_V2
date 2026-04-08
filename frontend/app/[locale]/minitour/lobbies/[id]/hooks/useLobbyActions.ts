@@ -107,17 +107,8 @@ export function useLobbyActions({
     mainButtonDisabled = isProcessingAction;
   }
 
-  // Add Start Lobby button for any participant if lobby is waiting
-  if (status === 'WAITING' && isCurrentUserParticipant) {
-    secondaryActions.unshift({ // Add to the beginning of the array
-      id: 'start-lobby',
-      label: 'Start Lobby',
-      action: () => startLobby(lobby.id),
-      disabled: isProcessingAction,
-      isLoading: isProcessingAction,
-      variant: "default",
-    });
-  }
+  // NOTE: "Start Lobby" button removed — the state machine now transitions
+  // automatically via the ready-check mechanism (useLobbySocket).
 
   return {
     mainButtonText,

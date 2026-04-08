@@ -3,12 +3,14 @@ import fetchMatchData from './jobs/fetchMatchData';
 import fetchMiniTourMatchData from './jobs/fetchMiniTourMatchData';
 import logger from './utils/logger';
 import RoundService from './services/RoundService';
-import { autoAdvanceRoundQueue, fetchMatchDataQueue, fetchMiniTourMatchDataQueue, syncCompletionQueue, redisConnectionOptions } from './lib/queues';
+import { autoAdvanceRoundQueue, fetchMatchDataQueue, fetchMiniTourMatchDataQueue, syncCompletionQueue, lobbyTimerQueue, redisConnectionOptions } from './lib/queues';
 import './jobs/roundCompletionWorker'; // Import to initialize the worker
 import SummaryManagerService from './services/SummaryManagerService';
 import { io as ClientIO } from 'socket.io-client';
-
 import syncCompletionProcessor from './jobs/syncCompletion';
+import LobbyStateService from './services/LobbyStateService';
+import { initLobbyTimerQueue } from './services/LobbyTimerService';
+import { recoverStaleLobbyTimers } from './jobs/recoverLobbyTimers';
 
 // Log the environment variables at startup for debugging
 console.log("--- Worker Environment Variables ---");
@@ -21,6 +23,12 @@ console.log("------------------------------------");
 // Initialize the summary workers for tournament and match summaries
 SummaryManagerService.initWorkers();
 logger.info('SummaryManagerService workers initialized');
+
+// Wire lobbyTimerQueue into LobbyTimerService
+if (lobbyTimerQueue) {
+  initLobbyTimerQueue(lobbyTimerQueue);
+  logger.info('LobbyTimerService: queue initialized');
+}
 
 // Initialize Socket.IO client for the worker, connecting to the main backend service
 // The URL should be provided via an environment variable in Railway
@@ -101,22 +109,76 @@ autoAdvanceRoundWorker.on('failed', (job, err) => {
 
 logger.info('AutoAdvanceRoundWorker started. Waiting for jobs...');
 
-// Worker for sync completion
-const syncCompletionWorker = new Worker(
-  syncCompletionQueue.name,
-  syncCompletionProcessor,
-  {
-    connection: redisConnectionOptions,
-    concurrency: 5,
-  }
-);
+if (REDIS_ENABLED) {
+  // Worker for sync completion
+  const syncCompletionWorker = new Worker(
+    syncCompletionQueue.name,
+    syncCompletionProcessor,
+    {
+      connection: redisConnectionOptions,
+      concurrency: 5,
+    }
+  );
 
-syncCompletionWorker.on('completed', (job) => {
-  logger.info(`SyncCompletionWorker: Job ${job.id} for tournament ${job.data.tournamentId} completed successfully.`);
-});
+  syncCompletionWorker.on('completed', (job) => {
+    logger.info(`SyncCompletionWorker: Job ${job.id} for tournament ${job.data.tournamentId} completed successfully.`);
+  });
 
-syncCompletionWorker.on('failed', (job, err) => {
-  logger.error(`SyncCompletionWorker: Job ${job?.id} for tournament ${job?.data.tournamentId} failed: ${err.message}`);
-});
+  syncCompletionWorker.on('failed', (job, err) => {
+    logger.error(`SyncCompletionWorker: Job ${job?.id} for tournament ${job?.data.tournamentId} failed: ${err.message}`);
+  });
 
-logger.info('SyncCompletionWorker started. Waiting for jobs...'); 
+  logger.info('SyncCompletionWorker started. Waiting for jobs...');
+
+  // ── Lobby Timer Worker ──────────────────────────────────────────────────────
+  // Drives all lobby phase transitions dispatched by LobbyTimerService.
+
+  const lobbyTimerWorker = new Worker(
+    'lobbyTimerQueue',
+    async job => {
+      const { lobbyId, targetState, fromState, jobType } = job.data;
+
+      if (jobType === 'autoResolve') {
+        // Special path: ADMIN_INTERVENTION → create 8th-place results + FINISHED
+        logger.info(`LobbyTimerWorker: auto-resolving ADMIN_INTERVENTION for lobby ${lobbyId}`);
+        await LobbyStateService.autoResolveIntervention(lobbyId);
+
+        // Emit updated state to lobby room
+        try {
+          const io = (global as any).__io;
+          if (io) {
+            const snapshot = await LobbyStateService.getLobbyState(lobbyId).catch(() => null);
+            if (snapshot) io.to(`lobby:${lobbyId}`).emit('lobby:state_update', snapshot);
+          }
+        } catch (_) { /* non-critical */ }
+      } else {
+        // Standard phase transition
+        logger.info(`LobbyTimerWorker: transitioning lobby ${lobbyId} ${fromState} → ${targetState}`);
+        await LobbyStateService.transitionPhase(lobbyId, fromState, targetState);
+
+        // Emit updated state to lobby room after transition
+        try {
+          const io = (global as any).io;
+          if (io) {
+            const snapshot = await LobbyStateService.getLobbyState(lobbyId).catch(() => null);
+            if (snapshot) io.to(`lobby:${lobbyId}`).emit('lobby:state_update', snapshot);
+          }
+        } catch (_) { /* non-critical */ }
+      }
+    },
+    { connection: redisConnectionOptions, concurrency: 20 }
+  );
+
+  lobbyTimerWorker.on('failed', (job, err) => {
+    logger.error(`LobbyTimerWorker: Job ${job?.id} failed: ${err.message}`, err);
+  });
+
+  logger.info('LobbyTimerWorker started. Waiting for jobs...');
+
+
+  // ── On startup: recover stale lobby timers ─────────────────────────────────
+  // If server restarted mid-game, reschedule any pending BullMQ transition jobs.
+  recoverStaleLobbyTimers().catch(err => {
+    logger.error('Failed to recover stale lobby timers on startup:', err);
+  });
+}

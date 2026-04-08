@@ -4,54 +4,73 @@
 
 @layer base {
   :root {
-    --background: 210 40% 98%;
-    --foreground: 240 10% 3.9%;
-    --card: hsla(210, 40%, 99%, 0.85);
-    --card-foreground: 222 47% 8%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 220 90% 56%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 260 60% 98%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 210 40% 97%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 192 100% 54%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 84.2% 60.2%;
+    /* LIGHT MODE - Celestial Gods */
+    --background: 45 30% 98%;      
+    --foreground: 220 50% 15%;     
+    --card: 0 0% 100%; /* Pure solid white */
+    --card-foreground: 220 50% 15%;
+    --popover: 45 30% 98%;
+    --popover-foreground: 220 50% 15%;
+    
+    --primary: 43 90% 55%;         
+    --primary-foreground: 220 50% 15%;
+    
+    --secondary: 195 60% 85%;       
+    --secondary-foreground: 220 50% 15%;
+    
+    --muted: 45 20% 90%;
+    --muted-foreground: 220 20% 40%;
+    
+    --accent: 180 80% 45%;         
+    --accent-foreground: 0 0% 100%;
+    
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
-    --border: 210 30% 85%;
-    --input: 240 5.9% 90%;
-    --ring: 196 100% 47%;
+    
+    --border: 43 40% 80%;          
+    --input: 45 20% 90%;
+    --ring: 43 90% 55%;
+    
     --radius: 0.75rem;
-    --live-update: 160 84% 39%;
-    --eliminated: 0 84.2% 60.2%;
-    --advanced: 160 84% 39%;
+    --live-update: 43 90% 55%;     
+    --eliminated: 0 84% 60%;
+    --advanced: 43 90% 55%;
+    
+    --font-heading: var(--font-cinzel), serif;
+    --font-sans: var(--font-space), sans-serif;
   }
 
   .dark {
-    --background: 222 47% 8%;
-    --foreground: 0 0% 98%;
-    --card: hsla(222, 47%, 12%, 0.85);
-    --card-foreground: 210 40% 98%;
-    --popover: 240 10% 6%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 220 90% 66%;
-    --primary-foreground: 240 5.9% 10%;
-    --secondary: 260 60% 18%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 222 47% 10%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 192 100% 54%;
-    --accent-foreground: 240 5.9% 10%;
-    --destructive: 0 84.2% 60.2%;
+    /* DARK MODE - Deep Space & Zodiac */
+    --background: 240 60% 4%;      
+    --foreground: 45 30% 98%;      
+    --card: 240 50% 8%; /* Pure solid dark void */
+    --card-foreground: 45 30% 98%;
+    --popover: 240 60% 6%;
+    --popover-foreground: 45 30% 98%;
+    
+    --primary: 280 80% 65%;        
+    --primary-foreground: 0 0% 100%;
+    
+    --secondary: 220 70% 15%;      
+    --secondary-foreground: 45 30% 98%;
+    
+    --muted: 240 40% 15%;
+    --muted-foreground: 240 20% 70%;
+    
+    --accent: 43 90% 65%;          
+    --accent-foreground: 240 60% 4%;
+    
+    --destructive: 350 80% 60%;
     --destructive-foreground: 0 0% 98%;
-    --border: 210 80% 60%;
-    --input: 240 3.7% 15.9%;
-    --ring: 196 100% 47%;
-    --live-update: 160 84% 39%;
-    --eliminated: 0 84.2% 60.2%;
-    --advanced: 160 84% 39%;
+    
+    --border: 280 60% 30%;         
+    --input: 240 40% 15%;
+    --ring: 280 80% 65%;
+    
+    --live-update: 43 90% 65%;     
+    --eliminated: 350 80% 60%;
+    --advanced: 43 90% 65%;
   }
 }
 
@@ -60,91 +79,196 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    letter-spacing: 0.05em;
   }
 }
 
+/* Light Mode Background - TFT HD */
 html, body, .bg-background {
-  background: linear-gradient(120deg, #1ecfff 0%, #e0eafc 40%, #fbc2eb 80%, #a1c4fd 100%);
-  background-attachment: fixed;
+  background: url('https://images.contentstack.io/v3/assets/blt731acb42bb3d1659/bltb9ba6e1b6f0e4b85/65fc6ec6fb8f3b067a99f3c1/TFT_Inkborn_Fables_Key_Art.jpg') center center / cover no-repeat fixed !important;
 }
+
+/* Dark Mode Background - TFT HD */
 .dark html, .dark body, .dark .bg-background {
-  background: linear-gradient(120deg, #232526 0%, #414345 60%, #283e51 100%);
-  background-attachment: fixed;
+  background: url('https://images.contentstack.io/v3/assets/blt731acb42bb3d1659/blt2217c093a8d168d4/672bd2ae5b86968ce1c9e821/TFT_Set13_KeyArt_1920x1080.jpg') center center / cover no-repeat fixed !important;
 }
 
+/* Base Glassmorphism - Cosmic Glass (REMOVED BLUR) */
 .glassmorphic {
-  @apply bg-background/80 backdrop-blur-md border border-border/50;
+  @apply bg-background border border-white/5 shadow-lg;
 }
 
-/* Futuristic scrollbar */
+.dark .glassmorphic {
+  @apply bg-card border border-primary/20 shadow-[0_0_15px_rgba(150,100,255,0.1)];
+}
+
+/* --- FORCE REMOVE ALL TRANSPARENCY AND BLUR --- */
+[class*="backdrop-blur"] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Force solid card backgrounds matching the design, ignoring any opacity tailwind utilities like bg-card/40 */
+.bg-card\/40, .bg-card\/60, .bg-card\/80, .bg-card\/95 {
+  background-color: hsl(var(--card)) !important;
+}
+
+div.bg-background\/60, section.bg-background\/60, div.dark\:bg-background\/40, section.dark\:bg-background\/40 {
+  background-color: transparent !important;
+}
+/* ----------------------------------------------- */
+
+/* Space Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-muted/50;
+  @apply bg-transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-primary/50 rounded-full transition-colors hover:bg-primary;
+  @apply bg-primary/40 rounded-full transition-colors hover:bg-primary/80;
 }
 
-/* Animations */
+/* NEW BUTTON VIBE - Cosmic Magic Button */
+.btn-zodiac {
+  position: relative;
+  overflow: hidden;
+  border-radius: 9999px !important;
+  background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--accent)) 100%) !important;
+  color: white !important;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  box-shadow: 0 0 15px hsla(var(--primary), 0.3), inset 0 0 10px hsla(var(--accent), 0.2);
+}
+
+.btn-zodiac:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 25px hsla(var(--primary), 0.6), inset 0 0 15px hsla(var(--accent), 0.5);
+  border-color: rgba(255, 255, 255, 0.6) !important;
+}
+
+.btn-zodiac::before {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 100%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  transition: left 0.5s ease;
+}
+
+.btn-zodiac:hover::before {
+  left: 100%;
+}
+
+/* Animations - Cosmic Glows and Floating */
 @keyframes pulse-glow {
-  0%,
-  100% {
-    box-shadow: 0 0 5px hsl(var(--primary)), 0 0 10px hsl(var(--primary));
+  0%, 100% {
+    box-shadow: 0 0 10px hsla(var(--primary), 0.5), 0 0 20px hsla(var(--primary), 0.3);
   }
   50% {
-    box-shadow: 0 0 15px hsl(var(--primary)), 0 0 20px hsl(var(--primary));
+    box-shadow: 0 0 20px hsla(var(--primary), 0.8), 0 0 40px hsla(var(--primary), 0.5);
   }
 }
 
 .animate-pulse-glow {
-  animation: pulse-glow 2s ease-in-out infinite;
+  animation: pulse-glow 3s ease-in-out infinite;
 }
 
-/* Grid pattern background */
-.grid-pattern {
-  background-image: linear-gradient(to right, hsl(var(--border)) 1px, transparent 1px),
-    linear-gradient(to bottom, hsl(var(--border)) 1px, transparent 1px);
-  background-size: 20px 20px;
+@keyframes astrolabe-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
-/* Futuristic card hover effect */
+.animate-spin-slow {
+  animation: astrolabe-spin 20s linear infinite;
+}
+
+/* Cosmic Hover Cards */
 .card-hover-effect {
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 .card-hover-effect:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  transform: translateY(-5px) scale(1.02);
+  box-shadow: 0 15px 35px -10px hsla(var(--primary), 0.3), 0 8px 10px -6px hsla(var(--primary), 0.2);
+  border-color: hsla(var(--primary), 0.5);
 }
 
-.dark .card-hover-effect:hover {
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
-}
-
-/* Gradient text */
+/* Divine/Cosmic Text Gradients */
 .gradient-text {
-  @apply bg-gradient-to-r from-primary to-blue-500 bg-clip-text text-transparent;
+  @apply bg-clip-text text-transparent font-bold;
+  background-image: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--accent)) 100%);
 }
 
-/* Hero section background */
-.hero-pattern {
-  background-color: hsl(var(--background));
-  background-image: radial-gradient(hsl(var(--primary) / 0.15) 1px, transparent 1px);
-  background-size: 20px 20px;
+.dark .gradient-text {
+  background-image: linear-gradient(135deg, hsl(43, 90%, 65%) 0%, hsl(280, 80%, 65%) 100%);
 }
 
+/* Utilities */
 @layer utilities {
   .modern-shadow {
-    box-shadow: 0 4px 24px 0 rgba(30, 207, 255, 0.10), 0 1.5px 6px 0 rgba(30, 207, 255, 0.08);
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
   }
 }
 
 .card, .panel {
-  box-shadow: 0 4px 24px 0 rgba(30, 207, 255, 0.10), 0 1.5px 6px 0 rgba(30, 207, 255, 0.08);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+  border-radius: var(--radius);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; filter: blur(4px); }
+  to { opacity: 1; filter: blur(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.8s ease-out forwards;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(30px); opacity: 0; filter: blur(4px); }
+  to { transform: translateY(0); opacity: 1; filter: blur(0); }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fadeInUp {
+  from { transform: translateY(15px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s ease-out forwards;
+  animation-fill-mode: both;
+}
+
+.animate-pulse-subtle {
+  animation: pulseSlight 3s ease-in-out infinite;
+}
+
+@keyframes pulseSlight {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* Live update starlight glint */
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 8px hsla(var(--live-update), 0.4), 0 0 15px hsla(var(--live-update), 0.2); }
+  50% { box-shadow: 0 0 15px hsla(var(--live-update), 0.8), 0 0 30px hsla(var(--live-update), 0.4); }
+}
+
+.animate-glow {
+  animation: glow 2s ease-in-out infinite;
 }

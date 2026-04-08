@@ -1,5 +1,17 @@
+import { Space_Grotesk, Cinzel_Decorative } from 'next/font/google';
 import './globals.css';
 import { Metadata } from 'next';
+
+const spaceGrotesk = Space_Grotesk({ 
+  subsets: ['latin'],
+  variable: '--font-space',
+});
+
+const cinzel = Cinzel_Decorative({
+  weight: ['400', '700', '900'],
+  subsets: ['latin'],
+  variable: '--font-cinzel',
+});
 
 export const metadata: Metadata = {
   title: 'TesTicTour - TFT Tournament Platform',
@@ -12,8 +24,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body>
+    <html lang="en" className={`${spaceGrotesk.variable} ${cinzel.variable}`}>
+      <body className="font-sans">
         {children}
       </body>
     </html>

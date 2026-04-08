@@ -21,44 +21,48 @@ export function TournamentRoundsTab({ tournamentId, phases }: TournamentRoundsTa
               phase.rounds
                 .slice()
                 .sort((a, b) => {
-                  const statusOrder = {
+                  const statusOrder: Record<string, number> = {
                     completed: 1,
                     in_progress: 2,
                     pending: 3,
                   }
-                  return statusOrder[a.status] - statusOrder[b.status]
+                  const statusA = a.status?.toLowerCase() || '';
+                  const statusB = b.status?.toLowerCase() || '';
+                  return (statusOrder[statusA] || 99) - (statusOrder[statusB] || 99);
                 })
-                .map((round, index) => (
+                .map((round, index) => {
+                  const normalizedStatus = round.status?.toLowerCase() || '';
+                  return (
                   <Card
                     key={round.id}
                     className={`
                     overflow-hidden transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1 animate-fade-in-up 
                     bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20
-                    ${round.status === "in_progress" ? "ring-2 ring-primary" : ""}
+                    ${normalizedStatus === "in_progress" ? "ring-2 ring-primary" : ""}
                   `}
                     style={{ animationDelay: `${index * 100}ms` }}
                   >
                     <CardHeader
                       className={`
                       flex flex-row items-center justify-between p-4
-                      ${round.status === "completed" ? "bg-muted/50" : ""}
+                      ${normalizedStatus === "completed" ? "bg-muted/50" : ""}
                     `}
                     >
                       <CardTitle className="text-lg">Round {round.roundNumber}</CardTitle>
                       <Badge
                         variant="outline"
                         className={`
-                        ${round.status === "in_progress" ? "bg-primary/20 text-primary animate-pulse-subtle" : ""}
-                        ${round.status === "pending" ? "bg-yellow-500/20 text-yellow-500" : ""}
-                        ${round.status === "completed" ? "bg-green-500/20 text-green-500" : ""}
+                        ${normalizedStatus === "in_progress" ? "bg-primary/20 text-primary animate-pulse-subtle" : ""}
+                        ${normalizedStatus === "pending" ? "bg-yellow-500/20 text-yellow-500" : ""}
+                        ${normalizedStatus === "completed" ? "bg-green-500/20 text-green-500" : ""}
                         capitalize
                       `}
                       >
-                        {round.status === "in_progress"
+                        {normalizedStatus === "in_progress"
                           ? "On Going"
-                          : round.status === "pending"
+                          : normalizedStatus === "pending"
                             ? "Upcoming"
-                            : round.status === "completed"
+                            : normalizedStatus === "completed"
                               ? "Finished"
                               : round.status}
                       </Badge>
@@ -95,18 +99,19 @@ export function TournamentRoundsTab({ tournamentId, phases }: TournamentRoundsTa
                       <div className="mt-6">
                         <Link href={`/tournaments/${tournamentId}/rounds/${round.id}`}>
                           <Button
-                            variant={round.status === "pending" ? "secondary" : "default"}
+                            variant={normalizedStatus === "pending" ? "secondary" : "default"}
                             className="w-full"
                           >
-                            {round.status === "completed" && "View Results"}
-                            {round.status === "in_progress" && "View Live Scoreboard"}
-                            {round.status === "pending" && "View Round Details"}
+                            {normalizedStatus === "completed" && "View Results"}
+                            {normalizedStatus === "in_progress" && "View Live Scoreboard"}
+                            {normalizedStatus === "pending" && "View Round Details"}
+                            {!["completed", "in_progress", "pending"].includes(normalizedStatus) && "View Round"}
                           </Button>
                         </Link>
                       </div>
                     </CardContent>
                   </Card>
-                ))
+                )})
             ) : (
               <p className="text-muted-foreground text-center">No rounds available for this phase.</p>
             )}
