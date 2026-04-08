@@ -141,6 +141,8 @@ export interface MiniTourLobbyState {
   error: string | null;
   isProcessingAction: boolean;
   syncingMatchId: string | null;
+  isPolling: boolean;
+  pollingMessage: string | null;
 }
 
 interface MiniTourLobbyActions {
@@ -157,6 +159,9 @@ interface MiniTourLobbyActions {
   deleteLobby: (lobbyId: string, router: any, onLobbiesUpdate?: (lobbies: MiniTourLobby[]) => void) => Promise<void>;
   assignPlayerToLobby: (lobbyId: string, userId: string) => Promise<void>;
   submitManualResult: (lobbyId: string, placements: { userId: string; placement: number }[]) => Promise<void>;
+  fetchMatchFromGrimoire: (lobbyId: string) => Promise<void>;
+  startPolling: (lobbyId: string) => void;
+  stopPolling: () => void;
 }
 
 export const useMiniTourLobbyStore = create<MiniTourLobbyState & MiniTourLobbyActions>((set, get) => ({
@@ -165,6 +170,8 @@ export const useMiniTourLobbyStore = create<MiniTourLobbyState & MiniTourLobbyAc
   error: null,
   isProcessingAction: false,
   syncingMatchId: null,
+  isPolling: false,
+  pollingMessage: null,
 
   setLobby: (lobby) => {
     set({ lobby, isLoading: false, error: null });
@@ -484,5 +491,86 @@ export const useMiniTourLobbyStore = create<MiniTourLobbyState & MiniTourLobbyAc
     } finally {
       set({ isProcessingAction: false });
     }
+  },
+
+  fetchMatchFromGrimoire: async (lobbyId: string) => {
+    set({ isProcessingAction: true, error: null, pollingMessage: 'Đang tìm trận đấu...' });
+    try {
+      const result = await MiniTourLobbyService.fetchMatchFromGrimoire(lobbyId);
+      
+      if (result.found && result.data) {
+        set({ lobby: result.data, pollingMessage: null });
+        toast({
+          title: 'Đã tìm thấy trận đấu!',
+          description: 'Kết quả đã được cập nhật tự động.',
+        });
+      } else {
+        set({ pollingMessage: result.message || 'Chưa tìm thấy trận đấu. Đang tiếp tục tìm...' });
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch match from Grimoire:', error);
+      const errorMessage = error.message || 'Lỗi khi tìm trận đấu.';
+      set({ error: errorMessage, pollingMessage: null });
+      toast({
+        title: 'Lỗi',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+    } finally {
+      set({ isProcessingAction: false });
+    }
+  },
+
+  startPolling: (lobbyId: string) => {
+    const state = get();
+    if (state.isPolling) return;
+
+    set({ isPolling: true, pollingMessage: 'Bắt đầu tìm trận đấu...' });
+
+    const poll = async () => {
+      const currentState = get();
+      if (!currentState.isPolling) return;
+
+      try {
+        const result = await MiniTourLobbyService.fetchMatchFromGrimoire(lobbyId);
+
+        if (result.found && result.data) {
+          set({
+            lobby: result.data,
+            isPolling: false,
+            pollingMessage: null,
+          });
+          toast({
+            title: '🎮 Trận đấu đã kết thúc!',
+            description: 'Kết quả đã được cập nhật tự động.',
+          });
+          return; // Stop polling
+        }
+
+        // Not found yet, continue polling
+        set({ pollingMessage: result.message || 'Trận đấu đang diễn ra... Đang chờ kết quả.' });
+
+        // Poll again after 15 seconds
+        if (get().isPolling) {
+          setTimeout(poll, 15000);
+        }
+      } catch (error: any) {
+        console.error('[Polling] Error:', error);
+        set({
+          pollingMessage: 'Lỗi khi tìm trận. Sẽ thử lại sau 15 giây...',
+        });
+        // Retry even on error
+        if (get().isPolling) {
+          setTimeout(poll, 15000);
+        }
+      }
+    };
+
+    // Start first poll immediately
+    poll();
+  },
+
+  stopPolling: () => {
+    set({ isPolling: false, pollingMessage: null });
   },
 }));

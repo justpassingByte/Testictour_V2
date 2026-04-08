@@ -12,6 +12,7 @@ import {
   assignPlayerToLobby,
   submitManualResult,
   syncAllLobbyMatches,
+  fetchMatchFromGrimoire,
 } from '../controllers/miniTourLobby.controller';
 import auth from '../middlewares/auth';
 import multer from 'multer';
@@ -43,6 +44,7 @@ router
 router.route('/:id/join').post(auth(), joinMiniTourLobby);
 router.route('/:id/start').post(auth(), startMiniTourLobby);
 router.route('/:id/fetch-result').post(auth(), fetchMiniTourLobbyResult);
+router.route('/:id/fetch-match-grimoire').post(fetchMatchFromGrimoire);
 router.route('/:id/leave').post(auth(), leaveMiniTourLobby);
 router.route('/:id/manual-result').post(auth('partner', 'admin'), submitManualResult);
 router.route('/:id/sync-all').post(auth('partner', 'admin'), syncAllLobbyMatches);

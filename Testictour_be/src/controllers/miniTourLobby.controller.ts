@@ -7,6 +7,7 @@ import path from 'path';
 import logger from '../utils/logger';
 import ApiError from '../utils/ApiError';
 import MatchService from '../services/MatchService';
+import GrimoireService from '../services/GrimoireService';
 
 const prisma = new PrismaClient();
 
@@ -980,5 +981,169 @@ export const syncAllLobbyMatches = asyncHandler(async (req: Request, res: Respon
     success: true,
     message: `Queued ${queuedCount} matches for syncing.`,
     data: { synced: queuedCount, total: pendingMatches.length },
+  });
+});
+
+// @desc    Fetch match results via Grimoire's internal API (enriched with icons)
+// @route   POST /api/minitour-lobbies/:id/fetch-match-grimoire
+// @access  Public
+export const fetchMatchFromGrimoire = asyncHandler(async (req: Request, res: Response) => {
+  const { id: lobbyId } = req.params;
+
+  const lobby = await prisma.miniTourLobby.findUnique({
+    where: { id: lobbyId },
+    include: {
+      participants: {
+        include: {
+          user: {
+            select: { id: true, puuid: true, region: true, riotGameName: true, riotGameTag: true },
+          },
+        },
+      },
+      matches: {
+        where: { status: 'PENDING' },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+      },
+    },
+  });
+
+  if (!lobby) {
+    throw new ApiError(404, 'Lobby not found');
+  }
+
+  if (lobby.status === 'COMPLETED' || lobby.status === 'CANCELLED') {
+    throw new ApiError(400, 'Cannot fetch results for a completed or cancelled lobby.');
+  }
+
+  const pendingMatch = lobby.matches[0];
+  if (!pendingMatch) {
+    throw new ApiError(400, 'No pending match found. Start a match first.');
+  }
+
+  // Get all participant PUUIDs
+  const allPuuids = lobby.participants
+    .map(p => p.user.puuid)
+    .filter(Boolean) as string[];
+
+  if (allPuuids.length === 0) {
+    throw new ApiError(400, 'No participants with PUUIDs found.');
+  }
+
+  // Pick 1-2 players for polling, use their actual region
+  const pollingPuuids = allPuuids.slice(0, 2);
+  const region = lobby.participants[0]?.user?.region;
+
+  if (!region) {
+    throw new ApiError(400, 'No region found for participants. Ensure players have region set in their profile.');
+  }
+
+  // Use match startTime as search start (minus 5 min buffer)
+  const startTime = pendingMatch.startTime
+    ? Math.floor(pendingMatch.startTime.getTime() / 1000) - 300
+    : Math.floor(Date.now() / 1000) - 3600; // fallback: 1 hour ago
+
+  logger.info(`[fetchMatchFromGrimoire] Polling Grimoire for lobby=${lobbyId}, match=${pendingMatch.id}, pollingPuuids=${pollingPuuids.join(',')}, region=${region}`);
+
+  const result = await GrimoireService.fetchLatestMatch(
+    pollingPuuids,
+    region,
+    startTime,
+    undefined,
+    allPuuids,
+  );
+
+  if (!result.match) {
+    return res.json({
+      success: true,
+      found: false,
+      message: result.message || 'No match found yet. Game may still be in progress.',
+    });
+  }
+
+  // Match found! Save the enriched data and update the match record
+  const grimoireMatch = result.match;
+
+  // Build summarized matchData with enriched icons
+  const matchData = {
+    matchId: grimoireMatch.matchId,
+    gameCreation: grimoireMatch.gameCreation,
+    gameDuration: grimoireMatch.gameDuration,
+    gameVersion: grimoireMatch.gameVersion,
+    participants: grimoireMatch.participants,
+  };
+
+  // Points mapping
+  const pointsMap: Record<number, number> = { 1: 10, 2: 7, 3: 5, 4: 3, 5: 2, 6: 1, 7: 0, 8: 0 };
+
+  // Transaction: update match + create results
+  const updatedLobby = await prisma.$transaction(async (tx) => {
+    // Delete old placeholder results
+    await tx.miniTourMatchResult.deleteMany({
+      where: { miniTourMatchId: pendingMatch.id },
+    });
+
+    // Create results from Grimoire data
+    for (const participant of grimoireMatch.participants) {
+      // Find matching lobby participant by PUUID
+      const lobbyParticipant = lobby.participants.find(
+        p => p.user.puuid === participant.puuid
+      );
+
+      if (lobbyParticipant) {
+        await tx.miniTourMatchResult.create({
+          data: {
+            miniTourMatchId: pendingMatch.id,
+            userId: lobbyParticipant.user.id,
+            placement: participant.placement,
+            points: pointsMap[participant.placement] || 0,
+          },
+        });
+      }
+    }
+
+    // Update the match with enriched data
+    await tx.miniTourMatch.update({
+      where: { id: pendingMatch.id },
+      data: {
+        matchIdRiotApi: grimoireMatch.matchId,
+        matchData: matchData as any,
+        status: 'COMPLETED',
+        fetchedAt: new Date(),
+      },
+    });
+
+    // Check if all matches are completed
+    const allMatches = await tx.miniTourMatch.findMany({
+      where: { miniTourLobbyId: lobbyId },
+    });
+    const completedCount = allMatches.filter(m => m.status === 'COMPLETED').length;
+
+    if (completedCount >= lobby.totalMatches && lobby.totalMatches > 0) {
+      await tx.miniTourLobby.update({
+        where: { id: lobbyId },
+        data: { status: 'COMPLETED' },
+      });
+    }
+
+    // Return updated lobby
+    return tx.miniTourLobby.findUnique({
+      where: { id: lobbyId },
+      include: {
+        participants: { include: { user: true } },
+        matches: {
+          include: { miniTourMatchResults: { include: { user: true } } },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+  });
+
+  logger.info(`[fetchMatchFromGrimoire] Match ${grimoireMatch.matchId} saved for lobby ${lobbyId}`);
+
+  res.json({
+    success: true,
+    found: true,
+    data: updatedLobby ? { ...updatedLobby, ownerId: updatedLobby.creatorId } : null,
   });
 }); 

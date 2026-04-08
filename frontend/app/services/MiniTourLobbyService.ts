@@ -88,6 +88,23 @@ const MiniTourLobbyService = {
     });
     return response.data.data;
   },
+
+  fetchMatchFromGrimoire: async (lobbyId: string): Promise<{ found: boolean; data?: MiniTourLobby; message?: string }> => {
+    console.log('[Service] fetchMatchFromGrimoire called for lobby:', lobbyId);
+    const response = await api.post<{ success: boolean; found: boolean; data?: MiniTourLobby; message?: string }>(
+      `/minitour-lobbies/${lobbyId}/fetch-match-grimoire`
+    );
+    console.log('[Service] fetchMatchFromGrimoire response:', {
+      success: response.data.success,
+      found: response.data.found,
+      message: response.data.message,
+    });
+    return {
+      found: response.data.found,
+      data: response.data.data,
+      message: response.data.message,
+    };
+  },
 };
 
 export default MiniTourLobbyService; 
