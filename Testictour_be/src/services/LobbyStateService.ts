@@ -300,6 +300,7 @@ export default class LobbyStateService {
       });
     }
 
+    result.sort((a, b) => new Date(b.phaseStartedAt).getTime() - new Date(a.phaseStartedAt).getTime());
     return result;
   }
 
