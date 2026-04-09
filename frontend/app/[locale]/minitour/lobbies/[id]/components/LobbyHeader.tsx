@@ -21,7 +21,7 @@ export function LobbyHeader({ lobby, getThemeStyle }: LobbyHeaderProps) {
           <div className="aspect-video w-32 rounded-lg overflow-hidden border">
             {lobby.customLogoUrl && (
               <Image
-                src={`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000/'}${lobby.customLogoUrl}`}
+                src={`${(process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000').replace(/\/$/, '')}${lobby.customLogoUrl}`}
                 alt={`${lobby.name} Custom Logo`}
                 className="w-full h-full object-cover"
                 width={100}

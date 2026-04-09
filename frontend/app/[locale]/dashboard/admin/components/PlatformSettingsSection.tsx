@@ -8,12 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import api from "@/app/lib/apiConfig";
+import { useTranslations } from "next-intl"
 
 interface Setting { id: string; key: string; value: string; type: string; label: string; group: string; updatedBy?: string; parsedValue: any; }
 
-const GROUP_LABELS: Record<string, string> = { general: "General", financial: "Financial", limits: "Limits" };
-
 export default function PlatformSettingsSection() {
+    const t = useTranslations("common");
     const { toast } = useToast();
     const [grouped, setGrouped] = useState<Record<string, Setting[]>>({});
     const [loading, setLoading] = useState(true);
@@ -55,13 +55,15 @@ export default function PlatformSettingsSection() {
         finally { setSaving(null); }
     };
 
-    if (loading) return <div className="py-8 text-center text-muted-foreground text-sm">Loading settings...</div>;
+    if (loading) return <div className="py-8 text-center text-muted-foreground text-sm">{t("loading_settings", { defaultValue: "Loading settings..." })}</div>;
+
+    const groupLabels: Record<string, string> = { general: t("general", { defaultValue: "General" }), financial: t("financial", { defaultValue: "Financial" }), limits: t("limits", { defaultValue: "Limits" }) };
 
     return (
         <div className="space-y-8">
             {Object.entries(grouped).map(([group, settings]) => (
                 <div key={group}>
-                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">{GROUP_LABELS[group] ?? group}</h3>
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">{groupLabels[group] ?? group}</h3>
                     <div className="space-y-3">
                         {settings.map(s => (
                             <div key={s.key} className="flex items-center justify-between gap-4 p-4 rounded-lg bg-black/20 border border-white/5">
@@ -92,7 +94,7 @@ export default function PlatformSettingsSection() {
                                     >
                                         {saving === s.key ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                                     </Button>
-                                    {s.group === 'financial' && <Badge variant="outline" className="text-[10px] border-yellow-500/30 text-yellow-500 bg-yellow-500/10">Financial</Badge>}
+                                    {s.group === 'financial' && <Badge variant="outline" className="text-[10px] border-yellow-500/30 text-yellow-500 bg-yellow-500/10">{t("financial", { defaultValue: "Financial" })}</Badge>}
                                 </div>
                             </div>
                         ))}
@@ -104,14 +106,14 @@ export default function PlatformSettingsSection() {
             <Dialog open={!!confirmKey} onOpenChange={() => setConfirmKey(null)}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Confirm Financial Change</DialogTitle>
+                        <DialogTitle>{t("confirm_financial_change", { defaultValue: "Confirm Financial Change" })}</DialogTitle>
                         <DialogDescription>
-                            You are about to change a financial setting (<code className="bg-black/30 px-1.5 py-0.5 rounded">{confirmKey}</code>). This affects revenue calculations immediately. Are you sure?
+                            {t("confirm_financial_desc", { defaultValue: "You are about to change a financial setting" })} (<code className="bg-black/30 px-1.5 py-0.5 rounded">{confirmKey}</code>). {t("are_you_sure_financial", { defaultValue: "This affects revenue calculations immediately. Are you sure?" })}
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
-                        <Button variant="ghost" onClick={() => setConfirmKey(null)}>Cancel</Button>
-                        <Button variant="destructive" onClick={() => confirmKey && doSave(confirmKey)}>Confirm Change</Button>
+                        <Button variant="ghost" onClick={() => setConfirmKey(null)}>{t("cancel", { defaultValue: "Cancel" })}</Button>
+                        <Button variant="destructive" onClick={() => confirmKey && doSave(confirmKey)}>{t("confirm_change", { defaultValue: "Confirm Change" })}</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

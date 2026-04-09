@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Crown, Loader2, Save } from "lucide-react";
+import { Crown, Loader2, Save, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -22,12 +22,7 @@ const PLAN_STYLES: Record<string, { badge: string; header: string }> = {
     ENTERPRISE: { badge: "bg-purple-500/10 text-purple-500 border-purple-500/20", header: "border-purple-500/20" },
 };
 
-const FEATURE_LABELS: Record<string, string> = {
-    customBranding: "Custom Branding",
-    analyticsExport: "Analytics Export",
-    prioritySupport: "Priority Support",
-    revenueShare: "Revenue Share",
-};
+
 
 export default function SubscriptionPlanConfigSection() {
     const { toast } = useToast();
@@ -35,6 +30,7 @@ export default function SubscriptionPlanConfigSection() {
     const [drafts, setDrafts] = useState<Record<string, PlanConfig>>({});
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState<string | null>(null);
+    const [newFeatures, setNewFeatures] = useState<Record<string, string>>({});
 
     useEffect(() => {
         api.get("/admin/settings/plans")
@@ -58,6 +54,24 @@ export default function SubscriptionPlanConfigSection() {
             ...prev,
             [plan]: { ...prev[plan], features: { ...prev[plan].features, [feature]: value } },
         }));
+    };
+
+    const addFeature = (plan: string, featureName: string) => {
+        setDrafts(prev => ({
+            ...prev,
+            [plan]: { ...prev[plan], features: { ...prev[plan].features, [featureName]: true } },
+        }));
+        setNewFeatures(prev => ({ ...prev, [plan]: '' }));
+    };
+
+    const removeFeature = (plan: string, featureKey: string) => {
+        setDrafts(prev => {
+            const d = { ...prev };
+            const features = { ...d[plan].features };
+            delete features[featureKey];
+            d[plan] = { ...d[plan], features };
+            return d;
+        });
     };
 
     const handleSave = async (planKey: string) => {
@@ -134,11 +148,46 @@ export default function SubscriptionPlanConfigSection() {
                             <div className="space-y-2">
                                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Features</p>
                                 {Object.entries(d.features).map(([key, val]) => (
-                                    <div key={key} className="flex items-center justify-between">
-                                        <label className="text-xs">{FEATURE_LABELS[key] ?? key}</label>
-                                        <Switch checked={!!val} onCheckedChange={v => updateFeature(p.plan, key, v)} />
+                                    <div key={key} className="flex items-center justify-between group">
+                                        <label className="text-xs">{key}</label>
+                                        <div className="flex items-center gap-2">
+                                            <Switch checked={!!val} onCheckedChange={v => updateFeature(p.plan, key, v)} />
+                                            <Button variant="ghost" size="icon" className="h-6 w-6 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => removeFeature(p.plan, key)}>
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                            </Button>
+                                        </div>
                                     </div>
                                 ))}
+                                <div className="flex gap-2 pt-2 mt-2 border-t border-white/5">
+                                    <Input 
+                                        placeholder="New feature..." 
+                                        className="bg-black/20 border-white/10 h-8 text-xs" 
+                                        value={newFeatures[p.plan] || ''} 
+                                        onChange={e => setNewFeatures(prev => ({...prev, [p.plan]: e.target.value}))}
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                const featureName = newFeatures[p.plan]?.trim();
+                                                if (featureName) {
+                                                    addFeature(p.plan, featureName);
+                                                }
+                                            }
+                                        }}
+                                    />
+                                    <Button 
+                                        size="sm" 
+                                        variant="outline" 
+                                        className="h-8 border-white/10" 
+                                        onClick={() => {
+                                            const featureName = newFeatures[p.plan]?.trim();
+                                            if(featureName) { 
+                                                addFeature(p.plan, featureName); 
+                                            }
+                                        }}
+                                    >
+                                        Add
+                                    </Button>
+                                </div>
                             </div>
 
                             <Button size="sm" className="w-full mt-2" onClick={() => handleSave(p.plan)} disabled={saving === p.plan}>

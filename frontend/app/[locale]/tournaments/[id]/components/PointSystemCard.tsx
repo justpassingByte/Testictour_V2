@@ -1,6 +1,5 @@
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ITournament } from "@/app/types/tournament"
 import { Medal } from "lucide-react"
 
@@ -41,14 +40,14 @@ export function PointSystemCard({ tournament }: PointSystemCardProps) {
   }
 
   return (
-    <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-lg flex items-center">
-          <Medal className="mr-2 h-5 w-5 text-primary" />
+    <div className="bg-muted/10 rounded-xl p-5 border border-border/50">
+      <div className="pb-4">
+        <h3 className="text-sm font-semibold uppercase tracking-wider flex items-center text-muted-foreground">
+          <Medal className="mr-2 h-4 w-4" />
           Point System
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
+        </h3>
+      </div>
+      <div>
           <div>
             {showPhaseTitle && <h4 className="font-semibold text-md mb-2">{name}</h4>}
             <div className="grid grid-cols-4 gap-x-2 gap-y-4 text-center">
@@ -73,7 +72,7 @@ export function PointSystemCard({ tournament }: PointSystemCardProps) {
               })}
             </div>
           </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }

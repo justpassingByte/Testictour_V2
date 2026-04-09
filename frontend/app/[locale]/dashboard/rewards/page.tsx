@@ -9,195 +9,197 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SyncStatus } from "@/components/sync-status"
-
-// Mock user loyalty data
-const loyaltyData = {
-  currentPoints: 3847,
-  currentTier: "Gold",
-  nextTier: "Platinum",
-  pointsToNextTier: 1153,
-  totalPointsEarned: 12450,
-  lifetimeSpent: 8603,
-  memberSince: "2024-01-15",
-  streakDays: 12,
-}
-
-// Loyalty tiers
-const tiers = [
-  {
-    name: "Bronze",
-    minPoints: 0,
-    maxPoints: 999,
-    color: "bg-amber-700/20 text-amber-700",
-    benefits: ["5% bonus coins on purchases", "Access to bronze-tier lobbies"],
-    icon: "🥉",
-  },
-  {
-    name: "Silver",
-    minPoints: 1000,
-    maxPoints: 2499,
-    color: "bg-gray-400/20 text-gray-400",
-    benefits: ["10% bonus coins on purchases", "Access to silver-tier lobbies", "Priority customer support"],
-    icon: "🥈",
-  },
-  {
-    name: "Gold",
-    minPoints: 2500,
-    maxPoints: 4999,
-    color: "bg-yellow-500/20 text-yellow-500",
-    benefits: [
-      "15% bonus coins on purchases",
-      "Access to gold-tier lobbies",
-      "Monthly bonus rewards",
-      "Early access to new features",
-    ],
-    icon: "🥇",
-  },
-  {
-    name: "Platinum",
-    minPoints: 5000,
-    maxPoints: 9999,
-    color: "bg-blue-500/20 text-blue-500",
-    benefits: [
-      "20% bonus coins on purchases",
-      "Access to platinum-tier lobbies",
-      "Weekly bonus rewards",
-      "Exclusive tournaments",
-      "Personal account manager",
-    ],
-    icon: "💎",
-  },
-  {
-    name: "Diamond",
-    minPoints: 10000,
-    maxPoints: 19999,
-    color: "bg-purple-500/20 text-purple-500",
-    benefits: [
-      "25% bonus coins on purchases",
-      "Access to diamond-tier lobbies",
-      "Daily bonus rewards",
-      "VIP tournaments",
-      "Custom lobby creation",
-    ],
-    icon: "💠",
-  },
-  {
-    name: "Elite",
-    minPoints: 20000,
-    maxPoints: Number.POSITIVE_INFINITY,
-    color: "bg-red-500/20 text-red-500",
-    benefits: [
-      "30% bonus coins on purchases",
-      "Access to all lobbies",
-      "Hourly bonus rewards",
-      "Elite-only events",
-      "Revenue sharing opportunities",
-    ],
-    icon: "👑",
-  },
-]
-
-// Mock rewards store
-const rewards = [
-  {
-    id: 1,
-    name: "500 Bonus Coins",
-    description: "Get 500 extra coins added to your account",
-    cost: 1000,
-    type: "coins",
-    icon: <Coins className="h-8 w-8 text-primary" />,
-    available: true,
-    popular: true,
-  },
-  {
-    id: 2,
-    name: "Premium Lobby Access",
-    description: "7-day access to premium lobbies",
-    cost: 2500,
-    type: "access",
-    icon: <Crown className="h-8 w-8 text-yellow-500" />,
-    available: true,
-    popular: false,
-  },
-  {
-    id: 3,
-    name: "Custom Avatar Frame",
-    description: "Exclusive animated avatar frame",
-    cost: 1500,
-    type: "cosmetic",
-    icon: <Star className="h-8 w-8 text-purple-500" />,
-    available: true,
-    popular: false,
-  },
-  {
-    id: 4,
-    name: "Tournament Entry Ticket",
-    description: "Free entry to next premium tournament",
-    cost: 3000,
-    type: "tournament",
-    icon: <Trophy className="h-8 w-8 text-primary" />,
-    available: true,
-    popular: true,
-  },
-  {
-    id: 5,
-    name: "Double XP Boost",
-    description: "2x loyalty points for 24 hours",
-    cost: 800,
-    type: "boost",
-    icon: <Zap className="h-8 w-8 text-green-500" />,
-    available: true,
-    popular: false,
-  },
-  {
-    id: 6,
-    name: "Exclusive Title",
-    description: '"Loyalty Legend" title for your profile',
-    cost: 5000,
-    type: "cosmetic",
-    icon: <Badge className="h-8 w-8 text-red-500" />,
-    available: false,
-    popular: false,
-  },
-]
-
-// Mock recent activities
-const recentActivities = [
-  {
-    id: 1,
-    type: "earned",
-    description: "Completed daily challenge",
-    points: 50,
-    date: "2025-06-16",
-    time: "14:30",
-  },
-  {
-    id: 2,
-    type: "earned",
-    description: "Won lobby match",
-    points: 100,
-    date: "2025-06-16",
-    time: "13:45",
-  },
-  {
-    id: 3,
-    type: "redeemed",
-    description: "Redeemed 500 Bonus Coins",
-    points: -1000,
-    date: "2025-06-15",
-    time: "16:20",
-  },
-  {
-    id: 4,
-    type: "earned",
-    description: "Login streak bonus",
-    points: 25,
-    date: "2025-06-15",
-    time: "09:15",
-  },
-]
+import { useTranslations } from "next-intl"
 
 export default function LoyaltyPage() {
+  const t = useTranslations("common")
+
+  // Mock user loyalty data
+  const loyaltyData = {
+    currentPoints: 3847,
+    currentTier: "Gold",
+    nextTier: "Platinum",
+    pointsToNextTier: 1153,
+    totalPointsEarned: 12450,
+    lifetimeSpent: 8603,
+    memberSince: "2024-01-15",
+    streakDays: 12,
+  }
+
+  // Loyalty tiers
+  const tiers = [
+    {
+      name: "Bronze",
+      minPoints: 0,
+      maxPoints: 999,
+      color: "bg-amber-700/20 text-amber-700",
+      benefits: [t("benefit_bronze_1", { defaultValue: "5% bonus coins on purchases" }), t("benefit_bronze_2", { defaultValue: "Access to bronze-tier lobbies" })],
+      icon: "🥉",
+    },
+    {
+      name: "Silver",
+      minPoints: 1000,
+      maxPoints: 2499,
+      color: "bg-gray-400/20 text-gray-400",
+      benefits: [t("benefit_silver_1", { defaultValue: "10% bonus coins on purchases" }), t("benefit_silver_2", { defaultValue: "Access to silver-tier lobbies" }), t("benefit_silver_3", { defaultValue: "Priority customer support" })],
+      icon: "🥈",
+    },
+    {
+      name: "Gold",
+      minPoints: 2500,
+      maxPoints: 4999,
+      color: "bg-yellow-500/20 text-yellow-500",
+      benefits: [
+        t("benefit_gold_1", { defaultValue: "15% bonus coins on purchases" }),
+        t("benefit_gold_2", { defaultValue: "Access to gold-tier lobbies" }),
+        t("benefit_gold_3", { defaultValue: "Monthly bonus rewards" }),
+        t("benefit_gold_4", { defaultValue: "Early access to new features" }),
+      ],
+      icon: "🥇",
+    },
+    {
+      name: "Platinum",
+      minPoints: 5000,
+      maxPoints: 9999,
+      color: "bg-blue-500/20 text-blue-500",
+      benefits: [
+        t("benefit_plat_1", { defaultValue: "20% bonus coins on purchases" }),
+        t("benefit_plat_2", { defaultValue: "Access to platinum-tier lobbies" }),
+        t("benefit_plat_3", { defaultValue: "Weekly bonus rewards" }),
+        t("benefit_plat_4", { defaultValue: "Exclusive tournaments" }),
+        t("benefit_plat_5", { defaultValue: "Personal account manager" }),
+      ],
+      icon: "💎",
+    },
+    {
+      name: "Diamond",
+      minPoints: 10000,
+      maxPoints: 19999,
+      color: "bg-purple-500/20 text-purple-500",
+      benefits: [
+        t("benefit_dia_1", { defaultValue: "25% bonus coins on purchases" }),
+        t("benefit_dia_2", { defaultValue: "Access to diamond-tier lobbies" }),
+        t("benefit_dia_3", { defaultValue: "Daily bonus rewards" }),
+        t("benefit_dia_4", { defaultValue: "VIP tournaments" }),
+        t("benefit_dia_5", { defaultValue: "Custom lobby creation" }),
+      ],
+      icon: "💠",
+    },
+    {
+      name: "Elite",
+      minPoints: 20000,
+      maxPoints: Number.POSITIVE_INFINITY,
+      color: "bg-red-500/20 text-red-500",
+      benefits: [
+        t("benefit_elite_1", { defaultValue: "30% bonus coins on purchases" }),
+        t("benefit_elite_2", { defaultValue: "Access to all lobbies" }),
+        t("benefit_elite_3", { defaultValue: "Hourly bonus rewards" }),
+        t("benefit_elite_4", { defaultValue: "Elite-only events" }),
+        t("benefit_elite_5", { defaultValue: "Revenue sharing opportunities" }),
+      ],
+      icon: "👑",
+    },
+  ]
+
+  // Mock rewards store
+  const rewards = [
+    {
+      id: 1,
+      name: t("reward_1_name", { defaultValue: "500 Bonus Coins" }),
+      description: t("reward_1_desc", { defaultValue: "Get 500 extra coins added to your account" }),
+      cost: 1000,
+      type: "coins",
+      icon: <Coins className="h-8 w-8 text-primary" />,
+      available: true,
+      popular: true,
+    },
+    {
+      id: 2,
+      name: t("reward_2_name", { defaultValue: "Premium Lobby Access" }),
+      description: t("reward_2_desc", { defaultValue: "7-day access to premium lobbies" }),
+      cost: 2500,
+      type: "access",
+      icon: <Crown className="h-8 w-8 text-yellow-500" />,
+      available: true,
+      popular: false,
+    },
+    {
+      id: 3,
+      name: t("reward_3_name", { defaultValue: "Custom Avatar Frame" }),
+      description: t("reward_3_desc", { defaultValue: "Exclusive animated avatar frame" }),
+      cost: 1500,
+      type: "cosmetic",
+      icon: <Star className="h-8 w-8 text-purple-500" />,
+      available: true,
+      popular: false,
+    },
+    {
+      id: 4,
+      name: t("reward_4_name", { defaultValue: "Tournament Entry Ticket" }),
+      description: t("reward_4_desc", { defaultValue: "Free entry to next premium tournament" }),
+      cost: 3000,
+      type: "tournament",
+      icon: <Trophy className="h-8 w-8 text-primary" />,
+      available: true,
+      popular: true,
+    },
+    {
+      id: 5,
+      name: t("reward_5_name", { defaultValue: "Double XP Boost" }),
+      description: t("reward_5_desc", { defaultValue: "2x loyalty points for 24 hours" }),
+      cost: 800,
+      type: "boost",
+      icon: <Zap className="h-8 w-8 text-green-500" />,
+      available: true,
+      popular: false,
+    },
+    {
+      id: 6,
+      name: t("reward_6_name", { defaultValue: "Exclusive Title" }),
+      description: t("reward_6_desc", { defaultValue: '\"Loyalty Legend\" title for your profile' }),
+      cost: 5000,
+      type: "cosmetic",
+      icon: <Badge className="h-8 w-8 text-red-500" />,
+      available: false,
+      popular: false,
+    },
+  ]
+
+  // Mock recent activities
+  const recentActivities = [
+    {
+      id: 1,
+      type: "earned",
+      description: t("activity_1_desc", { defaultValue: "Completed daily challenge" }),
+      points: 50,
+      date: "2025-06-16",
+      time: "14:30",
+    },
+    {
+      id: 2,
+      type: "earned",
+      description: t("activity_2_desc", { defaultValue: "Won lobby match" }),
+      points: 100,
+      date: "2025-06-16",
+      time: "13:45",
+    },
+    {
+      id: 3,
+      type: "redeemed",
+      description: t("activity_3_desc", { defaultValue: "Redeemed 500 Bonus Coins" }),
+      points: -1000,
+      date: "2025-06-15",
+      time: "16:20",
+    },
+    {
+      id: 4,
+      type: "earned",
+      description: t("activity_4_desc", { defaultValue: "Login streak bonus" }),
+      points: 25,
+      date: "2025-06-15",
+      time: "09:15",
+    },
+  ]
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
 
   const currentTierData = tiers.find((tier) => tier.name === loyaltyData.currentTier)
@@ -216,9 +218,9 @@ export default function LoyaltyPage() {
     <div className="container py-10 space-y-8">
       <div className="flex flex-col space-y-2 md:flex-row md:items-center md:justify-between md:space-y-0">
         <div>
-          <h1 className="text-4xl font-bold tracking-tight">Loyalty Program</h1>
+          <h1 className="text-4xl font-bold tracking-tight">{t("loyalty_program", { defaultValue: "Loyalty Program" })}</h1>
           <p className="text-muted-foreground">
-            Earn points, unlock rewards, and enjoy exclusive benefits as you play.
+            {t("loyalty_program_desc", { defaultValue: "Earn points, unlock rewards, and enjoy exclusive benefits as you play." })}
           </p>
         </div>
         <SyncStatus status="live" />
@@ -232,7 +234,7 @@ export default function LoyaltyPage() {
               <Star className="h-8 w-8 text-primary mr-3" />
               <div>
                 <p className="text-2xl font-bold">{loyaltyData.currentPoints.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground">Loyalty Points</p>
+                <p className="text-xs text-muted-foreground">{t("loyalty_points", { defaultValue: "Loyalty Points" })}</p>
               </div>
             </div>
           </CardContent>
@@ -243,7 +245,7 @@ export default function LoyaltyPage() {
               <Crown className="h-8 w-8 text-yellow-500 mr-3" />
               <div>
                 <p className="text-2xl font-bold">{loyaltyData.currentTier}</p>
-                <p className="text-xs text-muted-foreground">Current Tier</p>
+                <p className="text-xs text-muted-foreground">{t("current_tier", { defaultValue: "Current Tier" })}</p>
               </div>
             </div>
           </CardContent>
@@ -254,7 +256,7 @@ export default function LoyaltyPage() {
               <TrendingUp className="h-8 w-8 text-green-500 mr-3" />
               <div>
                 <p className="text-2xl font-bold">{loyaltyData.streakDays}</p>
-                <p className="text-xs text-muted-foreground">Day Streak</p>
+                <p className="text-xs text-muted-foreground">{t("day_streak", { defaultValue: "Day Streak" })}</p>
               </div>
             </div>
           </CardContent>
@@ -265,7 +267,7 @@ export default function LoyaltyPage() {
               <Gift className="h-8 w-8 text-purple-500 mr-3" />
               <div>
                 <p className="text-2xl font-bold">{loyaltyData.totalPointsEarned.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground">Total Earned</p>
+                <p className="text-xs text-muted-foreground">{t("total_earned", { defaultValue: "Total Earned" })}</p>
               </div>
             </div>
           </CardContent>
@@ -277,10 +279,10 @@ export default function LoyaltyPage() {
         <CardHeader>
           <CardTitle className="flex items-center">
             <Crown className="mr-2 h-5 w-5 text-primary" />
-            Tier Progress
+            {t("tier_progress", { defaultValue: "Tier Progress" })}
           </CardTitle>
           <CardDescription>
-            {loyaltyData.pointsToNextTier.toLocaleString()} points needed to reach {loyaltyData.nextTier} tier
+            {t("points_needed", { points: loyaltyData.pointsToNextTier.toLocaleString(), tier: loyaltyData.nextTier, defaultValue: `${loyaltyData.pointsToNextTier.toLocaleString()} points needed to reach ${loyaltyData.nextTier} tier` })}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -291,14 +293,14 @@ export default function LoyaltyPage() {
             </div>
             <Progress value={progressPercentage} className="h-3" />
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{loyaltyData.currentPoints.toLocaleString()} points</span>
-              <span>{nextTierData?.minPoints.toLocaleString()} points</span>
+              <span>{loyaltyData.currentPoints.toLocaleString()} {t("points", { defaultValue: "points" })}</span>
+              <span>{nextTierData?.minPoints.toLocaleString()} {t("points", { defaultValue: "points" })}</span>
             </div>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <h4 className="font-medium mb-2">Current Benefits ({loyaltyData.currentTier})</h4>
+              <h4 className="font-medium mb-2">{t("current_benefits", { defaultValue: "Current Benefits" })} ({loyaltyData.currentTier})</h4>
               <ul className="space-y-1 text-sm text-muted-foreground">
                 {currentTierData?.benefits.map((benefit, index) => (
                   <li key={index} className="flex items-center">
@@ -310,7 +312,7 @@ export default function LoyaltyPage() {
             </div>
             {nextTierData && (
               <div>
-                <h4 className="font-medium mb-2">Next Tier Benefits ({loyaltyData.nextTier})</h4>
+                <h4 className="font-medium mb-2">{t("next_tier_benefits", { defaultValue: "Next Tier Benefits" })} ({loyaltyData.nextTier})</h4>
                 <ul className="space-y-1 text-sm text-muted-foreground">
                   {nextTierData.benefits.map((benefit, index) => (
                     <li key={index} className="flex items-center">
@@ -327,42 +329,42 @@ export default function LoyaltyPage() {
 
       <Tabs defaultValue="rewards" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="rewards">Rewards Store</TabsTrigger>
-          <TabsTrigger value="tiers">All Tiers</TabsTrigger>
-          <TabsTrigger value="activity">Recent Activity</TabsTrigger>
+          <TabsTrigger value="rewards">{t("rewards_store", { defaultValue: "Rewards Store" })}</TabsTrigger>
+          <TabsTrigger value="tiers">{t("all_tiers", { defaultValue: "All Tiers" })}</TabsTrigger>
+          <TabsTrigger value="activity">{t("recent_activity", { defaultValue: "Recent Activity" })}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="rewards" className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold">Rewards Store</h2>
-            <div className="flex gap-2">
+            <h2 className="text-2xl font-bold">{t("rewards_store", { defaultValue: "Rewards Store" })}</h2>
+            <div className="flex gap-2 text-sm">
               <Button
                 variant={selectedCategory === "all" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setSelectedCategory("all")}
               >
-                All
+                {t("all", { defaultValue: "All" })}
               </Button>
               <Button
                 variant={selectedCategory === "coins" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setSelectedCategory("coins")}
               >
-                Coins
+                {t("coins", { defaultValue: "Coins" })}
               </Button>
               <Button
                 variant={selectedCategory === "cosmetic" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setSelectedCategory("cosmetic")}
               >
-                Cosmetics
+                {t("cosmetics", { defaultValue: "Cosmetics" })}
               </Button>
               <Button
                 variant={selectedCategory === "access" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setSelectedCategory("access")}
               >
-                Access
+                {t("access", { defaultValue: "Access" })}
               </Button>
             </div>
           </div>
@@ -372,7 +374,7 @@ export default function LoyaltyPage() {
               <Card key={reward.id} className={`relative ${!reward.available ? "opacity-50" : ""}`}>
                 {reward.popular && (
                   <div className="absolute -top-2 -right-2 bg-primary text-white text-xs px-2 py-1 rounded-full">
-                    Popular
+                    {t("popular", { defaultValue: "Popular" })}
                   </div>
                 )}
                 <CardContent className="pt-6">
@@ -386,7 +388,7 @@ export default function LoyaltyPage() {
 
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Cost:</span>
+                      <span className="text-sm text-muted-foreground">{t("cost", { defaultValue: "Cost" })}:</span>
                       <span className="font-bold text-primary">
                         <Star className="inline h-4 w-4 mr-1" />
                         {reward.cost.toLocaleString()}
@@ -395,13 +397,13 @@ export default function LoyaltyPage() {
 
                     <Button className="w-full" disabled={!reward.available || loyaltyData.currentPoints < reward.cost}>
                       {!reward.available ? (
-                        "Coming Soon"
+                        t("coming_soon", { defaultValue: "Coming Soon" })
                       ) : loyaltyData.currentPoints < reward.cost ? (
-                        "Insufficient Points"
+                        t("insufficient_points", { defaultValue: "Insufficient Points" })
                       ) : (
                         <>
                           <ShoppingCart className="mr-2 h-4 w-4" />
-                          Redeem
+                          {t("redeem", { defaultValue: "Redeem" })}
                         </>
                       )}
                     </Button>
@@ -413,7 +415,7 @@ export default function LoyaltyPage() {
         </TabsContent>
 
         <TabsContent value="tiers" className="space-y-4">
-          <h2 className="text-2xl font-bold">Loyalty Tiers</h2>
+          <h2 className="text-2xl font-bold">{t("loyalty_tiers", { defaultValue: "Loyalty Tiers" })}</h2>
           <div className="grid gap-4">
             {tiers.map((tier, index) => (
               <Card
@@ -428,17 +430,17 @@ export default function LoyaltyPage() {
                         <h3 className="text-xl font-bold">{tier.name}</h3>
                         <p className="text-sm text-muted-foreground">
                           {tier.minPoints.toLocaleString()} -{" "}
-                          {tier.maxPoints === Number.POSITIVE_INFINITY ? "∞" : tier.maxPoints.toLocaleString()} points
+                          {tier.maxPoints === Number.POSITIVE_INFINITY ? "∞" : tier.maxPoints.toLocaleString()} {t("points", { defaultValue: "points" })}
                         </p>
                       </div>
                     </div>
                     {tier.name === loyaltyData.currentTier && (
-                      <Badge className="bg-primary/20 text-primary">Current</Badge>
+                      <Badge className="bg-primary/20 text-primary">{t("current", { defaultValue: "Current" })}</Badge>
                     )}
                   </div>
 
                   <div>
-                    <h4 className="font-medium mb-2">Benefits:</h4>
+                    <h4 className="font-medium mb-2">{t("benefits", { defaultValue: "Benefits:" })}</h4>
                     <ul className="space-y-1">
                       {tier.benefits.map((benefit, benefitIndex) => (
                         <li key={benefitIndex} className="flex items-center text-sm">
@@ -455,7 +457,7 @@ export default function LoyaltyPage() {
         </TabsContent>
 
         <TabsContent value="activity" className="space-y-4">
-          <h2 className="text-2xl font-bold">Recent Activity</h2>
+          <h2 className="text-2xl font-bold">{t("recent_activity", { defaultValue: "Recent Activity" })}</h2>
           <Card>
             <CardContent className="pt-6">
               <div className="space-y-4">
@@ -469,7 +471,7 @@ export default function LoyaltyPage() {
                         <p className="font-medium">{activity.description}</p>
                         <div className="flex items-center text-sm text-muted-foreground">
                           <Clock className="h-3 w-3 mr-1" />
-                          {activity.date} at {activity.time}
+                          {activity.date} {t("at", { defaultValue: "at" })} {activity.time}
                         </div>
                       </div>
                     </div>

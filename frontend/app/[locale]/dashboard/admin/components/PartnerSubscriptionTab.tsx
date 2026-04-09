@@ -38,48 +38,9 @@ interface SubscriptionModalProps {
   open: boolean
   onClose: () => void
   subscription?: PartnerSubscription | null
+  onSave: (data: any) => void
 }
 
-const PLAN_FEATURES = {
-  FREE: {
-    playerManagement: true,
-    basicAnalytics: true,
-    revenueTracking: true,
-    csvExport: true,
-    maxPlayers: 50,
-    maxLobbies: 5,
-    supportLevel: 'basic'
-  },
-  PRO: {
-    playerManagement: true,
-    basicAnalytics: true,
-    advancedAnalytics: true,
-    revenueTracking: true,
-    csvExport: true,
-    customBranding: true,
-    apiAccess: true,
-    maxPlayers: 500,
-    maxLobbies: 50,
-    supportLevel: 'priority',
-    withdrawalProcessing: 'fast'
-  },
-  ENTERPRISE: {
-    playerManagement: true,
-    basicAnalytics: true,
-    advancedAnalytics: true,
-    revenueTracking: true,
-    csvExport: true,
-    customBranding: true,
-    apiAccess: true,
-    whiteLabel: true,
-    customIntegrations: true,
-    dedicatedSupport: true,
-    maxPlayers: -1, // unlimited
-    maxLobbies: -1, // unlimited
-    supportLevel: 'dedicated',
-    withdrawalProcessing: 'priority'
-  }
-}
 
 export default function PartnerSubscriptionTab() {
   const [subscriptions, setSubscriptions] = useState<PartnerSubscription[]>([])
@@ -214,7 +175,9 @@ export default function PartnerSubscriptionTab() {
                     </TableCell>
                     <TableCell>
                       <div className="text-sm space-y-1">
-                        {Object.entries(subscription.features).map(([key, value]) => (
+                        {Object.entries(subscription.features).map(([key, value]) => {
+                          if (typeof value !== 'boolean') return null;
+                          return (
                           <div key={key} className="flex items-center space-x-2">
                             {value ? (
                               <CheckCircle className="h-3 w-3 text-green-500" />
@@ -223,7 +186,7 @@ export default function PartnerSubscriptionTab() {
                             )}
                             <span className="capitalize">{key.replace(/([A-Z])/g, ' $1').toLowerCase()}</span>
                           </div>
-                        ))}
+                        )})}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -257,7 +220,7 @@ export default function PartnerSubscriptionTab() {
                           onClick={async () => {
                             if (confirm('Are you sure you want to delete this subscription?')) {
                               try {
-                                const response = await fetch(`/api/admin/subscriptions/${subscription.partnerId}`, {
+                                const response = await fetch(`/api/admin/subscriptions/${subscription.userId}`, {
                                   method: 'DELETE'
                                 })
                                 if (response.ok) {
@@ -310,7 +273,7 @@ export default function PartnerSubscriptionTab() {
 
 function SubscriptionModal({ open, onClose, subscription, onSave }: SubscriptionModalProps) {
   const [formData, setFormData] = useState({
-    partnerId: subscription?.partnerId || '',
+    partnerId: subscription?.userId || '',
     plan: subscription?.plan || 'FREE',
     features: subscription?.features || {},
     status: subscription?.status || 'ACTIVE'
@@ -389,24 +352,24 @@ function SubscriptionModal({ open, onClose, subscription, onSave }: Subscription
         <div className="col-span-4">
           <Label>Features</Label>
           <div className="mt-2 space-y-3">
-            {Object.entries(PLAN_FEATURES[formData.plan as keyof typeof PLAN_FEATURES]).map(([key, value]) => (
+            {Object.entries(formData.features || {}).map(([key, value]) => {
+              // We only want to toggle boolean features here
+              if (typeof value !== 'boolean' && typeof value !== 'undefined') return null;
+              
+              return (
               <div key={key} className="flex items-center justify-between p-3 border rounded">
                 <div className="flex items-center space-x-2">
                   <Switch
-                    checked={formData.features[key] || false}
+                    checked={!!formData.features[key]}
                     onCheckedChange={(checked) => handleFeatureToggle(key, checked)}
                   />
                   <span className="capitalize">{key.replace(/([A-Z])/g, ' $1').toLowerCase()}</span>
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  {typeof value === 'boolean' ? (
-                    value ? 'Enabled' : 'Disabled'
-                  ) : (
-                    typeof value === 'number' && value === -1 ? 'Unlimited' : value.toString()
-                  )}
+                  {formData.features[key] ? 'Enabled' : 'Disabled'}
                 </div>
               </div>
-            ))}
+            )})}
           </div>
         </div>
 

@@ -9,6 +9,7 @@ export interface AdminUser {
   email: string;
   role: string;
   balance: number;
+  isActive?: boolean;
   subscriptionPlan?: string | null;
   subscriptionStatus?: string | null;
 }

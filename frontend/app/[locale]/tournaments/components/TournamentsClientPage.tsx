@@ -133,16 +133,16 @@ export default function TournamentsClientPage({ initialTournaments }: Tournament
                 <SelectValue placeholder={t("status")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="in_progress">Ongoing</SelectItem>
-                <SelectItem value="UPCOMING">Upcoming</SelectItem>
-                <SelectItem value="COMPLETED">Finished</SelectItem>
+                <SelectItem value="all">{t("all_status")}</SelectItem>
+                <SelectItem value="in_progress">{t("ongoing")}</SelectItem>
+                <SelectItem value="UPCOMING">{t("upcoming")}</SelectItem>
+                <SelectItem value="COMPLETED">{t("finished")}</SelectItem>
               </SelectContent>
             </Select>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="flex items-center gap-1">
-                  Sort
+                  {t("sort")}
                   <ChevronDown className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -172,17 +172,17 @@ export default function TournamentsClientPage({ initialTournaments }: Tournament
         </div>
 
         <div className="flex items-center justify-between">
-          <div className="text-sm text-muted-foreground">Showing {sortedTournaments.length} tournaments</div>
+          <div className="text-sm text-muted-foreground">{t("showing_tournaments", { count: sortedTournaments.length })}</div>
           <SyncStatus status="live" />
         </div>
       </div>
 
       <Tabs defaultValue="all" className="w-full">
         <TabsList>
-          <TabsTrigger value="all">All</TabsTrigger>
+          <TabsTrigger value="all">{t("all")}</TabsTrigger>
           <TabsTrigger value="in_progress">
             <span className="flex items-center">
-              Ongoing
+              {t("ongoing")}
               <Badge variant="outline" className="ml-2 bg-primary/20 text-primary">
                 {displayedTournaments.filter((t) => t.status === "in_progress").length}
               </Badge>
@@ -190,7 +190,7 @@ export default function TournamentsClientPage({ initialTournaments }: Tournament
           </TabsTrigger>
           <TabsTrigger value="UPCOMING">
             <span className="flex items-center">
-              Upcoming
+              {t("upcoming")}
               <Badge variant="outline" className="ml-2 bg-primary/20 text-primary">
                 {displayedTournaments.filter((t) => t.status === "UPCOMING").length}
               </Badge>
@@ -198,13 +198,13 @@ export default function TournamentsClientPage({ initialTournaments }: Tournament
           </TabsTrigger>
           <TabsTrigger value="COMPLETED">
             <span className="flex items-center">
-              Finished
+              {t("finished")}
               <Badge variant="outline" className="ml-2 bg-primary/20 text-primary">
                 {displayedTournaments.filter((t) => t.status === "COMPLETED").length}
               </Badge>
             </span>
           </TabsTrigger>
-          <TabsTrigger value="my-tournaments">My Tournaments</TabsTrigger>
+          <TabsTrigger value="my-tournaments">{t("my_tournaments")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="all" className="mt-4">
@@ -214,7 +214,7 @@ export default function TournamentsClientPage({ initialTournaments }: Tournament
             ))}
             {sortedTournaments.length === 0 && (
               <div className="col-span-full text-center py-8 text-muted-foreground">
-                No tournaments match your criteria
+                {t("no_tournaments_match")}
               </div>
             )}
           </div>
@@ -229,7 +229,7 @@ export default function TournamentsClientPage({ initialTournaments }: Tournament
               ))}
             {sortedTournaments.filter((t) => t.status === "in_progress").length === 0 && (
               <div className="col-span-full text-center py-8 text-muted-foreground">
-                No ongoing tournaments match your criteria
+                {t("no_ongoing_tournaments")}
               </div>
             )}
           </div>
@@ -244,7 +244,7 @@ export default function TournamentsClientPage({ initialTournaments }: Tournament
               ))}
             {sortedTournaments.filter((t) => t.status === "UPCOMING").length === 0 && (
               <div className="col-span-full text-center py-8 text-muted-foreground">
-                No upcoming tournaments match your criteria
+                {t("no_upcoming_tournaments")}
               </div>
             )}
           </div>
@@ -259,7 +259,7 @@ export default function TournamentsClientPage({ initialTournaments }: Tournament
               ))}
             {sortedTournaments.filter((t) => t.status === "COMPLETED").length === 0 && (
               <div className="col-span-full text-center py-8 text-muted-foreground">
-                No completed tournaments match your criteria
+                {t("no_completed_tournaments")}
               </div>
             )}
           </div>
@@ -274,7 +274,7 @@ export default function TournamentsClientPage({ initialTournaments }: Tournament
               ))}
             {sortedTournaments.filter((t) => t.registered).length === 0 && (
               <div className="col-span-full text-center py-8 text-muted-foreground">
-                You are not registered for any tournaments
+                {t("no_registered_tournaments")}
               </div>
             )}
           </div>

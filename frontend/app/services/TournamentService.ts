@@ -33,6 +33,8 @@ export const TournamentService = {
 
   async create(data: {
     name: string;
+    description?: string;
+    image?: string;
     startTime: Date;
     maxPlayers: number;
     organizerId: string;

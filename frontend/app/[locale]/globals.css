@@ -36,8 +36,8 @@
     --eliminated: 0 84% 60%;
     --advanced: 43 90% 55%;
     
-    --font-heading: var(--font-cinzel), serif;
-    --font-sans: var(--font-space), sans-serif;
+    --font-heading: var(--font-space), sans-serif;
+    --font-sans: var(--font-inter), sans-serif;
   }
 
   .dark {
@@ -83,7 +83,17 @@
   }
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-heading);
-    letter-spacing: 0.05em;
+    letter-spacing: -0.02em;
+    font-weight: 700;
+  }
+  .dark p, .dark .text-muted-foreground {
+    color: rgba(255, 255, 255, 0.85) !important;
+  }
+  .section-label {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.8125rem;
+    font-weight: 600;
   }
 }
 

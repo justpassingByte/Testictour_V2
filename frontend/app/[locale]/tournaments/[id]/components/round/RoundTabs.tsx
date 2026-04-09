@@ -66,8 +66,12 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
             </h3>
             
             {lobby.matches?.map((match, matchIndex) => {
-              const matchInfo = match.matchData?.info;
-              if (!matchInfo) return (
+              // Support both Grimoire format (root-level participants) and legacy Riot format (info.participants)
+              const isGrimoire = isGrimoireMatchData(match.matchData);
+              const matchInfo = match.matchData?.info; // legacy only
+              const hasAnyData = isGrimoire || !!matchInfo;
+
+              if (!hasAnyData) return (
                 <Card key={match.id} className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20">
                   <CardHeader>
                     <CardTitle>Match {matchIndex + 1}</CardTitle>
@@ -76,20 +80,28 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
                 </Card>
               );
 
-              const riotParticipants = matchInfo.participants || [];
-              const winnerData = riotParticipants.find((p) => p.placement === 1);
-              const winnerParticipant = tournament.participants?.find(p => p.userId === winnerData?.puuid);
-              const winnerName = winnerParticipant?.user?.riotGameName || "Unknown";
+              // Normalise participant list & timing for the header summary
+              const riotParticipants: any[] = isGrimoire
+                ? (match.matchData as GrimoireMatchData).participants
+                : (matchInfo?.participants || []);
 
-              const startTime = matchInfo.gameStartTimestamp 
-                ? new Date(matchInfo.gameStartTimestamp)
-                : new Date(matchInfo.gameCreation);
-              
-              const endTime = matchInfo.gameEndTimestamp
-                ? new Date(matchInfo.gameEndTimestamp)
-                : new Date(startTime.getTime() + (matchInfo.gameDuration || 1800) * 1000);
-              
-              const durationInSeconds = matchInfo.gameDuration || Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
+              const winnerData = riotParticipants.find((p: any) => p.placement === 1);
+              // Grimoire uses gameName; legacy uses riotIdGameName
+              const winnerRiotName = isGrimoire
+                ? (winnerData as any)?.gameName
+                : winnerData?.riotIdGameName;
+              const winnerParticipant = tournament.participants?.find(p => p.user?.puuid === winnerData?.puuid);
+              const winnerName = winnerParticipant?.user?.riotGameName || winnerRiotName || "Unknown";
+
+              const gameCreationMs = isGrimoire
+                ? (match.matchData as GrimoireMatchData).gameCreation   // already ms
+                : (matchInfo?.gameStartTimestamp ?? matchInfo?.gameCreation ?? Date.now());
+              const gameDurationSec = isGrimoire
+                ? (match.matchData as GrimoireMatchData).gameDuration
+                : (matchInfo?.gameDuration ?? 1800);
+
+              const startTime = new Date(gameCreationMs);
+              const endTime   = new Date(gameCreationMs + gameDurationSec * 1000);
 
               const formatDuration = (seconds: number) => {
                 const minutes = Math.floor(seconds / 60);
@@ -100,6 +112,7 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
               // Get match results for all participants in this match
               const tournamentMatchResults = matchResults[match.id] || [];
               const totalPoints = tournamentMatchResults.reduce((sum, r) => sum + r.points, 0);
+
 
               return (
                 <Card 
@@ -122,7 +135,7 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
                         <span className="font-medium mr-1">End:</span> {format(endTime, "MMM d, yyyy h:mm a")}
                       </div>
                       <div className="flex items-center text-xs">
-                        <span className="font-medium mr-1">Duration:</span> {formatDuration(durationInSeconds)}
+                        <span className="font-medium mr-1">Duration:</span> {formatDuration(gameDurationSec)}
                       </div>
                     </CardDescription>
                   </CardHeader>
@@ -162,15 +175,19 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
                       </div>
                       <CollapsibleContent className="animate-in fade-in zoom-in-95 duration-200">
                         {isGrimoireMatchData(match.matchData) ? (
-                          // Rich enriched view — traits, units, items, augments
+                          // Rich enriched view — traits, units, items, augments + tournament points
                           <MatchCompPanel
                             matchData={match.matchData as GrimoireMatchData}
                             resultMap={Object.fromEntries(
-                              tournamentMatchResults.map(r => [
-                                // We need puuid here; fall back to participantId as key
-                                tournament.participants?.find(p => p.userId === r.participantId)?.user?.puuid ?? r.participantId,
-                                { placement: r.placement, points: r.points }
-                              ])
+                              tournamentMatchResults
+                                .map(r => {
+                                  // r.participantId is the DB participant row id
+                                  const participant = tournament.participants?.find(p => p.id === r.participantId);
+                                  const puuid = participant?.user?.puuid;
+                                  if (!puuid) return null;
+                                  return [puuid, { placement: r.placement, points: r.points }];
+                                })
+                                .filter(Boolean) as [string, { placement: number; points: number }][]
                             )}
                           />
                         ) : (

@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SyncStatus } from "@/components/sync-status"
 
 import SubscriptionTab from "./components/SubscriptionTab"
+import PartnerTournamentTab from "./components/PartnerTournamentTab"
 
 import api from "@/app/lib/apiConfig"
 import { MiniTourLobby, MiniTourMatch, MiniTourMatchResult, PartnerData, AnalyticsData, Player } from "@/app/stores/miniTourLobbyStore";
@@ -216,8 +217,9 @@ export default function PartnerDashboardPage() {
       </div>
 
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList>
+        <TabsList className="overflow-x-auto flex w-full justify-start h-auto no-scrollbar">
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="tournaments"><Trophy className="mr-1.5 h-4 w-4" />Tournaments</TabsTrigger>
           <TabsTrigger value="lobbies">Lobbies</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
           <TabsTrigger value="team">Players</TabsTrigger>
@@ -228,6 +230,10 @@ export default function PartnerDashboardPage() {
 
         <TabsContent value="overview" className="space-y-4">
           <OverviewTabNew key={partnerData?.id} partnerData={partnerData as any} lobbies={lobbies as any} />
+        </TabsContent>
+
+        <TabsContent value="tournaments" className="space-y-4">
+          <PartnerTournamentTab subscriptionPlan={(partnerData as any)?.subscriptionPlan} />
         </TabsContent>
 
         <TabsContent value="lobbies" className="space-y-4">

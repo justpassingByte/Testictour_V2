@@ -19,7 +19,6 @@ import { Separator } from "@/components/ui/separator"
 import { useMiniTourLobbyStore, MiniTourLobby } from "@/app/stores/miniTourLobbyStore"
 import { useToast } from "@/components/ui/use-toast"
 import api from "@/app/lib/apiConfig"
-import Image from "next/image"
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://localhost:4000"
 
@@ -524,39 +523,31 @@ export default function CreateOrEditLobbyPage() {
 
                   <div className="space-y-2">
                     <Label htmlFor="logo">Custom Logo</Label>
+                    <input
+                      id="customLogo"
+                      type="file"
+                      className="hidden"
+                      accept="image/png, image/jpeg, image/jpg"
+                      onChange={handleImageChange}
+                      ref={fileInputRef}
+                    />
                     <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center">
                       {imagePreview ? (
-                        <div className="relative group">
-                          <Image src={imagePreview} alt="Lobby Logo" className="mx-auto max-h-40 rounded-lg" />
-                          <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Label
-                              htmlFor="customLogo"
-                              className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-9 px-3 cursor-pointer border border-white/50 bg-transparent text-white hover:bg-white/10"
-                            >
+                        <div className="relative group flex justify-center">
+                          <img src={imagePreview} alt="Lobby Logo" className="mx-auto max-h-40 rounded-lg object-contain" />
+                          <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
+                            <Button variant="outline" size="sm" type="button" onClick={() => fileInputRef.current?.click()}>
                               Change Logo
-                            </Label>
+                            </Button>
                           </div>
                         </div>
                       ) : (
                         <>
                           <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                          <p className="text-sm text-muted-foreground mb-2">
-                            Upload your lobby logo (PNG, JPG up to 2MB)
-                          </p>
-                          <input
-                            id="customLogo"
-                            type="file"
-                            className="hidden"
-                            accept="image/png, image/jpeg, image/jpg"
-                            onChange={handleImageChange}
-                            ref={fileInputRef}
-                          />
-                          <Label
-                            htmlFor="customLogo"
-                            className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3 cursor-pointer"
-                          >
+                          <p className="text-sm text-muted-foreground mb-2">Upload your lobby logo (PNG, JPG up to 2MB)</p>
+                          <Button variant="outline" size="sm" type="button" onClick={() => fileInputRef.current?.click()}>
                             Choose File
-                          </Label>
+                          </Button>
                         </>
                       )}
                     </div>

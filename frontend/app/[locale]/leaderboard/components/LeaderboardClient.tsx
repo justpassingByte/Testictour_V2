@@ -63,7 +63,7 @@ export default function LeaderboardClient() {
       <div className="container py-10 flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="h-10 w-10 animate-spin text-primary" />
-          <p className="text-muted-foreground">{t('loading_tournaments', { defaultValue: 'Loading...' })}</p>
+          <p className="text-muted-foreground">{t('loading')}</p>
         </div>
       </div>
     )
@@ -75,17 +75,15 @@ export default function LeaderboardClient() {
       <div className="flex flex-col space-y-2 md:flex-row md:items-center md:justify-between md:space-y-0">
         <div>
           <h1 className="text-4xl font-bold tracking-tight">
-            <span className="gradient-text">{t('global_leaderboard', { defaultValue: 'Global Leaderboard' })}</span>
+            <span className="gradient-text">{t('global_leaderboard')}</span>
           </h1>
           <p className="text-muted-foreground mt-1">
-            {t('leaderboard_merged_description', {
-              defaultValue: 'Rankings, player profiles, and regional statistics — all in one place.'
-            })}
+            {t('leaderboard_merged_description')}
           </p>
         </div>
         <div className="flex items-center gap-3">
           <Badge variant="outline" className="text-sm py-1">
-            {total} {t('players', { defaultValue: 'Players' })}
+            {total} {t('players')}
           </Badge>
           <SyncStatus status="live" />
         </div>
@@ -96,11 +94,11 @@ export default function LeaderboardClient() {
         <TabsList className="grid w-full grid-cols-2 h-12">
           <TabsTrigger value="rankings" className="flex items-center gap-2 text-sm">
             <Trophy className="h-4 w-4" />
-            {t('rankings_tab', { defaultValue: 'Rankings' })}
+            {t('rankings_tab')}
           </TabsTrigger>
           <TabsTrigger value="players" className="flex items-center gap-2 text-sm">
             <Users className="h-4 w-4" />
-            {t('players_tab', { defaultValue: 'Players' })}
+            {t('players_tab')}
           </TabsTrigger>
         </TabsList>
 
@@ -150,7 +148,7 @@ export default function LeaderboardClient() {
                           )}
                           <div className="text-2xl font-black text-primary mt-1">{(player.totalPoints || 0).toLocaleString()} <span className="text-sm font-medium text-muted-foreground">pts</span></div>
                           <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
-                            <span>{player.tournamentsWon || 0} {t('tournaments_won', { defaultValue: 'Won' })}</span>
+                            <span>{player.tournamentsWon || 0} {t('tournaments_won')}</span>
                             <span>·</span>
                             <span>{player.topFourRate || 0}% Top 4</span>
                           </div>
@@ -168,7 +166,7 @@ export default function LeaderboardClient() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder={t('search_players', { defaultValue: 'Search players...' })}
+                placeholder={t('search_players')}
                 className="pl-9"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -179,30 +177,30 @@ export default function LeaderboardClient() {
           {/* Main Leaderboard Table */}
           <Card className="bg-card/95 dark:bg-card/40 backdrop-blur-lg border shadow-sm">
             <CardHeader className="pb-0">
-              <CardTitle>{t('player_rankings', { defaultValue: 'Player Rankings' })}</CardTitle>
+              <CardTitle>{t('player_rankings')}</CardTitle>
               <CardDescription>
-                {t('updated_rankings', { defaultValue: 'Rankings updated after each tournament' })}
+                {t('updated_rankings')}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[60px]">{t('rank', { defaultValue: 'Rank' })}</TableHead>
-                    <TableHead>{t('player', { defaultValue: 'Player' })}</TableHead>
-                    <TableHead>{t('summoner_name', { defaultValue: 'Summoner' })}</TableHead>
-                    <TableHead className="text-center">{t('region', { defaultValue: 'Region' })}</TableHead>
-                    <TableHead className="text-right">{t('points', { defaultValue: 'Points' })}</TableHead>
-                    <TableHead className="text-center">{t('tournaments_won', { defaultValue: 'Won' })}</TableHead>
-                    <TableHead className="text-center">{t('top_four_rate', { defaultValue: 'Top 4 Rate' })}</TableHead>
-                    <TableHead className="text-center">{t('avg_placement', { defaultValue: 'Avg Place' })}</TableHead>
+                    <TableHead className="w-[60px]">{t('rank')}</TableHead>
+                    <TableHead>{t('player')}</TableHead>
+                    <TableHead>{t('summoner_name')}</TableHead>
+                    <TableHead className="text-center">{t('region')}</TableHead>
+                    <TableHead className="text-right">{t('points')}</TableHead>
+                    <TableHead className="text-center">{t('tournaments_won')}</TableHead>
+                    <TableHead className="text-center">{t('top_four_rate')}</TableHead>
+                    <TableHead className="text-center">{t('avg_placement')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {sortedPlayers.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                        {isLoading ? t('loading_tournaments', { defaultValue: 'Loading...' }) : searchQuery ? t('no_tournaments_match_criteria', { defaultValue: 'No players match your search' }) : 'No players found'}
+                        {isLoading ? t('loading') : searchQuery ? t('no_tournaments_match') : 'No players found'}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -255,8 +253,8 @@ export default function LeaderboardClient() {
           {topPlayers.length > 0 && (
             <section className="space-y-6">
               <div>
-                <h2 className="text-2xl font-bold mb-1">{t('featured_players', { defaultValue: 'Featured Players' })}</h2>
-                <p className="text-muted-foreground">{t('featured_players_description', { defaultValue: 'Top performing players' })}</p>
+                <h2 className="text-2xl font-bold mb-1">{t('featured_players')}</h2>
+                <p className="text-muted-foreground">{t('featured_players_description')}</p>
               </div>
 
               <div className="grid gap-6 md:grid-cols-3">
@@ -299,15 +297,15 @@ export default function LeaderboardClient() {
 
                       <div className="space-y-3">
                         <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">{t('total_points', { defaultValue: 'Total Points' })}:</span>
+                          <span className="text-sm text-muted-foreground">{t('total_points')}:</span>
                           <span className="font-bold text-primary">{(player.totalPoints || 0).toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">{t('tournaments_won', { defaultValue: 'Won' })}:</span>
+                          <span className="text-sm text-muted-foreground">{t('tournaments_won')}:</span>
                           <span className="font-medium">{player.tournamentsWon || 0}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">{t('top_four_rate', { defaultValue: 'Top 4 Rate' })}:</span>
+                          <span className="text-sm text-muted-foreground">{t('top_four_rate')}:</span>
                           <span className="font-medium">{player.topFourRate || 0}%</span>
                         </div>
                       </div>
@@ -315,7 +313,7 @@ export default function LeaderboardClient() {
                       <div className="mt-4">
                         <Link href={`/players/${player.id}`}>
                           <Button className="w-full">
-                            {t('view_profile', { defaultValue: 'View Profile' })}
+                            {t('view_profile')}
                           </Button>
                         </Link>
                       </div>
@@ -329,15 +327,15 @@ export default function LeaderboardClient() {
           {/* Player Directory Table */}
           <section className="space-y-6">
             <div>
-              <h2 className="text-2xl font-bold mb-1">{t('player_directory', { defaultValue: 'Player Directory' })}</h2>
-              <p className="text-muted-foreground">{t('player_directory_description', { defaultValue: 'Browse all registered players' })}</p>
+              <h2 className="text-2xl font-bold mb-1">{t('player_directory')}</h2>
+              <p className="text-muted-foreground">{t('player_directory_description')}</p>
             </div>
 
             <div className="flex flex-col space-y-4 md:flex-row md:items-center md:space-y-0 md:space-x-4">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder={t('search_players', { defaultValue: 'Search players...' })}
+                  placeholder={t('search_players')}
                   className="pl-9"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -345,14 +343,14 @@ export default function LeaderboardClient() {
               </div>
               <Select value={sortBy} onValueChange={setSortBy}>
                 <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder={t('sort_by', { defaultValue: 'Sort by' })} />
+                  <SelectValue placeholder={t('sort_by')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="totalPoints">{t('total_points', { defaultValue: 'Total Points' })}</SelectItem>
-                  <SelectItem value="tournamentsWon">{t('tournaments_won', { defaultValue: 'Won' })}</SelectItem>
-                  <SelectItem value="topFourRate">{t('top_four_rate', { defaultValue: 'Top 4 Rate' })}</SelectItem>
-                  <SelectItem value="lobbiesPlayed">{t('match_history', { defaultValue: 'Games' })}</SelectItem>
-                  <SelectItem value="username">{t('player', { defaultValue: 'Name' })}</SelectItem>
+                  <SelectItem value="totalPoints">{t('total_points')}</SelectItem>
+                  <SelectItem value="tournamentsWon">{t('tournaments_won')}</SelectItem>
+                  <SelectItem value="topFourRate">{t('top_four_rate')}</SelectItem>
+                  <SelectItem value="lobbiesPlayed">{t('match_history')}</SelectItem>
+                  <SelectItem value="username">{t('player')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -362,20 +360,20 @@ export default function LeaderboardClient() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>{t('player', { defaultValue: 'Player' })}</TableHead>
-                      <TableHead>{t('summoner_name', { defaultValue: 'Summoner' })}</TableHead>
-                      <TableHead className="text-center">{t('region', { defaultValue: 'Region' })}</TableHead>
-                      <TableHead className="text-center">{t('total_points', { defaultValue: 'Points' })}</TableHead>
-                      <TableHead className="text-center">{t('tournaments_won', { defaultValue: 'Won' })}</TableHead>
-                      <TableHead className="text-center">{t('top_four_rate', { defaultValue: 'Top 4 %' })}</TableHead>
-                      <TableHead className="text-right">{t('action', { defaultValue: 'Action' })}</TableHead>
+                      <TableHead>{t('player')}</TableHead>
+                      <TableHead>{t('summoner_name')}</TableHead>
+                      <TableHead className="text-center">{t('region')}</TableHead>
+                      <TableHead className="text-center">{t('total_points')}</TableHead>
+                      <TableHead className="text-center">{t('tournaments_won')}</TableHead>
+                      <TableHead className="text-center">{t('top_four_rate')}</TableHead>
+                      <TableHead className="text-right">{t('action')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {sortedPlayers.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                          {isLoading ? 'Loading...' : 'No players found'}
+                          {isLoading ? t('loading') : 'No players found'}
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -401,7 +399,7 @@ export default function LeaderboardClient() {
                           <TableCell className="text-right">
                             <Link href={`/players/${player.id}`}>
                               <Button variant="ghost" size="sm">
-                                {t('view_profile', { defaultValue: 'View Profile' })}
+                                {t('view_profile')}
                               </Button>
                             </Link>
                           </TableCell>

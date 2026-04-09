@@ -26,11 +26,11 @@ export const TournamentTabsContent = memo(({
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab}>
-      <TabsList className="grid grid-cols-4 mb-4">
-        <TabsTrigger value="rounds">Rounds</TabsTrigger>
-        <TabsTrigger value="players">Players</TabsTrigger>
-        <TabsTrigger value="rules">Rules</TabsTrigger>
-        <TabsTrigger value="details">Details</TabsTrigger>
+      <TabsList className="grid grid-cols-4 mb-4 bg-muted/30 p-1 rounded-xl">
+        <TabsTrigger value="rounds" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all">Rounds</TabsTrigger>
+        <TabsTrigger value="players" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all">Players</TabsTrigger>
+        <TabsTrigger value="rules" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all">Rules</TabsTrigger>
+        <TabsTrigger value="details" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all">Details</TabsTrigger>
       </TabsList>
       <TabsContent value="rounds" className="space-y-4">
         {/* Pass tournament.phases instead of rounds */}

@@ -74,7 +74,7 @@ export function MainNav({
     },
     {
       href: "/loyalty",
-      label: t("loyalty", { defaultValue: 'Loyalty' }),
+      label: t("loyalty", { defaultValue: 'Rewards' }),
       icon: <Gift className="h-5 w-5" />,
     },
     {
@@ -83,16 +83,16 @@ export function MainNav({
       icon: <BarChart3 className="h-5 w-5" />,
     },
     ...(currentUser ? [
-      {
+      ...(currentUser.role === 'admin' || currentUser.role === 'partner' ? [{
         href: "/dashboard",
         label: t("Dashboard"),
         icon: <LayoutDashboard className="h-5 w-5" />,
-      },
-      {
+      }] : []),
+      ...(currentUser.role === 'user' ? [{
         href: `/players/${currentUser.id}`,
         label: t("profile", { defaultValue: 'Profile' }),
         icon: <UserCircle className="h-5 w-5" />,
-      },
+      }] : []),
     ] : []),
   ];
 

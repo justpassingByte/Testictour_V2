@@ -1,11 +1,11 @@
 export const getThemeStyle = (theme: string | undefined) => {
   switch (theme) {
     case "premium":
-      return "border-yellow-500/50 bg-yellow-500/5"
+      return "border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.15)]"
     case "dark":
-      return "border-purple-500/50 bg-purple-500/5"
+      return "border-purple-500/50 shadow-[0_0_15px_rgba(168,85,247,0.15)]"
     case "colorful":
-      return "border-pink-500/50 bg-pink-500/5"
+      return "border-pink-500/50 shadow-[0_0_15px_rgba(236,72,153,0.15)]"
     default:
       return ""
   }

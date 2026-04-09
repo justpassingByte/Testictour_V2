@@ -11,6 +11,7 @@ import { Progress } from "@/components/ui/progress"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SyncStatus } from "@/components/sync-status"
+import { useTranslations } from "next-intl"
 
 // Mock tournament data
 const tournament = {
@@ -22,9 +23,8 @@ const tournament = {
   totalMatches: 3,
 }
 
-// Mock live data
 const liveData = {
-  timeRemaining: 1245, // seconds
+  timeRemaining: 1245,
   currentLobby: "Finals Lobby",
   spectatorCount: 2847,
   currentLeaders: [
@@ -40,25 +40,22 @@ const liveData = {
     { id: 4, time: "12 min ago", event: "Match 1 completed", type: "match" },
     { id: 5, time: "15 min ago", event: "Player2 achieved 2nd place in Match 1", type: "achievement" },
   ],
-  matchProgress: 65, // percentage
+  matchProgress: 65,
 }
 
 export default function LiveScoreboardPage({ params }: { params: { id: string } }) {
+  const t = useTranslations("common")
   const [timeRemaining, setTimeRemaining] = useState(liveData.timeRemaining)
   const [isLive, setIsLive] = useState(true)
 
-  // Countdown timer
   useEffect(() => {
     if (!isLive) return
-
     const timer = setInterval(() => {
       setTimeRemaining((prev) => (prev > 0 ? prev - 1 : 0))
     }, 1000)
-
     return () => clearInterval(timer)
   }, [isLive])
 
-  // Format time
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
@@ -69,13 +66,13 @@ export default function LiveScoreboardPage({ params }: { params: { id: string } 
     <div className="container py-8">
       <div className="flex flex-col space-y-1 md:flex-row md:items-center md:justify-between md:space-y-0">
         <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-          <Link href="/">Home</Link>
+          <Link href="/">{t("home")}</Link>
           <ChevronRight className="h-4 w-4" />
-          <Link href="/tournaments">Tournaments</Link>
+          <Link href="/tournaments">{t("tournaments")}</Link>
           <ChevronRight className="h-4 w-4" />
           <Link href={`/tournaments/${params.id}`}>{tournament.name}</Link>
           <ChevronRight className="h-4 w-4" />
-          <span className="font-medium text-foreground">Live Scoreboard</span>
+          <span className="font-medium text-foreground">{t("live_updates")}</span>
         </div>
         <SyncStatus status="live" />
       </div>
@@ -83,10 +80,10 @@ export default function LiveScoreboardPage({ params }: { params: { id: string } 
       <div className="mt-6 space-y-6">
         <div className="flex flex-col space-y-2">
           <div className="flex items-center space-x-2">
-            <h1 className="text-3xl font-bold">{tournament.name} - Live Scoreboard</h1>
+            <h1 className="text-3xl font-bold">{tournament.name} - {t("live_updates")}</h1>
             <Badge className="bg-red-500/20 text-red-500 animate-pulse">LIVE</Badge>
           </div>
-          <p className="text-muted-foreground">Real-time tournament updates and scores</p>
+          <p className="text-muted-foreground">{t("live_updates")}</p>
         </div>
 
         {/* Live Status Cards */}
@@ -97,7 +94,7 @@ export default function LiveScoreboardPage({ params }: { params: { id: string } 
                 <Clock className="h-8 w-8 text-primary mr-3" />
                 <div>
                   <p className="text-2xl font-bold font-mono">{formatTime(timeRemaining)}</p>
-                  <p className="text-xs text-muted-foreground">Time Remaining</p>
+                  <p className="text-xs text-muted-foreground">{t("time")}</p>
                 </div>
               </div>
             </CardContent>
@@ -108,9 +105,9 @@ export default function LiveScoreboardPage({ params }: { params: { id: string } 
                 <Trophy className="h-8 w-8 text-primary mr-3" />
                 <div>
                   <p className="text-2xl font-bold">
-                    Round {tournament.currentRound}/{tournament.totalRounds}
+                    {t("rounds")} {tournament.currentRound}/{tournament.totalRounds}
                   </p>
-                  <p className="text-xs text-muted-foreground">Current Round</p>
+                  <p className="text-xs text-muted-foreground">{t("current_round")}</p>
                 </div>
               </div>
             </CardContent>
@@ -121,7 +118,7 @@ export default function LiveScoreboardPage({ params }: { params: { id: string } 
                 <Users className="h-8 w-8 text-primary mr-3" />
                 <div>
                   <p className="text-2xl font-bold">{liveData.spectatorCount.toLocaleString()}</p>
-                  <p className="text-xs text-muted-foreground">Spectators</p>
+                  <p className="text-xs text-muted-foreground">{t("players")}</p>
                 </div>
               </div>
             </CardContent>
@@ -132,7 +129,7 @@ export default function LiveScoreboardPage({ params }: { params: { id: string } 
                 <Zap className="h-8 w-8 text-primary mr-3" />
                 <div>
                   <p className="text-2xl font-bold">{liveData.currentLobby}</p>
-                  <p className="text-xs text-muted-foreground">Current Lobby</p>
+                  <p className="text-xs text-muted-foreground">{t("lobby")}</p>
                 </div>
               </div>
             </CardContent>
@@ -145,7 +142,7 @@ export default function LiveScoreboardPage({ params }: { params: { id: string } 
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center">
                 <Play className="mr-2 h-5 w-5 text-primary" />
-                Match Progress
+                {t("progress")}
               </CardTitle>
               <Button
                 variant="outline"
@@ -154,7 +151,7 @@ export default function LiveScoreboardPage({ params }: { params: { id: string } 
                 className={isLive ? "text-red-500" : "text-green-500"}
               >
                 {isLive ? <Pause className="mr-1 h-4 w-4" /> : <Play className="mr-1 h-4 w-4" />}
-                {isLive ? "Pause" : "Resume"}
+                {isLive ? t("idle") : t("active")}
               </Button>
             </div>
           </CardHeader>
@@ -162,9 +159,9 @@ export default function LiveScoreboardPage({ params }: { params: { id: string } 
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span>
-                  Match {tournament.currentMatch} of {tournament.totalMatches}
+                  {t("match")} {tournament.currentMatch} / {tournament.totalMatches}
                 </span>
-                <span>{liveData.matchProgress}% Complete</span>
+                <span>{liveData.matchProgress}%</span>
               </div>
               <Progress value={liveData.matchProgress} className="h-2" />
             </div>
@@ -173,9 +170,9 @@ export default function LiveScoreboardPage({ params }: { params: { id: string } 
 
         <Tabs defaultValue="leaderboard" className="w-full">
           <TabsList>
-            <TabsTrigger value="leaderboard">Live Leaderboard</TabsTrigger>
-            <TabsTrigger value="events">Recent Events</TabsTrigger>
-            <TabsTrigger value="statistics">Live Stats</TabsTrigger>
+            <TabsTrigger value="leaderboard">{t("leaderboard")}</TabsTrigger>
+            <TabsTrigger value="events">{t("recent_tournaments")}</TabsTrigger>
+            <TabsTrigger value="statistics">{t("statistics")}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="leaderboard" className="space-y-4">
@@ -183,18 +180,18 @@ export default function LiveScoreboardPage({ params }: { params: { id: string } 
               <CardHeader>
                 <CardTitle className="flex items-center">
                   <Trophy className="mr-2 h-5 w-5 text-primary" />
-                  Current Leaders
+                  {t("current_standings")}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[80px]">Rank</TableHead>
-                      <TableHead>Player</TableHead>
-                      <TableHead className="text-center">Total Points</TableHead>
-                      <TableHead className="text-center">Current Placement</TableHead>
-                      <TableHead className="text-center">Status</TableHead>
+                      <TableHead className="w-[80px]">{t("rank")}</TableHead>
+                      <TableHead>{t("player")}</TableHead>
+                      <TableHead className="text-center">{t("total_points")}</TableHead>
+                      <TableHead className="text-center">{t("placement")}</TableHead>
+                      <TableHead className="text-center">{t("status")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -220,23 +217,15 @@ export default function LiveScoreboardPage({ params }: { params: { id: string } 
                         </TableCell>
                         <TableCell className="text-center font-bold">{leader.points}</TableCell>
                         <TableCell className="text-center">
-                          <span
-                            className={`
-                            inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium
-                            ${leader.placement === 1 ? "bg-yellow-500/20 text-yellow-500" : ""}
-                            ${leader.placement === 2 ? "bg-gray-400/20 text-gray-400" : ""}
-                            ${leader.placement === 3 ? "bg-amber-700/20 text-amber-700" : ""}
-                            ${leader.placement > 3 ? "bg-secondary" : ""}
-                          `}
-                          >
+                          <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium ${leader.placement === 1 ? "bg-yellow-500/20 text-yellow-500" : ""} ${leader.placement === 2 ? "bg-gray-400/20 text-gray-400" : ""} ${leader.placement === 3 ? "bg-amber-700/20 text-amber-700" : ""} ${leader.placement > 3 ? "bg-secondary" : ""}`}>
                             {leader.placement}
                           </span>
                         </TableCell>
                         <TableCell className="text-center">
                           {leader.isLive ? (
-                            <Badge className="bg-green-500/20 text-green-500">Playing</Badge>
+                            <Badge className="bg-green-500/20 text-green-500">{t("active")}</Badge>
                           ) : (
-                            <Badge variant="outline">Waiting</Badge>
+                            <Badge variant="outline">{t("status_waiting")}</Badge>
                           )}
                         </TableCell>
                       </TableRow>
@@ -252,7 +241,7 @@ export default function LiveScoreboardPage({ params }: { params: { id: string } 
               <CardHeader>
                 <CardTitle className="flex items-center">
                   <Zap className="mr-2 h-5 w-5 text-primary" />
-                  Recent Events
+                  {t("recent_tournaments")}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -260,21 +249,9 @@ export default function LiveScoreboardPage({ params }: { params: { id: string } 
                   {liveData.recentEvents.map((event) => (
                     <div
                       key={event.id}
-                      className={`
-                        flex items-start space-x-3 p-3 rounded-lg border
-                        ${event.type === "achievement" ? "bg-green-500/5 border-green-500/20" : ""}
-                        ${event.type === "elimination" ? "bg-red-500/5 border-red-500/20" : ""}
-                        ${event.type === "match" ? "bg-blue-500/5 border-blue-500/20" : ""}
-                      `}
+                      className={`flex items-start space-x-3 p-3 rounded-lg border ${event.type === "achievement" ? "bg-green-500/5 border-green-500/20" : ""} ${event.type === "elimination" ? "bg-red-500/5 border-red-500/20" : ""} ${event.type === "match" ? "bg-blue-500/5 border-blue-500/20" : ""}`}
                     >
-                      <div
-                        className={`
-                          w-2 h-2 rounded-full mt-2 flex-shrink-0
-                          ${event.type === "achievement" ? "bg-green-500" : ""}
-                          ${event.type === "elimination" ? "bg-red-500" : ""}
-                          ${event.type === "match" ? "bg-blue-500" : ""}
-                        `}
-                      />
+                      <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${event.type === "achievement" ? "bg-green-500" : ""} ${event.type === "elimination" ? "bg-red-500" : ""} ${event.type === "match" ? "bg-blue-500" : ""}`} />
                       <div className="flex-1">
                         <p className="text-sm font-medium">{event.event}</p>
                         <p className="text-xs text-muted-foreground">{event.time}</p>
@@ -290,52 +267,27 @@ export default function LiveScoreboardPage({ params }: { params: { id: string } 
             <div className="grid gap-4 md:grid-cols-2">
               <Card>
                 <CardHeader>
-                  <CardTitle>Match Statistics</CardTitle>
+                  <CardTitle>{t("match_results")}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    <div className="flex justify-between">
-                      <span>Average Game Duration:</span>
-                      <span className="font-medium">28:45</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Total Eliminations:</span>
-                      <span className="font-medium">24</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Fastest Victory:</span>
-                      <span className="font-medium">22:15</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Most Contested Unit:</span>
-                      <span className="font-medium">Azir</span>
-                    </div>
+                    <div className="flex justify-between"><span>{t("avg_placement")}:</span><span className="font-medium">28:45</span></div>
+                    <div className="flex justify-between"><span>{t("eliminated")}:</span><span className="font-medium">24</span></div>
+                    <div className="flex justify-between"><span>{t("wins")}:</span><span className="font-medium">22:15</span></div>
+                    <div className="flex justify-between"><span>{t("performance")}:</span><span className="font-medium">Azir</span></div>
                   </div>
                 </CardContent>
               </Card>
-
               <Card>
                 <CardHeader>
-                  <CardTitle>Player Performance</CardTitle>
+                  <CardTitle>{t("performance")}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    <div className="flex justify-between">
-                      <span>Highest Single Game Score:</span>
-                      <span className="font-medium">8 pts (Player1)</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Most Consistent Player:</span>
-                      <span className="font-medium">Player2</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Current Win Streak:</span>
-                      <span className="font-medium">3 games (Player1)</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Average Placement:</span>
-                      <span className="font-medium">4.2</span>
-                    </div>
+                    <div className="flex justify-between"><span>{t("total_score")}:</span><span className="font-medium">8 pts (Player1)</span></div>
+                    <div className="flex justify-between"><span>{t("statistics")}:</span><span className="font-medium">Player2</span></div>
+                    <div className="flex justify-between"><span>{t("wins")}:</span><span className="font-medium">3 games (Player1)</span></div>
+                    <div className="flex justify-between"><span>{t("avg_placement")}:</span><span className="font-medium">4.2</span></div>
                   </div>
                 </CardContent>
               </Card>

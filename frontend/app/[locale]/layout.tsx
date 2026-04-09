@@ -1,4 +1,4 @@
-import { Space_Grotesk, Cinzel } from 'next/font/google';
+import { Space_Grotesk, Inter } from 'next/font/google';
 import { notFound } from 'next/navigation';
 import { NextIntlClientProvider } from 'next-intl';
 import { routing } from '../../i18n/routing';
@@ -12,15 +12,16 @@ import LocaleDebug from './components/LocaleDebug';
 import AuthClientWrapper from './components/AuthClientWrapper';
 import { GlobalProviders } from '@/components/GlobalProviders';
 
+
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
   variable: "--font-space",
   display: "swap",
 });
 
-const cinzel = Cinzel({
+const inter = Inter({
   subsets: ["latin"],
-  variable: "--font-cinzel",
+  variable: "--font-inter",
   display: "swap",
 });
 
@@ -76,7 +77,7 @@ export default async function LocaleLayout({
 
   return (
     <html lang={locale} suppressHydrationWarning>
-      <body className={cn("min-h-screen font-sans antialiased", spaceGrotesk.variable, cinzel.variable)}>
+      <body className={cn("min-h-screen font-sans antialiased text-base", spaceGrotesk.variable, inter.variable)}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           {/* Configure NextIntlClientProvider without function handlers */}
           <NextIntlClientProvider

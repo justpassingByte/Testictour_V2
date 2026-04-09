@@ -12,51 +12,53 @@ const PlatformSettingsSection = dynamic(() => import("./PlatformSettingsSection"
 const FeatureFlagsSection = dynamic(() => import("./FeatureFlagsSection"), { loading: LoadingSection });
 const MaintenanceModeSection = dynamic(() => import("./MaintenanceModeSection"), { loading: LoadingSection });
 const SubscriptionPlanConfigSection = dynamic(() => import("./SubscriptionPlanConfigSection"), { loading: LoadingSection });
+import { useTranslations } from "next-intl"
 
 export default function SettingsTab() {
+  const t = useTranslations("common")
   return (
     <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20">
       <CardHeader>
-        <CardTitle>Platform Settings</CardTitle>
+        <CardTitle>{t("platform_settings", { defaultValue: "Platform Settings" })}</CardTitle>
         <CardDescription>
-          Configure notifications, platform defaults, feature flags, maintenance mode, and subscription plans.
+          {t("platform_settings_desc", { defaultValue: "Configure notifications, platform defaults, feature flags, maintenance mode, and subscription plans." })}
         </CardDescription>
       </CardHeader>
       <CardContent className="p-0">
         <Tabs defaultValue="notifications" className="w-full">
           <TabsList className="w-full justify-start rounded-none border-b border-white/10 bg-transparent h-auto p-0 overflow-x-auto no-scrollbar">
             <TabsTrigger value="notifications" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-6 py-3">
-              <Bell className="mr-2 h-4 w-4" /> Notifications
+              <Bell className="mr-2 h-4 w-4" /> {t("notifications", { defaultValue: "Notifications" })}
             </TabsTrigger>
             <TabsTrigger value="platform" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-6 py-3">
-              <Settings className="mr-2 h-4 w-4" /> Platform
+              <Settings className="mr-2 h-4 w-4" /> {t("platform", { defaultValue: "Platform" })}
             </TabsTrigger>
             <TabsTrigger value="flags" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-6 py-3">
-              <Flag className="mr-2 h-4 w-4" /> Feature Flags
+              <Flag className="mr-2 h-4 w-4" /> {t("feature_flags", { defaultValue: "Feature Flags" })}
             </TabsTrigger>
             <TabsTrigger value="maintenance" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-6 py-3">
-              <AlertTriangle className="mr-2 h-4 w-4" /> Maintenance
+              <AlertTriangle className="mr-2 h-4 w-4" /> {t("maintenance", { defaultValue: "Maintenance" })}
             </TabsTrigger>
             <TabsTrigger value="plans" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-6 py-3">
-              <Crown className="mr-2 h-4 w-4" /> Plans
+              <Crown className="mr-2 h-4 w-4" /> {t("plans", { defaultValue: "Plans" })}
             </TabsTrigger>
           </TabsList>
 
           <div className="p-6">
             <TabsContent value="notifications" className="mt-0">
-              <SectionErrorBoundary fallbackTitle="Failed to load Notifications section"><PushNotificationsSection /></SectionErrorBoundary>
+              <SectionErrorBoundary fallbackTitle={t("failed_to_load_notifications", { defaultValue: "Failed to load Notifications section" })}><PushNotificationsSection /></SectionErrorBoundary>
             </TabsContent>
             <TabsContent value="platform" className="mt-0">
-              <SectionErrorBoundary fallbackTitle="Failed to load Platform Settings"><PlatformSettingsSection /></SectionErrorBoundary>
+              <SectionErrorBoundary fallbackTitle={t("failed_to_load_platform", { defaultValue: "Failed to load Platform Settings" })}><PlatformSettingsSection /></SectionErrorBoundary>
             </TabsContent>
             <TabsContent value="flags" className="mt-0">
-              <SectionErrorBoundary fallbackTitle="Failed to load Feature Flags"><FeatureFlagsSection /></SectionErrorBoundary>
+              <SectionErrorBoundary fallbackTitle={t("failed_to_load_flags", { defaultValue: "Failed to load Feature Flags" })}><FeatureFlagsSection /></SectionErrorBoundary>
             </TabsContent>
             <TabsContent value="maintenance" className="mt-0">
-              <SectionErrorBoundary fallbackTitle="Failed to load Maintenance Mode"><MaintenanceModeSection /></SectionErrorBoundary>
+              <SectionErrorBoundary fallbackTitle={t("failed_to_load_maintenance", { defaultValue: "Failed to load Maintenance Mode" })}><MaintenanceModeSection /></SectionErrorBoundary>
             </TabsContent>
             <TabsContent value="plans" className="mt-0">
-              <SectionErrorBoundary fallbackTitle="Failed to load Subscription Plans"><SubscriptionPlanConfigSection /></SectionErrorBoundary>
+              <SectionErrorBoundary fallbackTitle={t("failed_to_load_plans", { defaultValue: "Failed to load Subscription Plans" })}><SubscriptionPlanConfigSection /></SectionErrorBoundary>
             </TabsContent>
           </div>
         </Tabs>

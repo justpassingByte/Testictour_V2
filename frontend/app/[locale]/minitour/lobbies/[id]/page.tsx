@@ -5,7 +5,7 @@ export const metadata = {
 };
 import { cache } from "react"
 import { notFound } from "next/navigation";
-import type { MiniTourLobby } from '@/stores/miniTourLobbyStore'; // Still need type for initialLobby
+import type { MiniTourLobby } from '@/app/stores/miniTourLobbyStore'; // Still need type for initialLobby
 import { LobbyDetailsClient } from "./LobbyDetailsClient";
 
 import api from '@/app/lib/apiConfig'; // Import api for server-side fetching

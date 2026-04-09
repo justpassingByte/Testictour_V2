@@ -38,10 +38,12 @@ import { Switch } from "@/components/ui/switch"
 import api from "@/app/lib/apiConfig"
 import React, { FormEvent, useState } from 'react';
 import LobbiesTabClient from "./LobbiesTabClient";
+import { useTranslations } from "next-intl";
 
 // --- ASYNC COMPONENTS ---
 
 export function PartnerHeader({ partnerData }: { partnerData: PartnerData | null }) {
+  const t = useTranslations("common")
   if (!partnerData) return null
   return (
     <div className="flex items-center space-x-4">
@@ -52,9 +54,9 @@ export function PartnerHeader({ partnerData }: { partnerData: PartnerData | null
         </Avatar>
       </div>
       <div>
-        <h1 className="text-4xl font-bold tracking-tight">Partner Dashboard</h1>
+        <h1 className="text-4xl font-bold tracking-tight">{t("dashboard.partner.overview")}</h1>
         <div className="flex items-center space-x-2">
-          <Badge className="bg-primary/20 text-primary">Partner</Badge>
+          <Badge className="bg-primary/20 text-primary">{t("become_partner")}</Badge>
         </div>
       </div>
     </div>
@@ -62,7 +64,8 @@ export function PartnerHeader({ partnerData }: { partnerData: PartnerData | null
 }
 
 export function KeyMetrics({ partnerData }: { partnerData: PartnerData | null }) {
-  if (!partnerData) return <div>Failed to load partner metrics. Please check the API.</div>
+  const t = useTranslations("common")
+  if (!partnerData) return <div>{t("error")}</div>
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       <Card className="border-primary/50 bg-primary/5">
@@ -71,7 +74,7 @@ export function KeyMetrics({ partnerData }: { partnerData: PartnerData | null })
             <DollarSign className="mr-3 h-8 w-8 text-primary" />
             <div>
               <p className="text-2xl font-bold">${partnerData.monthlyRevenue?.toLocaleString() || 0}</p>
-              <p className="text-xs text-muted-foreground">Monthly Revenue</p>
+              <p className="text-xs text-muted-foreground">{t("budget")}</p>
             </div>
           </div>
         </CardContent>
@@ -82,7 +85,7 @@ export function KeyMetrics({ partnerData }: { partnerData: PartnerData | null })
             <Coins className="mr-3 h-8 w-8 text-primary" />
             <div>
               <p className="text-2xl font-bold">${partnerData.balance?.toLocaleString() || 0}</p>
-              <p className="text-xs text-muted-foreground">Partner Balance</p>
+              <p className="text-xs text-muted-foreground">{t("coins")}</p>
             </div>
           </div>
         </CardContent>
@@ -93,7 +96,7 @@ export function KeyMetrics({ partnerData }: { partnerData: PartnerData | null })
             <Users className="mr-3 h-8 w-8 text-primary" />
             <div>
               <p className="text-2xl font-bold">{partnerData.totalPlayers?.toLocaleString() || 0}</p>
-              <p className="text-xs text-muted-foreground">Total Players</p>
+              <p className="text-xs text-muted-foreground">{t("total_players")}</p>
             </div>
           </div>
         </CardContent>
@@ -104,7 +107,7 @@ export function KeyMetrics({ partnerData }: { partnerData: PartnerData | null })
             <Trophy className="mr-3 h-8 w-8 text-primary" />
             <div>
               <p className="text-2xl font-bold">{partnerData.totalLobbies?.toLocaleString() || 0}</p>
-              <p className="text-xs text-muted-foreground">Total Lobbies</p>
+              <p className="text-xs text-muted-foreground">{t("minitour_lobbies_title")}</p>
             </div>
           </div>
         </CardContent>
@@ -114,27 +117,28 @@ export function KeyMetrics({ partnerData }: { partnerData: PartnerData | null })
 }
 
 export function OverviewTab({ partnerData, lobbies }: { partnerData: PartnerData | null; lobbies: MiniTourLobby[] }) {
-  if (!partnerData) return <p>Could not load overview.</p>
+  const t = useTranslations("common")
+  if (!partnerData) return <p>{t("error")}</p>
 
   return (
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Recent Performance</CardTitle>
-            <CardDescription>Your lobbies performance over the last 30 days</CardDescription>
+            <CardTitle>{t("performance")}</CardTitle>
+            <CardDescription>{t("statistics")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <div className="flex justify-between">
-                <span className="text-sm">Player Satisfaction</span>
+                <span className="text-sm">{t("rating")}</span>
                 <span className="text-sm font-medium">N/A</span>
               </div>
               <Progress value={0} />
             </div>
             <div className="space-y-2">
               <div className="flex justify-between">
-                <span className="text-sm">Lobby Utilization</span>
+                <span className="text-sm">{t("active_players")}</span>
                 <span className="text-sm font-medium">
                   {(partnerData.totalLobbies || 0) > 0 ? Math.round(((partnerData.activeLobbies || 0) / (partnerData.totalLobbies || 0)) * 100) : 0}%
                 </span>
@@ -143,7 +147,7 @@ export function OverviewTab({ partnerData, lobbies }: { partnerData: PartnerData
             </div>
             <div className="space-y-2">
               <div className="flex justify-between">
-                <span className="text-sm">Revenue Share</span>
+                <span className="text-sm">{t("prize_pool")}</span>
                 <span className="text-sm font-medium">{partnerData.revenueShare || 30}%</span>
               </div>
               <Progress value={partnerData.revenueShare || 30} />
@@ -152,28 +156,28 @@ export function OverviewTab({ partnerData, lobbies }: { partnerData: PartnerData
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-            <CardDescription>Manage your lobbies and settings</CardDescription>
+            <CardTitle>{t("quick_links")}</CardTitle>
+            <CardDescription>{t("manage_players")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <Link href="/dashboard/partner/lobbies">
               <Button className="w-full justify-start">
-                <Plus className="mr-2 h-4 w-4" /> Create New Lobby
+                <Plus className="mr-2 h-4 w-4" /> {t("view_all_lobbies")}
               </Button>
             </Link>
             <Link href="/dashboard/partner/analytics">
               <Button variant="outline" className="w-full justify-start">
-                <BarChart3 className="mr-2 h-4 w-4" /> View Detailed Analytics
+                <BarChart3 className="mr-2 h-4 w-4" /> {t("dashboard.partner.analytics")}
               </Button>
             </Link>
             <Link href="/dashboard/partner/settings">
               <Button variant="outline" className="w-full justify-start">
-                <Settings className="mr-2 h-4 w-4" /> Partner Settings
+                <Settings className="mr-2 h-4 w-4" /> {t("dashboard.partner.settings")}
               </Button>
             </Link>
             <Link href="/dashboard/partner?tab=team">
               <Button variant="outline" className="w-full justify-start">
-                <Users className="mr-2 h-4 w-4" /> View Team
+                <Users className="mr-2 h-4 w-4" /> {t("manage_players")}
               </Button>
             </Link>
           </CardContent>
@@ -181,8 +185,8 @@ export function OverviewTab({ partnerData, lobbies }: { partnerData: PartnerData
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>Top Performing Lobbies</CardTitle>
-          <CardDescription>Your most successful lobbies this month</CardDescription>
+          <CardTitle>{t("minitour_lobbies_title")}</CardTitle>
+          <CardDescription>{t("this_month")}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -196,7 +200,7 @@ export function OverviewTab({ partnerData, lobbies }: { partnerData: PartnerData
                     <h4 className="font-medium">{lobby.name}</h4>
                     <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                       <span>
-                        {lobby.currentPlayers}/{lobby.maxPlayers} players
+                        {lobby.currentPlayers}/{lobby.maxPlayers} {t("players")}
                       </span>
                       <span>{(lobby.matches?.length || 0)} matches</span>
                       <div className="flex items-center">
@@ -210,7 +214,7 @@ export function OverviewTab({ partnerData, lobbies }: { partnerData: PartnerData
                       <Coins className="mr-1 inline h-4 w-4" />
                       {lobby.prizePool}
                     </div>
-                    <div className="text-sm text-muted-foreground">Prize Pool</div>
+                    <div className="text-sm text-muted-foreground">{t("prize_pool")}</div>
                   </div>
                 </div>
               ))}
@@ -226,7 +230,8 @@ export function LobbiesTab({ lobbies, onLobbiesUpdate }: { lobbies: MiniTourLobb
 }
 
 export function AnalyticsTab({ analyticsData }: { analyticsData: AnalyticsData | null }) {
-  if (!analyticsData) return <p>Could not load analytics.</p>
+  const t = useTranslations("common")
+  if (!analyticsData) return <p>{t("error")}</p>
 
   const { playerGrowth, revenueGrowth, performance } = analyticsData
 
@@ -235,8 +240,8 @@ export function AnalyticsTab({ analyticsData }: { analyticsData: AnalyticsData |
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Player Growth</CardTitle>
-            <CardDescription>New players over the last 6 months</CardDescription>
+            <CardTitle>{t("active_players")}</CardTitle>
+            <CardDescription>{t("this_month")}</CardDescription>
           </CardHeader>
           <CardContent>
             {/* Placeholder for a chart */}
@@ -247,8 +252,8 @@ export function AnalyticsTab({ analyticsData }: { analyticsData: AnalyticsData |
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Revenue Growth</CardTitle>
-            <CardDescription>Monthly revenue over the last 6 months</CardDescription>
+            <CardTitle>{t("budget")}</CardTitle>
+            <CardDescription>{t("this_month")}</CardDescription>
           </CardHeader>
           <CardContent>
             {/* Placeholder for a chart */}
@@ -265,7 +270,7 @@ export function AnalyticsTab({ analyticsData }: { analyticsData: AnalyticsData |
               <Users className="mr-3 h-8 w-8 text-blue-500" />
               <div>
                 <p className="text-2xl font-bold">{performance.totalPlayers.value.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground">Total Players</p>
+                <p className="text-xs text-muted-foreground">{t("total_players")}</p>
                 <p className={`text-sm ${performance.totalPlayers.change >= 0 ? "text-green-500" : "text-red-500"}`}>
                   {performance.totalPlayers.change >= 0 ? "+" : ""}{performance.totalPlayers.change.toLocaleString()}% vs last month
                 </p>
@@ -279,7 +284,7 @@ export function AnalyticsTab({ analyticsData }: { analyticsData: AnalyticsData |
               <DollarSign className="mr-3 h-8 w-8 text-green-500" />
               <div>
                 <p className="text-2xl font-bold">${performance.totalRevenue.value.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground">Total Revenue</p>
+                <p className="text-xs text-muted-foreground">{t("budget")}</p>
                 <p className={`text-sm ${performance.totalRevenue.change >= 0 ? "text-green-500" : "text-red-500"}`}>
                   {performance.totalRevenue.change >= 0 ? "+" : ""}{performance.totalRevenue.change.toLocaleString()}% vs last month
                 </p>
@@ -293,7 +298,7 @@ export function AnalyticsTab({ analyticsData }: { analyticsData: AnalyticsData |
               <Star className="mr-3 h-8 w-8 text-yellow-500" />
               <div>
                 <p className="text-2xl font-bold">{performance.averageRating.value?.toFixed(1) || '0.0'}</p>
-                <p className="text-xs text-muted-foreground">Average Rating</p>
+                <p className="text-xs text-muted-foreground">{t("rating")}</p>
                 <p className={`text-sm ${performance.averageRating.change >= 0 ? "text-green-500" : "text-red-500"}`}>
                   {performance.averageRating.change >= 0 ? "+" : ""}{performance.averageRating.change?.toFixed(1) || '0.0'} vs last month
                 </p>
@@ -307,7 +312,8 @@ export function AnalyticsTab({ analyticsData }: { analyticsData: AnalyticsData |
 }
 
 export function RevenueTab({ partnerData, lobbies }: { partnerData: PartnerData | null; lobbies: MiniTourLobby[] }) {
-  if (!partnerData) return <p>Could not load revenue data.</p>
+  const t = useTranslations("common")
+  if (!partnerData) return <p>{t("error")}</p>
 
   // Calculate additional revenue metrics
   const completedLobbies = lobbies.filter(l => l.status === 'COMPLETED')
@@ -323,7 +329,7 @@ export function RevenueTab({ partnerData, lobbies }: { partnerData: PartnerData 
               <DollarSign className="mr-3 h-8 w-8 text-primary" />
               <div>
                 <p className="text-2xl font-bold">${partnerData.totalRevenue?.toLocaleString() || 0}</p>
-                <p className="text-xs text-muted-foreground">Total Revenue</p>
+                <p className="text-xs text-muted-foreground">{t("budget")}</p>
                 <p className="text-xs text-green-600">From all completed matches</p>
               </div>
             </div>
@@ -335,7 +341,7 @@ export function RevenueTab({ partnerData, lobbies }: { partnerData: PartnerData 
               <Coins className="mr-3 h-8 w-8 text-primary" />
               <div>
                 <p className="text-2xl font-bold">${partnerData.balance?.toLocaleString() || 0}</p>
-                <p className="text-xs text-muted-foreground">Current Balance</p>
+                <p className="text-xs text-muted-foreground">{t("coins")}</p>
                 <p className="text-xs text-blue-600">Available for payout</p>
               </div>
             </div>
@@ -347,7 +353,7 @@ export function RevenueTab({ partnerData, lobbies }: { partnerData: PartnerData 
               <TrendingUp className="mr-3 h-8 w-8 text-primary" />
               <div>
                 <p className="text-2xl font-bold">${partnerData.monthlyRevenue?.toLocaleString() || 0}</p>
-                <p className="text-xs text-muted-foreground">Monthly Revenue</p>
+                <p className="text-xs text-muted-foreground">{t("this_month")}</p>
                 <p className="text-xs text-orange-600">Last 30 days earnings</p>
               </div>
             </div>
@@ -359,7 +365,7 @@ export function RevenueTab({ partnerData, lobbies }: { partnerData: PartnerData 
               <Trophy className="mr-3 h-8 w-8 text-primary" />
               <div>
                 <p className="text-2xl font-bold">{partnerData.totalMatches?.toLocaleString() || 0}</p>
-                <p className="text-xs text-muted-foreground">Matches Played</p>
+                <p className="text-xs text-muted-foreground">{t("match_history")}</p>
                 <p className="text-xs text-purple-600">Across all lobbies</p>
               </div>
             </div>
@@ -370,21 +376,21 @@ export function RevenueTab({ partnerData, lobbies }: { partnerData: PartnerData 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Revenue Breakdown</CardTitle>
-            <CardDescription>How your revenue is calculated</CardDescription>
+            <CardTitle>{t("prize_pool")}</CardTitle>
+            <CardDescription>{t("performance")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-between">
-              <span className="text-sm">Total Prize Pools</span>
+              <span className="text-sm">{t("prize_pool")}</span>
               <span className="text-sm font-medium">${lobbies.reduce((sum, lobby) => sum + (lobby.prizePool || 0), 0).toLocaleString()}</span>
             </div>
 
             <div className="flex justify-between">
-              <span className="text-sm">Total Revenue Earned</span>
+              <span className="text-sm">{t("budget")}</span>
               <span className="text-sm font-bold text-green-600">${partnerData.totalRevenue?.toLocaleString() || 0}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-sm">Monthly Estimate</span>
+              <span className="text-sm">{t("this_month")}</span>
               <span className="text-sm font-bold text-blue-600">${partnerData.monthlyRevenue?.toLocaleString() || 0}</span>
             </div>
           </CardContent>
@@ -392,24 +398,24 @@ export function RevenueTab({ partnerData, lobbies }: { partnerData: PartnerData 
 
         <Card>
           <CardHeader>
-            <CardTitle>Lobby Performance</CardTitle>
-            <CardDescription>Your lobby statistics</CardDescription>
+            <CardTitle>{t("minitour_lobbies_title")}</CardTitle>
+            <CardDescription>{t("statistics")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-between">
-              <span className="text-sm">Total Lobbies</span>
+              <span className="text-sm">{t("all")}</span>
               <span className="text-sm font-medium">{partnerData.totalLobbies || 0}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-sm">Active Lobbies</span>
+              <span className="text-sm">{t("active_players")}</span>
               <span className="text-sm font-medium text-green-600">{partnerData.activeLobbies || 0}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-sm">Completed Lobbies</span>
+              <span className="text-sm">{t("completed")}</span>
               <span className="text-sm font-medium text-blue-600">{completedLobbies.length}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-sm">Average Prize Pool</span>
+              <span className="text-sm">{t("avg_points")}</span>
               <span className="text-sm font-medium">${averagePrizePool.toLocaleString()}</span>
             </div>
           </CardContent>
@@ -425,11 +431,11 @@ export function RevenueTab({ partnerData, lobbies }: { partnerData: PartnerData 
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Lobby Name</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Prize Pool</TableHead>
-                <TableHead>Your Share</TableHead>
-                <TableHead>Revenue (Est.)</TableHead>
+                <TableHead>{t("lobby")}</TableHead>
+                <TableHead>{t("status")}</TableHead>
+                <TableHead>{t("prize_pool")}</TableHead>
+                <TableHead>{t("registration_fee")}</TableHead>
+                <TableHead>{t("budget")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -459,6 +465,7 @@ export function RevenueTab({ partnerData, lobbies }: { partnerData: PartnerData 
 }
 
 export function SettingsTab() {
+  const t = useTranslations("common")
   // Mock data that would normally come from an API
   const [partnerSettings, setPartnerSettings] = useState({
     partnerName: "TesTicTour Partner",
@@ -499,13 +506,13 @@ export function SettingsTab() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold">Partner Settings</h2>
+      <h2 className="text-2xl font-bold">{t("dashboard.partner.settings")}</h2>
       <form onSubmit={handleSaveSettings} className="space-y-6">
         <Card>
-          <CardHeader><CardTitle>General Information</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t("tournament_details")}</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label htmlFor="partnerName">Partner Name</Label>
+              <Label htmlFor="partnerName">{t("summoner_name")}</Label>
               <Input id="partnerName" defaultValue={partnerSettings.partnerName} />
             </div>
             <div>
@@ -520,10 +527,10 @@ export function SettingsTab() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>Payout Settings</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t("reward_history_tab")}</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label htmlFor="payoutMethod">Payout Method</Label>
+              <Label htmlFor="payoutMethod">{t("prize_pool")}</Label>
               <Input id="payoutMethod" defaultValue={partnerSettings.payoutMethod} />
             </div>
             <div className="flex items-center space-x-2">
@@ -531,16 +538,16 @@ export function SettingsTab() {
                 id="autoPayout"
                 defaultChecked={partnerSettings.autoPayout}
               />
-              <Label htmlFor="autoPayout">Enable Auto Payout</Label>
+              <Label htmlFor="autoPayout">{t("live_updates")}</Label>
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>API Settings</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t("api_status")}</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label htmlFor="riotApiKey">Riot API Key</Label>
+              <Label htmlFor="riotApiKey">{t("api_status")}</Label>
               <Input
                 id="riotApiKey"
                 name="riotApiKey"
@@ -553,7 +560,7 @@ export function SettingsTab() {
                   name="usePersonalRiotApi"
                   defaultChecked={partnerSettings.usePersonalRiotApi}
                 />
-                <Label htmlFor="usePersonalRiotApi">Use Personal Riot API Key</Label>
+                <Label htmlFor="usePersonalRiotApi">{t("operational")}</Label>
               </div>
             </div>
           </CardContent>
@@ -562,7 +569,7 @@ export function SettingsTab() {
 
 
         <Card>
-          <CardHeader><CardTitle>Notification Preferences</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t("settings")}</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center space-x-2">
               <Switch
@@ -570,19 +577,19 @@ export function SettingsTab() {
                 name="emailNotifications"
                 defaultChecked={partnerSettings.notifications.email}
               />
-              <Label htmlFor="emailNotifications">Email Notifications</Label>
+              <Label htmlFor="emailNotifications">{t("auth.email")}</Label>
             </div>
             <div className="flex items-center space-x-2">
               <Switch
                 id="smsNotifications"
                 defaultChecked={partnerSettings.notifications.sms}
               />
-              <Label htmlFor="smsNotifications">SMS Notifications</Label>
+              <Label htmlFor="smsNotifications">{t("settings")}</Label>
             </div>
           </CardContent>
         </Card>
 
-        <Button type="submit">Save Settings</Button>
+        <Button type="submit">{t("save")}</Button>
       </form>
     </div>
   );

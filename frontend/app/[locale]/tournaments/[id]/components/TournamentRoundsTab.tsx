@@ -67,40 +67,43 @@ export function TournamentRoundsTab({ tournamentId, phases }: TournamentRoundsTa
                               : round.status}
                       </Badge>
                     </CardHeader>
-                    <CardContent className="grid gap-2 p-4 text-sm">
-                      <div className="flex justify-between">
-                        <div className="text-muted-foreground">Time:</div>
-                        <div className="font-medium">
-                          {new Date(round.startTime).toLocaleString()} - {round.endTime ? new Date(round.endTime).toLocaleString() : 'N/A'}
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        {/* Left Column: Lobbies */}
-                        <div className="flex flex-col items-start">
-                          <div className="text-muted-foreground text-sm mb-1">Lobbies</div>
-                          <div className="flex items-center text-primary">
-                            <Users className="mr-2 h-5 w-5" />
-                            <span className="font-bold text-lg">{round.lobbies?.length || 0}</span>
-                            <span className="ml-1 text-base text-muted-foreground">Lobbies</span>
+                    <CardContent className="p-0">
+                      <div className="p-4 sm:p-5">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 items-center">
+                          {/* Schedule Column */}
+                          <div className="flex flex-col space-y-1.5">
+                            <div className="text-muted-foreground text-[10px] sm:text-xs uppercase tracking-widest font-bold">Schedule</div>
+                            <div className="font-medium text-sm flex flex-col">
+                              <span className="text-foreground">{new Date(round.startTime).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'})}</span>
+                              {round.endTime && <span className="text-muted-foreground">to {new Date(round.endTime).toLocaleString(undefined, { hour: '2-digit', minute: '2-digit'})}</span>}
+                            </div>
                           </div>
-                        </div>
 
-                        {/* Right Column: Matches */}
-                        <div className="flex flex-col items-start">
-                          <div className="text-muted-foreground text-sm mb-1">Matches</div>
-                          <div className="flex items-center text-primary">
-                            <Trophy className="mr-2 h-5 w-5" />
-                            <span className="font-bold text-lg">{phase.matchesPerRound || 'N/A'}</span>
-                            <span className="ml-1 text-base text-muted-foreground">Matches per Lobby</span>
+                          {/* Lobbies Column */}
+                          <div className="flex flex-col md:items-center md:justify-center md:border-x md:border-border/50 py-2 md:py-0">
+                            <div className="text-muted-foreground text-[10px] sm:text-xs uppercase tracking-widest font-bold mb-1.5">Lobbies</div>
+                            <div className="flex items-center text-primary">
+                              <Users className="mr-2 h-5 w-5" />
+                              <span className="font-bold text-2xl leading-none">{round.lobbies?.length || 0}</span>
+                            </div>
+                          </div>
+
+                          {/* Matches Column */}
+                          <div className="flex flex-col md:items-center md:justify-center">
+                            <div className="text-muted-foreground text-[10px] sm:text-xs uppercase tracking-widest font-bold mb-1.5">Matches per Lobby</div>
+                            <div className="flex items-center text-primary">
+                              <Trophy className="mr-2 h-5 w-5" />
+                              <span className="font-bold text-2xl leading-none">{phase.matchesPerRound || 'N/A'}</span>
+                            </div>
                           </div>
                         </div>
                       </div>
                       
-                      <div className="mt-6">
+                      <div className="p-4 sm:px-5 sm:pb-5 bg-muted/10 border-t border-white/5 flex items-center justify-end">
                         <Link href={`/tournaments/${tournamentId}/rounds/${round.id}`}>
                           <Button
                             variant={normalizedStatus === "pending" ? "secondary" : "default"}
-                            className="w-full"
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-6 shadow-md shadow-primary/20"
                           >
                             {normalizedStatus === "completed" && "View Results"}
                             {normalizedStatus === "in_progress" && "View Live Scoreboard"}

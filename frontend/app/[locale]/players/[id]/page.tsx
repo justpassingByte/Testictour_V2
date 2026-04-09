@@ -38,9 +38,11 @@ export default function PlayerPage() {
 
   useEffect(() => {
     const loadPlayerData = async () => {
-      await fetchPlayer(playerId);
-      await fetchPlayerTournaments(playerId);
-      await fetchPlayerMatchesSummary(playerId);
+      await Promise.all([
+        fetchPlayer(playerId),
+        fetchPlayerTournaments(playerId),
+        fetchPlayerMatchesSummary(playerId)
+      ]);
     };
 
     if (playerId) {

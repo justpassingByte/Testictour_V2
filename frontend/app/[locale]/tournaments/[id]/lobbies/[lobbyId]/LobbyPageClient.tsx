@@ -12,7 +12,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useLobbySocket } from '@/app/hooks/useLobbySocket';
 import { useUserStore } from '@/app/stores/userStore';
 import { ILobbyStateSnapshot, LobbyState, IDelayRequest } from '@/app/types/tournament';
-import { GrimoireParticipantData, GrimoireTraitData, GrimoireUnitData, GrimoireAugmentData } from '@/app/types/riot';
+import { GrimoireParticipantData, GrimoireTraitData, GrimoireUnitData, GrimoireAugmentData, GrimoireMatchData } from '@/app/types/riot';
+import { MatchCompPanel, isGrimoireMatchData } from '@/components/match/MatchCompPanel';
 
 // ── Countdown Timer ──────────────────────────────────────────────────────────
 function useCountdown(phaseStartedAt: string | undefined, phaseDurationSeconds: number) {
@@ -291,20 +292,63 @@ export default function LobbyPageClient({ lobbyId, tournamentId, initialState, l
               </TabsContent>
 
               <TabsContent value="matches" className="space-y-4 pt-4">
-                 <Card className="border-white/10 bg-card/60 backdrop-blur-lg">
-                   <CardHeader>
-                     <CardTitle>Match Results</CardTitle>
-                   </CardHeader>
-                   <CardContent>
-                     {state.state === 'FINISHED' ? (
-                       <div className="text-sm text-emerald-400 font-medium">Match finished. Data sync pending...</div>
-                     ) : (
-                       <div className="text-sm text-muted-foreground text-center py-6 border border-dashed rounded-lg border-white/10">
-                         Match is not finished yet. Results will appear here after the match concludes.
-                       </div>
-                     )}
-                   </CardContent>
-                 </Card>
+                {state.state === 'FINISHED' && lobbyData?.matches?.length > 0 ? (
+                  lobbyData.matches.map((match: any, idx: number) => {
+                    const hasGrimoire = isGrimoireMatchData(match.matchData);
+                    return (
+                      <div key={match.id} className="space-y-2">
+                        {lobbyData.matches.length > 1 && (
+                          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide px-1">
+                            Match {idx + 1}
+                          </p>
+                        )}
+                        <Card className="border-white/10 bg-card/60 backdrop-blur-lg">
+                          <CardHeader className="pb-2">
+                            <div className="flex items-center justify-between">
+                              <CardTitle className="text-base">Match Results</CardTitle>
+                              {match.matchIdRiotApi && (
+                                <Badge variant="outline" className="text-[10px] font-mono">
+                                  {match.matchIdRiotApi.split('_').pop()?.slice(0, 8)}…
+                                </Badge>
+                              )}
+                            </div>
+                          </CardHeader>
+                          <CardContent>
+                            {hasGrimoire ? (
+                              <MatchCompPanel
+                                matchData={match.matchData as GrimoireMatchData}
+                                resultMap={Object.fromEntries(
+                                  (match.matchResults ?? []).map((r: any) => [
+                                    r.user?.puuid ?? r.userId,
+                                    { placement: r.placement, points: r.points }
+                                  ])
+                                )}
+                              />
+                            ) : (
+                              <div className="text-sm text-emerald-400 font-medium py-2">
+                                Match finished. Results are syncing from Riot API...
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </div>
+                    );
+                  })
+                ) : state.state === 'FINISHED' ? (
+                  <Card className="border-white/10 bg-card/60 backdrop-blur-lg">
+                    <CardContent className="py-8 text-center text-sm text-emerald-400 font-medium">
+                      Match finished. Results are syncing from Riot API...
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card className="border-white/10 bg-card/60 backdrop-blur-lg">
+                    <CardContent>
+                      <div className="text-sm text-muted-foreground text-center py-6 border border-dashed rounded-lg border-white/10">
+                        Match is not finished yet. Results will appear here after the match concludes.
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
               </TabsContent>
             </Tabs>
           </div>

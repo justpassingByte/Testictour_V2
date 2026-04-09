@@ -26,9 +26,10 @@ import { MatchResultDetail } from "./MatchResultDetail"
 interface LobbiesTabClientProps {
     initialLobbies: MiniTourLobby[]
     onLobbiesUpdate?: (lobbies: MiniTourLobby[]) => void
+    isAdmin?: boolean
 }
 
-export default function LobbiesTabClient({ initialLobbies, onLobbiesUpdate }: LobbiesTabClientProps) {
+export default function LobbiesTabClient({ initialLobbies, onLobbiesUpdate, isAdmin = false }: LobbiesTabClientProps) {
     const router = useRouter()
     const { lobby: storeLobby, startLobby, syncMatch, deleteLobby, submitManualResult, isProcessingAction, syncingMatchId } = useMiniTourLobbyStore()
 
@@ -556,7 +557,7 @@ export default function LobbiesTabClient({ initialLobbies, onLobbiesUpdate }: Lo
 
                                 {/* Enhanced Actions */}
                                 <div className="flex flex-wrap gap-3 pt-6 border-t border-slate-700 bg-slate-900 p-4 rounded-lg">
-                                    <Link href={`/dashboard/partner/lobbies/${selectedLobby.id}`}>
+                                    <Link href={isAdmin ? `/dashboard/admin/lobbies/${selectedLobby.id}` : `/dashboard/partner/lobbies/${selectedLobby.id}`}>
                                         <Button variant="outline" className="bg-slate-800 border-slate-700 hover:bg-slate-700">
                                             <Edit className="mr-2 h-4 w-4" /> Full Edit
                                         </Button>
@@ -581,6 +582,7 @@ export default function LobbiesTabClient({ initialLobbies, onLobbiesUpdate }: Lo
                 isOpen={isAssignPlayersDialogOpen}
                 onOpenChange={setIsAssignPlayersDialogOpen}
                 onSuccess={refreshLobbies}
+                isAdmin={isAdmin}
             />
         </div>
     )

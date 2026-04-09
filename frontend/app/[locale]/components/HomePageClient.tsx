@@ -59,31 +59,32 @@ export default function HomePageClient({ tournaments, lobbies }: HomePageClientP
                 <div className="absolute inset-0 bg-black/30 dark:bg-black/40 mix-blend-multiply"></div>
               </div>
 
-              <div className="relative z-10 space-y-6 lg:space-y-8 animate-fade-in">
-                <h1 className="text-4xl md:text-5xl lg:text-6xl xl:text-[4.5rem] xl:leading-tight font-bold tracking-tight drop-shadow-md font-['var(--font-cinzel)']">
-                  <span className="gradient-text">{t('hero_title_part1')}</span> <br />
-                  <span className="text-white drop-shadow-lg">{t('hero_title_part2')}</span>
+              <div className="relative z-10 space-y-8 animate-fade-in">
+                <h1 className="text-[40px] md:text-[48px] lg:text-[56px] leading-[1.15] font-bold tracking-tight [text-shadow:_0_2px_10px_rgb(0_0_0_/_0.8)] font-['var(--font-cinzel)']">
+                  <span className="gradient-text drop-shadow-md">{t('hero_title_part1')}</span> <br />
+                  <span className="text-white drop-shadow-xl">{t('hero_title_part2')}</span>
                 </h1>
-                <p className="text-xl lg:text-2xl text-white/90 drop-shadow">
+                <p className="text-base md:text-lg font-medium text-white/95 [text-shadow:_0_2px_4px_rgb(0_0_0_/_0.8)] max-w-2xl">
                   {t('hero_description')}
                 </p>
-                <div className="flex flex-col sm:flex-row items-center justify-center sm:gap-12 gap-6 pt-6 lg:pt-8">
-                  <Link
-                    href="/tournaments"
-                    className="text-xl lg:text-2xl font-medium text-white/90 hover:text-primary transition-all duration-300 flex items-center group drop-shadow"
-                  >
-                    Browse <ArrowRight className="ml-3 h-6 w-6 transition-transform group-hover:translate-x-2" />
-                  </Link>
+                <div className="flex flex-col sm:flex-row items-center sm:gap-6 gap-4 pt-4 lg:pt-6">
+                  <Button asChild className="btn-zodiac text-base px-8 py-6 rounded-full shadow-[0_0_15px_rgba(255,255,255,0.1)] hover:shadow-[0_0_25px_rgba(255,255,255,0.2)] transition-all duration-300 hover:scale-105 text-white">
+                    <Link href="/tournaments" className="flex items-center group">
+                      Browse <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
+                    </Link>
+                  </Button>
 
-                  <Link
-                    href="https://discord.com/invite/R3rez3qDbf"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center text-[#5865F2] hover:text-[#5865F2] hover:scale-105 transition-all duration-300 drop-shadow group"
-                  >
-                    <DiscordIcon className="h-8 w-8 mr-3" />
-                    <span className="text-xl lg:text-2xl font-medium text-white/90 group-hover:text-white transition-colors">Join</span>
-                  </Link>
+                  <Button asChild variant="outline" className="bg-background/20 border-2 border-white/20 hover:border-white/50 text-white hover:bg-white/10 hover:text-white rounded-full px-8 py-6 text-base backdrop-blur-md transition-all duration-300 hover:scale-105">
+                    <Link
+                      href="https://discord.com/invite/R3rez3qDbf"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center group"
+                    >
+                      <DiscordIcon className="h-5 w-5 mr-2 text-[#5865F2] group-hover:text-[#7289da] transition-colors" />
+                      <span>Join Discord</span>
+                    </Link>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -110,7 +111,7 @@ export default function HomePageClient({ tournaments, lobbies }: HomePageClientP
                     fill
                     src="/foreground.png"
                     alt="TFT Characters Cutout"
-                    className="object-contain drop-shadow-[0_25px_35px_rgba(0,0,0,0.9)] scale-[1.6] -translate-x-12 xl:-translate-x-24 -translate-y-8 transition-transform duration-500 ease-out group-hover:scale-[1.65]"
+                    className="object-contain drop-shadow-[0_25px_35px_rgba(0,0,0,0.9)] scale-[1.6] -translate-x-24 xl:-translate-x-40 -translate-y-8 transition-transform duration-500 ease-out group-hover:scale-[1.65]"
                     priority
                   />
                 </div>

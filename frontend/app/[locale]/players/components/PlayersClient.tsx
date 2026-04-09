@@ -183,7 +183,7 @@ export default function PlayersClient() {
         <div>
           <h1 className="text-4xl font-bold tracking-tight">{t("players")}</h1>
           <p className="text-muted-foreground">
-            {t("players_description", { defaultValue: "Discover top TFT players, view their statistics, and track their tournament performance." })}
+            {t("players_description")}
           </p>
         </div>
         <SyncStatus status="live" />
@@ -193,7 +193,7 @@ export default function PlayersClient() {
       <section className="space-y-6">
         <div>
           <h2 className="text-2xl font-bold mb-2">{t("featured_players")}</h2>
-          <p className="text-muted-foreground">{t("featured_players_description", { defaultValue: "Top performing players in recent tournaments" })}</p>
+          <p className="text-muted-foreground">{t("featured_players_description")}</p>
         </div>
 
         <div className="grid gap-6 md:grid-cols-3">
@@ -267,7 +267,7 @@ export default function PlayersClient() {
       <section className="space-y-6">
         <div>
           <h2 className="text-2xl font-bold mb-2">{t("player_directory")}</h2>
-          <p className="text-muted-foreground">{t("player_directory_description", { defaultValue: "Browse and search through all registered players" })}</p>
+          <p className="text-muted-foreground">{t("player_directory_description")}</p>
         </div>
 
         {/* Filters */}

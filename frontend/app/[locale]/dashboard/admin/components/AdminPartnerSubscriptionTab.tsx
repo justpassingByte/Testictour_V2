@@ -5,8 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/use-toast"
-import { Loader2, Crown, CheckCircle2 } from "lucide-react"
+import { Loader2, Crown, CheckCircle2, Wallet } from "lucide-react"
 import api from "@/app/lib/apiConfig"
 
 interface SubscriptionData {
@@ -23,6 +24,7 @@ interface AdminPartnerSubscriptionTabProps {
     partnerId: string
     partnerName: string
     currentSubscription?: SubscriptionData | null
+    partnerBalance?: number
     onUpdate: () => void
 }
 
@@ -30,11 +32,14 @@ export default function AdminPartnerSubscriptionTab({
     partnerId,
     partnerName,
     currentSubscription,
+    partnerBalance = 0,
     onUpdate
 }: AdminPartnerSubscriptionTabProps) {
     const { toast } = useToast()
     const [loading, setLoading] = useState(false)
+    const [depositLoading, setDepositLoading] = useState(false)
     const [selectedPlan, setSelectedPlan] = useState<string>(currentSubscription?.plan || 'FREE')
+    const [depositAmount, setDepositAmount] = useState<string>('')
 
     const handleUpdatePlan = async () => {
         try {
@@ -95,6 +100,34 @@ export default function AdminPartnerSubscriptionTab({
         }
     }
 
+    const handleDeposit = async () => {
+        const amount = parseFloat(depositAmount)
+        if (isNaN(amount) || amount <= 0) {
+            toast({ title: "Error", description: "Please enter a valid amount.", variant: "destructive" })
+            return
+        }
+
+        try {
+            setDepositLoading(true)
+            await api.post(`/admin/users/${partnerId}/deposit`, { amount })
+            toast({
+                title: "Balance Updated",
+                description: `Successfully added $${amount} to ${partnerName}'s balance.`,
+            })
+            setDepositAmount('')
+            onUpdate()
+        } catch (error) {
+            console.error("Failed to deposit:", error)
+            toast({
+                title: "Error",
+                description: "Failed to update balance.",
+                variant: "destructive",
+            })
+        } finally {
+            setDepositLoading(false)
+        }
+    }
+
     const planColors: Record<string, string> = {
         'FREE': 'bg-slate-500/10 text-slate-400 border-slate-500/20',
         'PRO': 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
@@ -138,6 +171,40 @@ export default function AdminPartnerSubscriptionTab({
                                 </p>
                             </div>
                         )}
+                    </div>
+
+                    <div className="space-y-3 pt-4 border-t border-white/10">
+                        <div className="flex items-center justify-between">
+                            <label className="text-sm font-medium flex items-center gap-2">
+                                <Wallet className="h-4 w-4 text-blue-400" />
+                                Balance Management
+                            </label>
+                            <div className="text-sm text-muted-foreground">
+                                Current Balance: <span className="font-semibold text-blue-400">${partnerBalance.toLocaleString()}</span>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <Input
+                                type="number"
+                                placeholder="Amount to deposit"
+                                value={depositAmount}
+                                onChange={(e) => setDepositAmount(e.target.value)}
+                                min="0"
+                                step="10"
+                                className="w-[200px]"
+                            />
+                            <Button
+                                onClick={handleDeposit}
+                                disabled={depositLoading || !depositAmount}
+                                variant="secondary"
+                                className="w-32"
+                            >
+                                {depositLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Top Up"}
+                            </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                            Partners need sufficient balance to upgrade to paid subscription plans.
+                        </p>
                     </div>
 
                     <div className="space-y-3 pt-4 border-t border-white/10">

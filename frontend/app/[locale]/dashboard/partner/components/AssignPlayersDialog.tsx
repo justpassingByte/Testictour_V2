@@ -25,21 +25,25 @@ interface AssignPlayersDialogProps {
   lobbyId: string
   isOpen: boolean
   onOpenChange: (open: boolean) => void
-  onSuccess?: () => void // New: Callback to refresh data
+  onSuccess?: () => void
+  isAdmin?: boolean
 }
 
-export function AssignPlayersDialog({ lobbyId, isOpen, onOpenChange, onSuccess }: AssignPlayersDialogProps) {
+export function AssignPlayersDialog({ lobbyId, isOpen, onOpenChange, onSuccess, isAdmin = false }: AssignPlayersDialogProps) {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]) // Store player IDs
   const { assignPlayerToLobby, isProcessingAction } = useMiniTourLobbyStore()
-  const { allPlayers, fetchPartnerPlayers, isLoading: loadingPlayers } = usePlayerStore()
+  const { allPlayers, fetchPartnerPlayers, fetchAllPlayers, isLoading: loadingPlayers } = usePlayerStore()
 
   useEffect(() => {
-    // Fetch all players only once when dialog opens
     if (isOpen) {
-      fetchPartnerPlayers() // Use the new partner-specific fetch
+      if (isAdmin) {
+        fetchAllPlayers() // Admin: fetch all users from admin endpoint
+      } else {
+        fetchPartnerPlayers() // Partner: fetch partner-specific players
+      }
     }
-  }, [isOpen, fetchPartnerPlayers])
+  }, [isOpen, isAdmin, fetchAllPlayers, fetchPartnerPlayers])
 
   const handleCheckboxChange = (playerId: string, checked: boolean) => {
     if (checked) {

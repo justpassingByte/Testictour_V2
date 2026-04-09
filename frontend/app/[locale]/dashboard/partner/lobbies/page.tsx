@@ -19,7 +19,7 @@ import { Separator } from "@/components/ui/separator"
 import { useMiniTourLobbyStore, MiniTourLobby } from "@/app/stores/miniTourLobbyStore"
 import { useToast } from "@/components/ui/use-toast"
 import api from "@/app/lib/apiConfig"
-import Image from "next/image"
+import { useTranslations } from "next-intl"
 
 export default function CreateOrEditLobbyPage() {
   const router = useRouter()
@@ -30,6 +30,7 @@ export default function CreateOrEditLobbyPage() {
   const { createLobby, updateLobby, deleteLobby, isProcessingAction, isLoading } = useMiniTourLobbyStore()
   console.log("isProcessingAction on load:", isProcessingAction)
   const { toast } = useToast()
+  const t = useTranslations("common")
 
   const [lobbyData, setLobbyData] = useState({
     name: "",
@@ -124,6 +125,14 @@ export default function CreateOrEditLobbyPage() {
     }
   }
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setSelectedImage(file)
+      setImagePreview(URL.createObjectURL(file))
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -180,37 +189,29 @@ export default function CreateOrEditLobbyPage() {
     }
   }
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setSelectedImage(file)
-      setImagePreview(URL.createObjectURL(file))
-    }
-  }
-
   return (
     <div className="container py-8">
       <div className="flex items-center space-x-2 text-sm text-muted-foreground mb-6">
         <ChevronRight className="h-4 w-4" />
-        <Link href="/dashboard/partner">Partner Dashboard</Link>
+        <Link href="/dashboard/partner">{t("partner_dashboard", { defaultValue: "Partner Dashboard" })}</Link>
         <ChevronRight className="h-4 w-4" />
-        <span className="font-medium text-foreground">{isEditMode ? `Edit Lobby` : 'Create Lobby'}</span>
+        <span className="font-medium text-foreground">{isEditMode ? t("edit_lobby", { defaultValue: "Edit Lobby" }) : t("create_lobby", { defaultValue: "Create Lobby" })}</span>
       </div>
 
       <div className="max-w-4xl mx-auto">
         <div className="flex justify-between items-start mb-8">
           <div className="flex flex-col space-y-2">
-            <h1 className="text-3xl font-bold">{isEditMode ? "Edit Lobby" : "Create New Lobby"}</h1>
+            <h1 className="text-3xl font-bold">{isEditMode ? t("edit_lobby", { defaultValue: "Edit Lobby" }) : t("create_new_lobby", { defaultValue: "Create New Lobby" })}</h1>
             <p className="text-muted-foreground">
               {isEditMode
-                ? "Update the details of your existing lobby."
-                : "Set up a custom lobby for your community with personalized settings and branding."}
+                ? t("edit_lobby_desc", { defaultValue: "Update the details of your existing lobby." })
+                : t("create_lobby_desc", { defaultValue: "Set up a custom lobby for your community with personalized settings and branding." })}
             </p>
           </div>
           {isEditMode && (
             <Button variant="destructive" onClick={handleDelete} disabled={isProcessingAction}>
               <Trash2 className="mr-2 h-4 w-4" />
-              Delete Lobby
+              {t("delete_lobby", { defaultValue: "Delete Lobby" })}
             </Button>
           )}
         </div>
@@ -218,10 +219,10 @@ export default function CreateOrEditLobbyPage() {
         <form onSubmit={handleSubmit}>
           <Tabs defaultValue="basic" className="space-y-6">
             <TabsList className="grid grid-cols-4 w-full">
-              <TabsTrigger value="basic">Basic Info</TabsTrigger>
-              <TabsTrigger value="settings">Settings</TabsTrigger>
-              <TabsTrigger value="branding">Branding</TabsTrigger>
-              <TabsTrigger value="review">Review</TabsTrigger>
+              <TabsTrigger value="basic">{t("basic_info", { defaultValue: "Basic Info" })}</TabsTrigger>
+              <TabsTrigger value="settings">{t("settings", { defaultValue: "Settings" })}</TabsTrigger>
+              <TabsTrigger value="branding">{t("branding", { defaultValue: "Branding" })}</TabsTrigger>
+              <TabsTrigger value="review">{t("review", { defaultValue: "Review" })}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="basic" className="space-y-6">
@@ -229,9 +230,9 @@ export default function CreateOrEditLobbyPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center">
                     <Users className="mr-2 h-5 w-5 text-primary" />
-                    Basic Information
+                    {t("basic_information", { defaultValue: "Basic Information" })}
                   </CardTitle>
-                  <CardDescription>Set up the fundamental details for your lobby</CardDescription>
+                  <CardDescription>{t("basic_info_desc", { defaultValue: "Set up the fundamental details for your lobby" })}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="grid gap-4 md:grid-cols-2">
@@ -355,9 +356,9 @@ export default function CreateOrEditLobbyPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center">
                     <DollarSign className="mr-2 h-5 w-5 text-primary" />
-                    Entry & Pricing
+                    {t("entry_pricing", { defaultValue: "Entry & Pricing" })}
                   </CardTitle>
-                  <CardDescription>Configure entry fees and prize distribution</CardDescription>
+                  <CardDescription>{t("entry_pricing_desc", { defaultValue: "Configure entry fees and prize distribution" })}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="grid gap-4 md:grid-cols-2">
@@ -455,9 +456,9 @@ export default function CreateOrEditLobbyPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center">
                     <Settings className="mr-2 h-5 w-5 text-primary" />
-                    Lobby Settings
+                    {t("lobby_settings", { defaultValue: "Lobby Settings" })}
                   </CardTitle>
-                  <CardDescription>Configure how your lobby operates</CardDescription>
+                  <CardDescription>{t("lobby_settings_desc", { defaultValue: "Configure how your lobby operates" })}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="space-y-4">
@@ -505,37 +506,69 @@ export default function CreateOrEditLobbyPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center">
                     <Palette className="mr-2 h-5 w-5 text-primary" />
-                    Visual Branding
+                    {t("visual_branding", { defaultValue: "Visual Branding" })}
                   </CardTitle>
-                  <CardDescription>Customize the appearance of your lobby</CardDescription>
+                  <CardDescription>{t("visual_branding_desc", { defaultValue: "Customize the appearance of your lobby" })}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="theme">Theme</Label>
-                    <Select
-                      value={lobbyData.theme}
-                      onValueChange={(value) => setLobbyData({ ...lobbyData, theme: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="default">Default</SelectItem>
-                        <SelectItem value="dark">Dark</SelectItem>
-                        <SelectItem value="premium">Premium</SelectItem>
-                        <SelectItem value="colorful">Colorful</SelectItem>
-                        <SelectItem value="minimal">Minimal</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="theme">Theme</Label>
+                      <Select
+                        value={lobbyData.theme}
+                        onValueChange={(value) => setLobbyData({ ...lobbyData, theme: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="default">Default</SelectItem>
+                          <SelectItem value="dark">Dark</SelectItem>
+                          <SelectItem value="premium">Premium</SelectItem>
+                          <SelectItem value="colorful">Colorful</SelectItem>
+                          <SelectItem value="minimal">Minimal</SelectItem>
+                          <SelectItem value="neon">Neon</SelectItem>
+                          <SelectItem value="cyberpunk">Cyberpunk</SelectItem>
+                          <SelectItem value="retro">Retro</SelectItem>
+                          <SelectItem value="ocean">Ocean</SelectItem>
+                          <SelectItem value="fire">Fire</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Primary Color</Label>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-8 h-8 rounded border" style={{ backgroundColor: lobbyData.theme !== "default" ? "#3B82F6" : "transparent" }}></div>
+                        <Input placeholder="#3B82F6" />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Accent Color</Label>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-8 h-8 rounded border" style={{ backgroundColor: lobbyData.theme !== "default" ? "#10B981" : "transparent" }}></div>
+                        <Input placeholder="#10B981" />
+                      </div>
+                    </div>
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="logo">Custom Logo</Label>
+                    {/* File input always rendered so ref works in both preview/empty states */}
+                    <input
+                      id="customLogo"
+                      type="file"
+                      className="hidden"
+                      accept="image/png, image/jpeg, image/jpg"
+                      onChange={handleImageChange}
+                      ref={fileInputRef}
+                    />
                     <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center">
                       {imagePreview ? (
-                        <div className="relative group">
-                          <Image src={imagePreview} alt="Lobby Logo" className="mx-auto max-h-40 rounded-lg" />
-                          <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="relative group flex justify-center">
+                          <img src={imagePreview} alt="Lobby Logo" className="mx-auto max-h-40 rounded-lg object-contain" />
+                          <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
                             <Button variant="outline" size="sm" type="button" onClick={() => fileInputRef.current?.click()}>
                               Change Logo
                             </Button>
@@ -545,14 +578,6 @@ export default function CreateOrEditLobbyPage() {
                         <>
                           <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                           <p className="text-sm text-muted-foreground mb-2">Upload your lobby logo (PNG, JPG up to 2MB)</p>
-                          <input
-                            id="customLogo"
-                            type="file"
-                            className="hidden"
-                            accept="image/png, image/jpeg, image/jpg"
-                            onChange={handleImageChange}
-                            ref={fileInputRef}
-                          />
                           <Button variant="outline" size="sm" type="button" onClick={() => fileInputRef.current?.click()}>
                             Choose File
                           </Button>
@@ -561,22 +586,7 @@ export default function CreateOrEditLobbyPage() {
                     </div>
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Primary Color</Label>
-                      <div className="flex items-center space-x-2">
-                        <div className="w-8 h-8 rounded border bg-primary"></div>
-                        <Input placeholder="#3B82F6" />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Accent Color</Label>
-                      <div className="flex items-center space-x-2">
-                        <div className="w-8 h-8 rounded border bg-accent"></div>
-                        <Input placeholder="#10B981" />
-                      </div>
-                    </div>
-                  </div>
+                  {/* Colors removed as they are combined with Theme above */}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -586,9 +596,9 @@ export default function CreateOrEditLobbyPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center">
                     <Trophy className="mr-2 h-5 w-5 text-primary" />
-                    Review & Create
+                    {t("review_create", { defaultValue: "Review & Create" })}
                   </CardTitle>
-                  <CardDescription>Review your lobby settings before creating</CardDescription>
+                  <CardDescription>{t("review_create_desc", { defaultValue: "Review your lobby settings before creating" })}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="grid gap-6 md:grid-cols-2">
@@ -672,11 +682,11 @@ export default function CreateOrEditLobbyPage() {
 
               <div className="flex justify-between">
                 <Link href="/dashboard/partner">
-                  <Button variant="outline" type="button">Cancel</Button>
+                  <Button variant="outline" type="button">{t("cancel")}</Button>
                 </Link>
                 <Button type="submit" className="flex items-center" disabled={isProcessingAction}>
                   <Save className="mr-2 h-4 w-4" />
-                  {isProcessingAction ? (isEditMode ? "Saving..." : "Creating...") : (isEditMode ? "Save Changes" : "Create Lobby")}
+                  {isProcessingAction ? (isEditMode ? t("saving", { defaultValue: "Saving..." }) : t("creating", { defaultValue: "Creating..." })) : (isEditMode ? t("save_changes", { defaultValue: "Save Changes" }) : t("create_lobby", { defaultValue: "Create Lobby" }))}
                 </Button>
               </div>
             </TabsContent>

@@ -9,9 +9,11 @@ import { TournamentScheduleCard } from "@/app/[locale]/tournaments/[id]/componen
 import { TournamentFormatCard } from "@/app/[locale]/tournaments/[id]/components/TournamentFormatCard"
 import { PointSystemCard } from "@/app/[locale]/tournaments/[id]/components/PointSystemCard"
 import TabsContentClientWrapper from "@/app/[locale]/tournaments/[id]/components/TabsContentClientWrapper"
+import { TournamentLobbyButton } from "@/app/[locale]/tournaments/[id]/components/TournamentLobbyButton"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { getTranslations } from "next-intl/server"
 import { 
   Globe, Users, Calendar, 
   DollarSign, Clock, Download, Loader2
@@ -39,21 +41,21 @@ async function getTournamentParticipants(tournamentId: string) {
 }
 
 export default async function TournamentPage({ params }: { params: { id: string } }) {
+  const t = await getTranslations("common")
   const resolvedParams = await Promise.resolve(params)
-  const tournament = await getTournamentDetail(resolvedParams.id)
+  const [tournament, participants] = await Promise.all([
+    getTournamentDetail(resolvedParams.id),
+    getTournamentParticipants(resolvedParams.id)
+  ])
   
   if (!tournament) {
     notFound()
   }
 
-  // Pre-fetch participants for server rendering
-  const participants = await getTournamentParticipants(resolvedParams.id)
-
-  // Determine status from database values
   const statusMapping = {
-    pending: { text: "Upcoming", color: "bg-yellow-500/20 text-yellow-500" },
-    in_progress: { text: "Ongoing", color: "bg-primary/20 text-primary animate-pulse-subtle" },
-    completed: { text: "Finished", color: "bg-muted text-muted-foreground" },
+    pending:     { text: t("upcoming"),   color: "bg-yellow-500/20 text-yellow-500" },
+    in_progress: { text: t("ongoing"),    color: "bg-primary/20 text-primary animate-pulse-subtle" },
+    completed:   { text: t("finished"),   color: "bg-muted text-muted-foreground" },
   }
   const currentStatus = statusMapping[tournament.status as keyof typeof statusMapping] || 
     { text: tournament.status, color: "" }
@@ -62,9 +64,9 @@ export default async function TournamentPage({ params }: { params: { id: string 
     <div className="container py-8">
       <TournamentHeader tournament={tournament} />
 
-      <div className="mt-6 grid gap-6 md:grid-cols-3">
+      <div className="mt-8 grid gap-8 md:grid-cols-3">
         <div className="col-span-3 md:col-span-2">
-          <div className="flex flex-col space-y-6">
+          <div className="flex flex-col space-y-8">
             <div className="flex flex-col space-y-2">
               <div className="flex items-center space-x-2">
                 <h1 className="text-3xl font-bold">{tournament.name}</h1>
@@ -83,18 +85,19 @@ export default async function TournamentPage({ params }: { params: { id: string 
             <PointSystemCard tournament={tournament} />
 
             <Suspense fallback={<TabContentSkeleton />}>
-              {/* Use the client component wrapper */}
-              <TabsContentClientWrapper 
-                tournament={tournament}
-                participants={participants}
-              />
+              <div id="tournament-tabs">
+                <TabsContentClientWrapper 
+                  tournament={tournament}
+                  participants={participants}
+                />
+              </div>
             </Suspense>
           </div>
         </div>
 
         <div className="col-span-3 md:col-span-1">
-          <div className="flex flex-col space-y-6">
-            <Card className="overflow-hidden bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1">
+          <div className="flex flex-col space-y-8">
+            <Card className="overflow-hidden bg-card/80 dark:bg-card/60 backdrop-blur-xl border border-primary/20 shadow-xl shadow-primary/5 transition-all duration-300 hover:shadow-2xl hover:shadow-primary/10">
               <CardHeader className="p-0">
                 <Image
                   width={1000}
@@ -107,15 +110,15 @@ export default async function TournamentPage({ params }: { params: { id: string 
               <CardContent className="p-6 space-y-4">
                 <ul className="space-y-3">
                   <li className="flex items-center justify-between">
-                    <span className="text-muted-foreground flex items-center"><Users className="mr-2 h-4 w-4" /> Players:</span>
+                    <span className="text-muted-foreground flex items-center"><Users className="mr-2 h-4 w-4" /> {t("players")}:</span>
                     <span className="font-medium">{tournament.registered || 0} / {tournament.maxPlayers}</span>
                   </li>
                   <li className="flex items-center justify-between">
-                    <span className="text-muted-foreground flex items-center"><Globe className="mr-2 h-4 w-4" /> Region:</span>
+                    <span className="text-muted-foreground flex items-center"><Globe className="mr-2 h-4 w-4" /> {t("region")}:</span>
                     <span className="font-medium">{tournament.region || 'N/A'}</span>
                   </li>
                   <li className="flex items-center justify-between">
-                    <span className="text-muted-foreground flex items-center"><Calendar className="mr-2 h-4 w-4" /> Reg. Deadline:</span>
+                    <span className="text-muted-foreground flex items-center"><Calendar className="mr-2 h-4 w-4" /> {t("registration_deadline")}:</span>
                     <span className="font-medium">
                       {tournament.endTime && !isNaN(new Date(tournament.endTime).getTime())
                         ? format(new Date(tournament.endTime), "yyyy-MM-dd")
@@ -123,47 +126,47 @@ export default async function TournamentPage({ params }: { params: { id: string 
                     </span>
                   </li>
                   <li className="flex items-center justify-between">
-                    <span className="text-muted-foreground flex items-center"><DollarSign className="mr-2 h-4 w-4" /> Reg. Fee:</span>
-                    <span className="font-medium">${tournament.entryFee}</span>
+                    <span className="text-muted-foreground flex items-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 h-4 w-4"><circle cx="8" cy="8" r="7"/><polyline points="8 4 8 12 11.5 15.5"/><circle cx="16" cy="16" r="7"/><line x1="16" y1="12" x2="16" y2="20"/><line x1="12" y1="16" x2="20" y2="16"/></svg> {t("registration_fee")}:
+                    </span>
+                    <span className="font-medium text-amber-400 font-mono">{tournament.entryFee.toLocaleString()}</span>
                   </li>
                   <li className="flex items-center justify-between">
-                    <span className="text-muted-foreground flex items-center"><Clock className="mr-2 h-4 w-4" /> Status:</span>
+                    <span className="text-muted-foreground flex items-center"><Clock className="mr-2 h-4 w-4" /> {t("status")}:</span>
                     <Badge variant="outline" className={`${currentStatus.color} capitalize`}>{currentStatus.text}</Badge>
                   </li>
                 </ul>
-                <div className="grid gap-2">
+                <div className="grid gap-3">
                   {tournament.status === "in_progress" && (
                     <>
-                      <Button asChild className="w-full">
-                        <Link href={`/tournaments/${tournament.id}/scoreboard`}>View Live Scoreboard</Link>
-                      </Button>
+                      <TournamentLobbyButton tournamentId={tournament.id} />
                       <Button asChild variant="secondary" className="w-full">
-                        <Link href={`/tournaments/${tournament.id}/lobbies`}>View Current Lobbies</Link>
+                        <Link href={`/tournaments/${tournament.id}/live`}>{t("view_live_scoreboard")}</Link>
                       </Button>
                     </>
                   )}
                   {tournament.status === "UPCOMING" && (
                     <Button asChild className="w-full">
-                      <Link href={`/tournaments/${tournament.id}/register`}>Register Now</Link>
+                      <Link href={`/tournaments/${tournament.id}/register`}>{t("register_now")}</Link>
                     </Button>
                   )}
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1">
+            <Card className="bg-card/80 dark:bg-card/60 backdrop-blur-xl border border-primary/20 shadow-xl shadow-primary/5 transition-all duration-300 hover:shadow-2xl hover:shadow-primary/10">
               <CardHeader>
-                <CardTitle className="text-lg">Quick Links</CardTitle>
+                <CardTitle className="text-lg">{t("quick_links")}</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-3">
-                <Link href="#" className="flex items-center text-sm hover:text-primary">
-                  <Download className="mr-2 h-4 w-4" /> Download Brackets
+                <Link href="#" className="flex items-center text-sm font-medium text-muted-foreground hover:text-primary transition-all duration-200 hover:translate-x-1 p-2 hover:bg-primary/5 rounded-md -mx-2">
+                  <Download className="mr-2 h-4 w-4" /> {t("bracket")}
                 </Link>
-                <Link href="#" className="flex items-center text-sm hover:text-primary">
-                  <Download className="mr-2 h-4 w-4" /> Export Results as CSV
+                <Link href="#" className="flex items-center text-sm font-medium text-muted-foreground hover:text-primary transition-all duration-200 hover:translate-x-1 p-2 hover:bg-primary/5 rounded-md -mx-2">
+                  <Download className="mr-2 h-4 w-4" /> {t("export_scoreboard")}
                 </Link>
-                <Link href="#" className="flex items-center text-sm hover:text-primary">
-                  <Download className="mr-2 h-4 w-4" /> Download Player List
+                <Link href="#" className="flex items-center text-sm font-medium text-muted-foreground hover:text-primary transition-all duration-200 hover:translate-x-1 p-2 hover:bg-primary/5 rounded-md -mx-2">
+                  <Download className="mr-2 h-4 w-4" /> {t("player_list")}
                 </Link>
               </CardContent>
             </Card>
@@ -191,4 +194,4 @@ function TabContentSkeleton() {
       </div>
     </div>
   )
-} 
+}

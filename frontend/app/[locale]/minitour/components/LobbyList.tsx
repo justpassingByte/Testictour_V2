@@ -30,11 +30,11 @@ function LobbyCard({ lobby }: { lobby: MiniTourLobby }) {
   const getThemeStyle = (theme?: string) => {
     switch (theme) {
       case "premium":
-        return "border-yellow-500/50 bg-yellow-500/5"
+        return "border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.15)]"
       case "dark":
-        return "border-purple-500/50 bg-purple-500/5"
+        return "border-purple-500/50 shadow-[0_0_15px_rgba(168,85,247,0.15)]"
       case "colorful":
-        return "border-pink-500/50 bg-pink-500/5"
+        return "border-pink-500/50 shadow-[0_0_15px_rgba(236,72,153,0.15)]"
       default:
         return ""
     }
@@ -46,7 +46,7 @@ function LobbyCard({ lobby }: { lobby: MiniTourLobby }) {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <Avatar className="h-8 w-8">
-              <AvatarImage src={lobby.customLogoUrl || "/placeholder.svg"} alt={lobby.name} />
+              <AvatarImage src={lobby.customLogoUrl ? `${(process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000').replace(/\/$/, '')}${lobby.customLogoUrl}` : "/placeholder.svg"} alt={lobby.name} />
               <AvatarFallback className="text-xs">{lobby.name.charAt(0)}</AvatarFallback>
             </Avatar>
             <div>

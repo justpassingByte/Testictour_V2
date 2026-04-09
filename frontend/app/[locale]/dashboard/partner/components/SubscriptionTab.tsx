@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -82,11 +82,7 @@ export default function SubscriptionTab({ partnerId }: { partnerId?: string }) {
   const [availablePlans, setAvailablePlans] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    fetchSubscription()
-  }, [partnerId])
-
-  const fetchSubscription = async () => {
+  const fetchSubscription = useCallback(async () => {
     try {
       let url = '/partner/subscription';
       if (partnerId) {
@@ -108,7 +104,11 @@ export default function SubscriptionTab({ partnerId }: { partnerId?: string }) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [partnerId])
+
+  useEffect(() => {
+    fetchSubscription()
+  }, [fetchSubscription])
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -180,17 +180,29 @@ export default function SubscriptionTab({ partnerId }: { partnerId?: string }) {
   const ACTIVE_PLAN_FEATURES = (() => {
     if (!availablePlans || availablePlans.length === 0) return PLAN_FEATURES;
 
-    const merged = JSON.parse(JSON.stringify(PLAN_FEATURES)); // clone
+    const merged: Record<string, any> = {};
 
-    availablePlans.forEach(plan => {
-      const planKey = plan.plan as keyof typeof merged;
-      if (merged[planKey]) {
-        merged[planKey] = {
-          ...merged[planKey],
-          ...(typeof plan.features === 'object' && plan.features ? plan.features : {}),
-          maxLobbies: plan.maxLobbies,
-          maxPlayers: plan.maxPlayersPerLobby
-        };
+    ['FREE', 'PRO', 'ENTERPRISE'].forEach(planKey => {
+      const plan = availablePlans.find((p: any) => p.plan === planKey);
+      const defaultFeatures = (PLAN_FEATURES as any)[planKey] || {};
+      
+      merged[planKey] = { ...defaultFeatures };
+      
+      // Remove all boolean keys from default features so deleted features don't show up
+      Object.keys(merged[planKey]).forEach(key => {
+          if (typeof merged[planKey][key] === 'boolean') {
+              delete merged[planKey][key];
+          }
+      });
+
+      if (plan) {
+          // Add back the dynamically configured boolean features from DB
+          if (typeof plan.features === 'object' && plan.features) {
+              Object.assign(merged[planKey], plan.features);
+          }
+
+          if (plan.maxLobbies !== undefined) merged[planKey].maxLobbies = plan.maxLobbies;
+          if (plan.maxPlayersPerLobby !== undefined) merged[planKey].maxPlayers = plan.maxPlayersPerLobby;
       }
     });
 
@@ -216,7 +228,7 @@ export default function SubscriptionTab({ partnerId }: { partnerId?: string }) {
             <Users className="h-12 w-12 mx-auto text-gray-400 mb-4" />
             <h3 className="text-lg font-medium mb-2">No Subscription Found</h3>
             <p className="text-muted-foreground mb-4">
-              You don't have an active subscription. Contact your administrator to get access to premium features.
+              You don&apos;t have an active subscription. Contact your administrator to get access to premium features.
             </p>
             <Button onClick={() => alert('Contact support to activate your subscription')}>
               Request Access
@@ -225,309 +237,103 @@ export default function SubscriptionTab({ partnerId }: { partnerId?: string }) {
         </Card>
       ) : (
         <>
-          {/* Current Plan */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Crown className="mr-2 h-5 w-5" />
-                Current Plan
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className={`p-6 rounded-lg border-2 ${getPlanColor(subscription.plan)}`}>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-3">
-                    {getPlanIcon(subscription.plan)}
-                    <div>
-                      <h3 className="text-2xl font-bold">{subscription.plan}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        {subscription.plan === 'FREE' ? 'Basic Plan' :
-                          subscription.plan === 'PRO' ? 'Professional Plan' :
-                            'Enterprise Plan'}
-                      </p>
+          <div className="grid md:grid-cols-3 gap-6">
+            {['FREE', 'PRO', 'ENTERPRISE'].map((planKey) => {
+              const features = ACTIVE_PLAN_FEATURES[planKey as keyof typeof ACTIVE_PLAN_FEATURES] as any;
+              const isCurrent = subscription.plan === planKey;
+              const title = planKey === 'FREE' ? 'Basic Plan' : planKey === 'PRO' ? 'Professional' : 'Enterprise';
+              const price = planKey === 'FREE' ? 0 : planKey === 'PRO' ? 29.99 : 99.99;
+              
+              return (
+                <Card key={planKey} className={`relative flex flex-col ${isCurrent ? 'border-primary ring-2 ring-primary/20 bg-primary/5' : 'bg-card'}`}>
+                  {isCurrent && (
+                     <div className="absolute top-0 right-0 transform translate-x-2 -translate-y-2 z-10">
+                       <Badge className="bg-primary text-primary-foreground shadow-lg px-2 py-1 text-xs">Current Plan</Badge>
+                     </div>
+                  )}
+                  <CardHeader className="pb-4">
+                    <CardTitle className="flex items-center gap-2">
+                       <div className={`p-2 rounded-lg ${getPlanColor(planKey)} border`}>
+                         {getPlanIcon(planKey)}
+                       </div>
+                      {title}
+                    </CardTitle>
+                    <div className="mt-4">
+                       <span className="text-3xl font-bold">${price}</span>
+                       <span className="text-sm text-muted-foreground">/month</span>
                     </div>
-                  </div>
-                  <div className="text-right">
-                    {getStatusBadge(subscription.status)}
-                  </div>
-                </div>
-
-                {subscription.monthlyPrice && (
-                  <div className="text-center mb-4">
-                    <div className="text-3xl font-bold">${subscription.monthlyPrice}</div>
-                    <div className="text-sm text-muted-foreground">per month</div>
-                  </div>
-                )}
-
-                <div className="text-sm text-muted-foreground mb-4">
-                  Active since {new Date(subscription.startDate).toLocaleDateString()}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Features Comparison */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Plan Comparison</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {Object.entries(ACTIVE_PLAN_FEATURES.FREE).map(([key, freeValue]) => {
-                  const proFeatures = ACTIVE_PLAN_FEATURES.PRO;
-                  const enterpriseFeatures = ACTIVE_PLAN_FEATURES.ENTERPRISE;
-                  const currentPlanFeatures = ACTIVE_PLAN_FEATURES[subscription.plan as keyof typeof ACTIVE_PLAN_FEATURES] || ACTIVE_PLAN_FEATURES.FREE;
-                  const currentValue = currentPlanFeatures[key as keyof typeof ACTIVE_PLAN_FEATURES.FREE];
-                  const proValue = proFeatures[key as keyof typeof ACTIVE_PLAN_FEATURES.PRO];
-                  const enterpriseValue = enterpriseFeatures[key as keyof typeof ACTIVE_PLAN_FEATURES.ENTERPRISE];
-
-                  return (
-                    <div key={key} className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/30">
-                      <div className="flex items-center space-x-3">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-sm font-medium capitalize">
-                            {key.replace(/([A-Z])/g, ' $1').toLowerCase()}
-                          </span>
-                        </div>
+                    {isCurrent && (
+                      <div className="text-xs text-muted-foreground mt-2">
+                        {getStatusBadge(subscription.status)} Active since {new Date(subscription.startDate).toLocaleDateString()}
                       </div>
-
-                      <div className="flex items-center space-x-4 text-center">
-                        {/* Free Plan */}
-                        <div className="flex flex-col items-center min-w-[60px]">
-                          <div className="text-xs font-medium text-gray-600 mb-1">Free</div>
-                          {freeValue ? (
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                          ) : (
-                            <XCircle className="h-4 w-4 text-gray-400" />
-                          )}
-                          <div className="text-xs text-muted-foreground mt-1">
-                            {typeof freeValue === 'number' && freeValue !== -1 ? freeValue :
-                              typeof freeValue === 'boolean' ? '' : freeValue}
-                          </div>
+                    )}
+                  </CardHeader>
+                  <CardContent className="flex-1 flex flex-col">
+                     <div className="space-y-3 mb-6 bg-muted/40 p-3 rounded-lg">
+                       <div className="flex justify-between text-sm items-center">
+                          <span className="text-muted-foreground flex items-center gap-1.5"><Users className="h-4 w-4" /> Players</span>
+                          <span className="font-bold text-blue-500">{features.maxPlayers === -1 ? 'Unlimited' : features.maxPlayers}</span>
+                       </div>
+                       <div className="flex justify-between text-sm items-center">
+                          <span className="text-muted-foreground flex items-center gap-1.5"><Crown className="h-4 w-4" /> Lobbies</span>
+                          <span className="font-bold text-green-500">{features.maxLobbies === -1 ? 'Unlimited' : features.maxLobbies}</span>
+                       </div>
+                     </div>
+                     
+                     <div className="space-y-3 mb-6 flex-1">
+                        {Object.entries(features).map(([key, value]) => {
+                           if (key === 'maxPlayers' || key === 'maxLobbies' || key === 'supportLevel' || key === 'withdrawalProcessing') return null;
+                           if (!value) return null; // Don't show inactive features
+                           
+                           return (
+                             <div key={key} className="flex items-start gap-2 text-sm">
+                               <CheckCircle className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+                               <span className="text-muted-foreground">{key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}</span>
+                             </div>
+                           );
+                        })}
+                        <div className="flex items-start gap-2 text-sm">
+                           <CheckCircle className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+                           <span className="text-muted-foreground capitalize">{features.supportLevel} Support</span>
                         </div>
-
-                        {/* Pro Plan */}
-                        <div className="flex flex-col items-center min-w-[60px]">
-                          <div className="text-xs font-medium text-yellow-600 mb-1">Pro</div>
-                          {proValue ? (
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                          ) : (
-                            <XCircle className="h-4 w-4 text-gray-400" />
-                          )}
-                          <div className="text-xs text-muted-foreground mt-1">
-                            {typeof proValue === 'number' && proValue !== -1 ? proValue :
-                              typeof proValue === 'boolean' ? '' : proValue}
-                          </div>
-                        </div>
-
-                        {/* Enterprise Plan */}
-                        <div className="flex flex-col items-center min-w-[60px]">
-                          <div className="text-xs font-medium text-purple-600 mb-1">Enterprise</div>
-                          {enterpriseValue ? (
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                          ) : (
-                            <XCircle className="h-4 w-4 text-gray-400" />
-                          )}
-                          <div className="text-xs text-muted-foreground mt-1">
-                            {typeof enterpriseValue === 'number' && enterpriseValue === -1 ? '∞' :
-                              typeof enterpriseValue === 'boolean' ? '' : enterpriseValue}
-                          </div>
-                        </div>
-
-                        {/* Current Plan Indicator */}
-                        <div className="flex flex-col items-center min-w-[80px]">
-                          <div className="text-xs font-medium text-blue-600 mb-1">You</div>
-                          <div className="text-xs font-medium">
-                            {typeof currentValue === 'boolean' ? (
-                              currentValue ? '✓' : '✗'
-                            ) : (
-                              typeof currentValue === 'number' && currentValue === -1 ? '∞' : currentValue
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Additional Pro/Enterprise Features */}
-              <div className="mt-4 pt-4 border-t">
-                <div className="text-sm font-medium mb-3 text-yellow-600">Pro Plan Additional Features:</div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="flex items-center space-x-2">
-                    <CheckCircle className="h-3 w-3 text-green-500" />
-                    <span>Advanced Analytics</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <CheckCircle className="h-3 w-3 text-green-500" />
-                    <span>Custom Branding</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <CheckCircle className="h-3 w-3 text-green-500" />
-                    <span>API Access</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <CheckCircle className="h-3 w-3 text-green-500" />
-                    <span>Priority Support</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <CreditCard className="h-3 w-3 text-blue-500" />
-                    <span>Payment Gateway</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <ArrowUpCircle className="h-3 w-3 text-green-500" />
-                    <span>Automatic Withdrawals</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <ArrowDownCircle className="h-3 w-3 text-blue-500" />
-                    <span>Player Deposits</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Wallet className="h-3 w-3 text-purple-500" />
-                    <span>Withdrawal Management</span>
-                  </div>
-                </div>
-
-                <div className="text-sm font-medium mb-3 mt-4 text-purple-600">Enterprise Plan Additional Features:</div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="flex items-center space-x-2">
-                    <CheckCircle className="h-3 w-3 text-green-500" />
-                    <span>White Label Solution</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <CheckCircle className="h-3 w-3 text-green-500" />
-                    <span>Custom Integrations</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <CheckCircle className="h-3 w-3 text-green-500" />
-                    <span>Dedicated Support</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <CheckCircle className="h-3 w-3 text-green-500" />
-                    <span>Unlimited Resources</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <CreditCard className="h-3 w-3 text-blue-500" />
-                    <span>Payment Gateway</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <ArrowUpCircle className="h-3 w-3 text-green-500" />
-                    <span>Automatic Withdrawals</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <ArrowDownCircle className="h-3 w-3 text-blue-500" />
-                    <span>Player Deposits</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Wallet className="h-3 w-3 text-purple-500" />
-                    <span>Withdrawal Management</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Settings className="h-3 w-3 text-orange-500" />
-                    <span>Custom Payment Gateway</span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Quick Stats */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <TrendingUp className="mr-2 h-5 w-5" />
-                Plan Limits
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="text-center p-3 border rounded-lg bg-muted/20">
-                  <div className="text-xl font-bold text-blue-600">
-                    {subscription.features.maxPlayers === -1 ? '∞' : subscription.features.maxPlayers || ACTIVE_PLAN_FEATURES.FREE.maxPlayers}
-                  </div>
-                  <div className="text-xs text-muted-foreground">Players</div>
-                </div>
-                <div className="text-center p-3 border rounded-lg bg-muted/20">
-                  <div className="text-xl font-bold text-green-600">
-                    {subscription.features.maxLobbies === -1 ? '∞' : subscription.features.maxLobbies || ACTIVE_PLAN_FEATURES.FREE.maxLobbies}
-                  </div>
-                  <div className="text-xs text-muted-foreground">Lobbies</div>
-                </div>
-              </div>
-
-              {/* Plan Summary */}
-              <div className="mt-4 p-3 rounded-lg bg-primary/5 border border-primary/20">
-                <div className="text-sm font-medium mb-2">What's included in your plan:</div>
-                <div className="flex flex-wrap gap-2">
-                  {Object.entries(ACTIVE_PLAN_FEATURES.FREE).map(([key, value]) => {
-                    const currentPlanFeatures = ACTIVE_PLAN_FEATURES[subscription.plan as keyof typeof ACTIVE_PLAN_FEATURES] || ACTIVE_PLAN_FEATURES.FREE;
-                    const currentValue = currentPlanFeatures[key as keyof typeof ACTIVE_PLAN_FEATURES.FREE];
-                    const isIncluded = currentValue !== false && currentValue !== 0;
-
-                    return (
-                      <div key={key} className="flex items-center space-x-1 text-xs">
-                        {isIncluded ? (
-                          <CheckCircle className="h-3 w-3 text-green-500" />
-                        ) : (
-                          <XCircle className="h-3 w-3 text-gray-400" />
+                        {features.withdrawalProcessing && (
+                           <div className="flex items-start gap-2 text-sm">
+                              <CheckCircle className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+                              <span className="text-muted-foreground capitalize">{features.withdrawalProcessing} Withdrawal</span>
+                           </div>
                         )}
-                        <span className={isIncluded ? 'text-green-700' : 'text-gray-500'}>
-                          {key.replace(/([A-Z])/g, ' $1').toLowerCase()}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                     </div>
 
-          {/* Upgrade Options */}
-          {subscription.plan !== 'ENTERPRISE' && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Upgrade Your Plan</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4">
-                  {subscription.plan === 'FREE' && (
-                    <div className="p-4 border rounded-lg text-center">
-                      <Crown className="h-8 w-8 mx-auto mb-3 text-yellow-500" />
-                      <h3 className="text-lg font-medium mb-2">Upgrade to Pro</h3>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        Get advanced analytics, custom branding, API access, and more
-                      </p>
-                      <div className="text-2xl font-bold mb-2">$29.99<span className="text-lg font-normal">/month</span></div>
-                      <Button
-                        onClick={() => handleUpgradePlan('PRO')}
-                        className="w-full"
-                      >
-                        Upgrade to Pro
-                      </Button>
-                    </div>
-                  )}
-
-                  {subscription.plan === 'PRO' && (
-                    <div className="p-4 border rounded-lg text-center">
-                      <Crown className="h-8 w-8 mx-auto mb-3 text-purple-500" />
-                      <h3 className="text-lg font-medium mb-2">Upgrade to Enterprise</h3>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        Get white-label solution, custom integrations, dedicated support, and unlimited resources
-                      </p>
-                      <div className="text-2xl font-bold mb-2">$99.99<span className="text-lg font-normal">/month</span></div>
-                      <Button
-                        onClick={() => handleUpgradePlan('ENTERPRISE')}
-                        className="w-full"
-                      >
-                        Upgrade to Enterprise
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                     {!isCurrent && (
+                        <div className="mt-auto pt-4">
+                            {subscription.plan === 'ENTERPRISE' || (subscription.plan === 'PRO' && planKey === 'FREE') ? (
+                              // Downgrade or lower tier
+                              <Button disabled variant="outline" className="w-full">
+                                Included in Your Plan
+                              </Button>
+                            ) : (
+                              <Button 
+                                className="w-full" 
+                                variant={planKey === 'PRO' ? 'default' : 'outline'}
+                                onClick={() => handleUpgradePlan(planKey)}
+                              >
+                                Upgrade to {title}
+                              </Button>
+                            )}
+                        </div>
+                     )}
+                     {isCurrent && (
+                        <div className="mt-auto pt-4">
+                          <Button disabled variant="secondary" className="w-full opacity-75">
+                            Your Active Plan
+                          </Button>
+                        </div>
+                     )}
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
         </>
       )}
     </div>
