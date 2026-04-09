@@ -39,7 +39,7 @@ export default async function HomePage() {
   const t = await getTranslations('common');
   const tournaments = await getTournaments();
   const lobbies = await getMiniTourLobbies();
-  
+
   return (
     <Suspense fallback={<HomePageSkeleton />}>
       <HomePageClient tournaments={tournaments} lobbies={lobbies} />
@@ -72,7 +72,7 @@ function HomePageSkeleton() {
       </section>
 
       {/* Featured Tournaments Skeleton */}
-      <section className="py-12">
+      <section className="py-12 bg-background/60 dark:bg-background/40 backdrop-blur-lg border-t border-b border-white/20">
         <div className="container">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
             <div>

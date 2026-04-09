@@ -47,16 +47,17 @@ export default function HomePageClient({ tournaments, lobbies }: HomePageClientP
             {/* Left Column: Text content wrapped in Vegas Background Panel */}
             <div className="w-full lg:w-[68%] xl:w-[72%] relative p-8 md:p-14 lg:p-20 xl:p-24 rounded-[3rem] overflow-hidden shadow-2xl border border-primary/20 group min-h-[550px] md:min-h-[650px] xl:min-h-[750px] flex flex-col justify-center">
               {/* Vegas Background Layer */}
-              <div className="absolute inset-0 z-0 bg-background/80">
+              <div className="absolute inset-0 z-0 bg-slate-950">
                 <Image
                   fill
                   src="/hero-bg.png"
                   alt="Vegas Stage Background"
-                  className="object-cover transition-transform duration-[10s] ease-out group-hover:scale-105 opacity-60"
+                  className="object-cover transition-transform duration-[10s] ease-out group-hover:scale-105 opacity-80"
                   priority
                 />
                 {/* Uniform subtle darkening to ensure text readability without hiding the image */}
-                <div className="absolute inset-0 bg-black/30 dark:bg-black/40 mix-blend-multiply"></div>
+                <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent"></div>
+                <div className="absolute inset-0 bg-black/20 mix-blend-multiply"></div>
               </div>
 
               <div className="relative z-10 space-y-8 animate-fade-in">
@@ -122,7 +123,7 @@ export default function HomePageClient({ tournaments, lobbies }: HomePageClientP
       </section>
 
       {/* Featured Tournaments */}
-      <section className="py-12">
+      <section className="py-12 bg-background/60 dark:bg-background/40 backdrop-blur-lg border-t border-b border-white/20">
         <div className="container">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
             <div>
