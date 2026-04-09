@@ -107,10 +107,10 @@ export default class RoundService {
 
           // Removed verbose log for lobby assignment.
           // logger.info(`Assigning lobbies for Round ${currentRound.roundNumber} with ${participants.length} participants (Size: ${lobbySize}, Assignment: ${lobbyAssignment}).`);
-          const { lobbies, jobsToQueue: newJobsToQueue } = await LobbyService.autoAssignLobbies(updatedRound.id, participants, lobbySize, lobbyAssignment, matchesPerRound, tx);
+          const { lobbies, transitionsToSchedule } = await LobbyService.autoAssignLobbies(updatedRound.id, participants, lobbySize, lobbyAssignment, matchesPerRound, tx);
           
-          // Assign jobs to outer scope variable
-          jobsToQueue = newJobsToQueue;
+          // No jobsToQueue directly from autoAssignLobbies anymore
+          jobsToQueue = [];
 
           if ((global as any).io) {
             (global as any).io.to(`tournament:${currentRound.phase.tournamentId}`).emit('tournament_update', { type: 'round_started', round: updatedRound });

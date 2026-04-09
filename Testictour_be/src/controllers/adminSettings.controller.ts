@@ -145,6 +145,15 @@ export const updateSubscriptionPlan = async (req: Request, res: Response) => {
                 updatedBy: adminId,
             },
         });
+
+        // Sync boolean features to ALL existing partners on this plan immediately
+        if (features !== undefined) {
+            await prisma.partnerSubscription.updateMany({
+                where: { plan },
+                data: { features }
+            });
+        }
+
         return res.json({ plan: updated });
     } catch (error) {
         console.error('[updateSubscriptionPlan]', error);

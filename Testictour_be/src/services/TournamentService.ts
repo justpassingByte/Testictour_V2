@@ -110,7 +110,11 @@ export default class TournamentService {
               include: {
                 lobbies: {
                   include: {
-                    matches: true
+                    matches: {
+                      include: {
+                        matchResults: true
+                      }
+                    }
                   }
                 },
               }

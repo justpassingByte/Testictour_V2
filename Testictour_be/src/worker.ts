@@ -3,7 +3,7 @@ import fetchMatchData from './jobs/fetchMatchData';
 import fetchMiniTourMatchData from './jobs/fetchMiniTourMatchData';
 import logger from './utils/logger';
 import RoundService from './services/RoundService';
-import { autoAdvanceRoundQueue, fetchMatchDataQueue, fetchMiniTourMatchDataQueue, syncCompletionQueue, lobbyTimerQueue, redisConnectionOptions } from './lib/queues';
+import { autoAdvanceRoundQueue, fetchMatchDataQueue, fetchMiniTourMatchDataQueue, syncCompletionQueue, lobbyTimerQueue, redisConnectionOptions, REDIS_ENABLED } from './lib/queues';
 import './jobs/roundCompletionWorker'; // Import to initialize the worker
 import SummaryManagerService from './services/SummaryManagerService';
 import { io as ClientIO } from 'socket.io-client';

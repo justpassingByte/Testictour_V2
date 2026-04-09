@@ -4,6 +4,37 @@ import ApiError from '../utils/ApiError';
 import { prisma } from '../services/prisma';
 import asyncHandler from '../lib/asyncHandler';
 
+/**
+ * Helper: Verify that a partner user owns a tournament (or is admin).
+ * Throws 403 if not authorized.
+ */
+async function ensureOwnership(req: Request, tournamentId: string) {
+  const user = req.user!;
+  if (user.role === 'admin') return; // admins can do anything
+
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+    select: { organizerId: true },
+  });
+  if (!tournament) throw new ApiError(404, 'Tournament not found');
+  if (tournament.organizerId !== user.id) {
+    throw new ApiError(403, 'You can only manage your own tournaments.');
+  }
+}
+
+/**
+ * Helper: Check if partner has a paid subscription to create tournaments.
+ */
+async function ensurePaidPartner(userId: string) {
+  const subscription = await prisma.partnerSubscription.findUnique({
+    where: { userId },
+    select: { plan: true, status: true },
+  });
+  if (!subscription || subscription.status !== 'ACTIVE' || subscription.plan === 'FREE') {
+    throw new ApiError(403, 'A PRO or ENTERPRISE subscription is required to create tournaments. Please upgrade your plan.');
+  }
+}
+
 const TournamentController = {
   async list(req: Request, res: Response, next: NextFunction) {
     try {
@@ -22,14 +53,53 @@ const TournamentController = {
     }
   },
 
+  // GET /tournaments/my — returns tournaments organized by current user
+  myTournaments: asyncHandler(async (req, res) => {
+    const user = req.user!;
+    const tournaments = await prisma.tournament.findMany({
+      where: { organizerId: user.id },
+      include: {
+        organizer: { select: { id: true, username: true, email: true } },
+        participants: { select: { id: true } },
+        phases: {
+          include: {
+            rounds: {
+              include: {
+                lobbies: {
+                  include: { matches: true }
+                }
+              }
+            }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Map to include registered count
+    const mapped = tournaments.map((t) => ({
+      ...t,
+      registered: t.participants.length,
+    }));
+
+    res.json({ tournaments: mapped });
+  }),
+
   async create(req: Request, res: Response, next: NextFunction) {
     try {
+      const user = req.user!;
+
+      // If partner, check paid subscription
+      if (user.role === 'partner') {
+        await ensurePaidPartner(user.id);
+      }
+
       const data = await TournamentService.create({
         name: req.body.name,
         startTime: new Date(req.body.startTime),
         maxPlayers: req.body.maxPlayers,
         entryFee: req.body.entryFee,
-        organizerId: req.user!.id,
+        organizerId: user.id,
         registrationDeadline: new Date(req.body.registrationDeadline),
         description: req.body.description,
         image: req.body.image,
@@ -53,6 +123,8 @@ const TournamentController = {
 
   async update(req: Request, res: Response, next: NextFunction) {
     try {
+      // Partner can only update own tournaments
+      await ensureOwnership(req, req.params.id);
       const tournament = await TournamentService.update(req.params.id, req.body);
       res.json({ tournament });
     } catch (err) {
@@ -62,6 +134,8 @@ const TournamentController = {
 
   async remove(req: Request, res: Response, next: NextFunction) {
     try {
+      // Partner can only delete own tournaments
+      await ensureOwnership(req, req.params.id);
       await TournamentService.remove(req.params.id);
       res.json({ message: 'deleted' });
     } catch (err) {
@@ -129,6 +203,8 @@ const TournamentController = {
 
   syncMatches: asyncHandler(async (req, res, next) => {
     const { id } = req.params;
+    // Partner can only sync own tournaments
+    await ensureOwnership(req, id);
     const result = await TournamentService.queueSyncJobs(id);
     res.status(202).json({
       success: true,
@@ -148,4 +224,4 @@ const TournamentController = {
   })
 };
 
-export default TournamentController; 
+export default TournamentController;

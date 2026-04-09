@@ -176,6 +176,9 @@ export const createMiniTourLobby = asyncHandler(async (req: Request, res: Respon
 export const getMiniTourLobbies = asyncHandler(async (req: Request, res: Response) => {
   const lobbies = await prisma.miniTourLobby.findMany({
     include: {
+      creator: {
+        select: { id: true, username: true, email: true },
+      },
       participants: true,
       matches: {
         include: {
@@ -186,6 +189,7 @@ export const getMiniTourLobbies = asyncHandler(async (req: Request, res: Respons
         orderBy: { createdAt: 'desc' },
       },
     },
+    orderBy: { createdAt: 'desc' },
   });
   res.status(200).json({ success: true, data: lobbies });
 });
@@ -779,7 +783,7 @@ export const assignPlayerToLobby = asyncHandler(async (req: Request, res: Respon
   const { userId } = req.body; // userId to be assigned
   const currentUser = (req as any).user; // Authenticated user initiating the assignment
 
-  if (!currentUser || (currentUser.role !== 'partner')) {
+  if (!currentUser || (currentUser.role !== 'partner' && currentUser.role !== 'admin')) {
     res.status(403);
     throw new Error("User not authorized to assign players to this lobby");
   }

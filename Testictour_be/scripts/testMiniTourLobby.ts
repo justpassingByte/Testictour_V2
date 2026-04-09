@@ -202,7 +202,7 @@ async function triggerSyncAndVerify(lobbyId: string) {
       });
 
       // Queue the match for Riot API data fetching
-      await MatchService.queueMiniTourMatchSync(newMiniTourMatch.id);
+      await MatchService.queueMiniTourMatchSync(newMiniTourMatch.id, riotMatchId, lobbyId);
       console.log(`Queued MiniTourMatch sync for new match ${newMiniTourMatch.id} with Riot Match ID ${riotMatchId}.`);
 
     } else {

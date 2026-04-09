@@ -17,6 +17,7 @@ import adminSettingsRoutes from './adminSettings.routes';
 import miniTourLobbyRoutes from './miniTourLobby.route';
 import partnerRoutes from './partner.routes';
 import lobbyStateRoutes from './lobbyState.routes';
+import devRoutes from './dev.routes';
 
 const router = Router();
 
@@ -38,6 +39,7 @@ router.use('/admin/settings', adminSettingsRoutes);
 router.use('/minitour-lobbies', miniTourLobbyRoutes);
 router.use('/partner', partnerRoutes);
 router.use('/', lobbyStateRoutes); // Lobby state machine REST endpoints
+router.use('/dev', devRoutes);   // Dev/test utilities
 
 export default router;
 
