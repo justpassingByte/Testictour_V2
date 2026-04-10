@@ -80,7 +80,7 @@ export function Footer() {
               <span className="h-2 w-2 rounded-full bg-red-500"></span>
               Powered by Riot API
             </div>
-            <p className="text-xs text-muted-foreground/70 leading-relaxed max-w-4xl">
+            <p className="text-xs text-muted-foreground leading-relaxed max-w-4xl">
               TesticTour isn&apos;t endorsed by Riot Games and doesn&apos;t reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.
             </p>
           </div>

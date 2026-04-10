@@ -113,7 +113,17 @@ export default function TournamentManagePage() {
       if (selectedImage) {
         const formData = new FormData()
         formData.append("image", selectedImage)
-        await api.post(`/tournaments/${tournamentId}/image`, formData)
+        
+        // Remove default application/json content-type so browser forms the multipart boundary safely
+        await api.post(`/tournaments/${tournamentId}/image`, formData, {
+          headers: {
+            "Content-Type": undefined
+          },
+          transformRequest: [(data, headers) => {
+            delete headers['Content-Type'];
+            return data;
+          }]
+        })
       }
       await TournamentService.update(tournamentId, editForm as any)
       toast({ title: "Saved", description: "Tournament updated successfully." })
@@ -572,7 +582,12 @@ export default function TournamentManagePage() {
                   {(selectedImage || tournament?.image) && (
                     <div className="h-16 w-32 rounded-md overflow-hidden bg-white/5 border border-white/10 shrink-0">
                       <img 
-                        src={selectedImage ? URL.createObjectURL(selectedImage) : tournament?.image} 
+                        src={selectedImage 
+                          ? URL.createObjectURL(selectedImage) 
+                          : tournament?.image?.startsWith('http') 
+                            ? tournament.image 
+                            : `${process.env.NEXT_PUBLIC_API_URL ? process.env.NEXT_PUBLIC_API_URL.replace(/\/api$/, '') : 'http://localhost:4000'}${tournament?.image}`
+                        } 
                         alt="Banner" 
                         className="h-full w-full object-cover"
                       />

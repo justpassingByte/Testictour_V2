@@ -73,7 +73,7 @@ export function LanguageToggle() {
         <TooltipTrigger asChild>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="focus-visible:ring-0">
+              <Button variant="ghost" size="icon" className="focus-visible:ring-0" aria-label={changeLanguageText}>
                 <Globe className="h-[1.2rem] w-[1.2rem]" />
                 <span className="sr-only">{changeLanguageText}</span>
               </Button>
