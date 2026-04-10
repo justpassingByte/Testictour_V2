@@ -89,13 +89,17 @@ export default async function fetchMatchData(job: Job<FetchMatchDataJobData>, io
 
   if (result.status === 'pending') {
     // No valid match found yet — re-queue with smart polling delay
-    let retryDelay: number;
-    if (elapsedMin < 10) retryDelay = 60_000;
-    else if (elapsedMin < 25) retryDelay = 20_000;
-    else if (elapsedMin < 40) retryDelay = 8_000;
-    else retryDelay = 5_000;
+    let retryDelay = 15_000; // Poll every 15s after 20 mins
 
-    logger.info(`MatchDataWorker: lobby ${lobbyId} — no match yet (${elapsedMin.toFixed(1)}min elapsed). Re-queuing in ${retryDelay}ms`);
+    const isDev = process.env.NODE_ENV === 'development';
+    if (!isDev && elapsedMin < 20) {
+      // Wait until 20 minutes mark
+      retryDelay = (20 - elapsedMin) * 60_000;
+      logger.info(`MatchDataWorker: lobby ${lobbyId} — waiting 20 minutes before polling. Re-queuing in ${Math.round(retryDelay / 1000)}s`);
+    } else {
+      logger.info(`MatchDataWorker: lobby ${lobbyId} — no match yet. Re-queuing in 15s`);
+    }
+
     await fetchMatchDataQueue.add('fetchMatchData', job.data, { delay: retryDelay });
     await prisma.lobby.update({ where: { id: lobbyId }, data: { lastPolledAt: new Date() } });
     return;

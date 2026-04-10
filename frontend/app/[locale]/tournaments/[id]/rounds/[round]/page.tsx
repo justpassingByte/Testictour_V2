@@ -24,7 +24,7 @@ export default function RoundResultsPage({ params }: { params: { id: string; rou
   }, [params.id, params.round, fetchRoundDetails])
 
   const allPlayers: PlayerRoundStats[] = useMemo(() => {
-    if (!roundData || !currentTournament?.participants || Object.keys(matchResults).length === 0) {
+    if (!roundData || !currentTournament?.participants) {
       return []
     }
 
@@ -34,19 +34,23 @@ export default function RoundResultsPage({ params }: { params: { id: string; rou
         })
     );
 
-    return currentTournament.participants
+    // Build per-lobby player stats first so we can rank within each lobby for auto-elimination
+    const currentPhase = currentTournament.phases.find(p => p.id === roundData.phaseId);
+    const advancementN = (currentPhase?.advancementCondition as any)?.value ?? null; // e.g. top 4 advance
+
+    const rawPlayers = currentTournament.participants
       .filter(participant => participant.userId && participantIdsInRound.has(participant.userId))
       .map((participant) => {
         if (!participant || !participant.user) return null;
 
-        const participantLobby = roundData.lobbies?.find(lobby => 
+        const participantLobby = roundData.lobbies?.find(lobby =>
             (lobby.participants || []).some((p: any) => (p?.userId || p) === participant.userId)
         );
 
-        // Ensure matches are sorted by creation time for correct column display
+        // Sort matches by gameCreation — handles both Grimoire (root-level) and legacy (info.gameCreation)
         const sortedMatches = (participantLobby?.matches || []).slice().sort((a, b) => {
-          const timeA = a.matchData?.info?.gameCreation ?? 0;
-          const timeB = b.matchData?.info?.gameCreation ?? 0;
+          const timeA = (a.matchData as any)?.gameCreation ?? (a.matchData as any)?.info?.gameCreation ?? 0;
+          const timeB = (b.matchData as any)?.gameCreation ?? (b.matchData as any)?.info?.gameCreation ?? 0;
           return timeA - timeB;
         });
 
@@ -57,29 +61,70 @@ export default function RoundResultsPage({ params }: { params: { id: string; rou
         const calculatedRoundScore = playerMatchResults.reduce((sum, result) => sum + result.points, 0);
         const placements = playerMatchResults.map(r => r.placement);
         const lastPlacement = placements.length > 0 ? placements[placements.length - 1] : Infinity;
-        
+
         const roundOutcome = participant.roundOutcomes?.find(
             (outcome) => outcome.roundId === roundData.id
         );
 
-        const status: "advanced" | "eliminated" = roundOutcome
-            ? roundOutcome.status as "advanced" | "eliminated"
-            : participant.eliminated ? "eliminated" : "advanced";
-
-        const totalScoreToShow = roundOutcome?.scoreInRound ?? calculatedRoundScore; 
+        const totalScoreToShow = roundOutcome?.scoreInRound ?? calculatedRoundScore;
 
         return {
             id: participant.id,
-            name: participant.user?.riotGameName || "N/A",
-            region: participant.user?.region || "N/A",
+            userId: participant.userId,
+            lobbyId: participantLobby?.id,
             lobbyName: participantLobby?.name || "N/A",
+            name: participant.user?.riotGameName || participant.user?.username || "N/A",
+            region: participant.user?.region || "N/A",
             placements: placements,
             lastPlacement: lastPlacement,
             points: playerMatchResults.map((r) => r.points),
             total: totalScoreToShow,
-            status: status,
+            roundOutcomeStatus: roundOutcome?.status ?? null,
+            eliminatedGlobal: participant.eliminated ?? false,
         };
-    }).filter((p): p is PlayerRoundStats => p !== null);
+    }).filter((p): p is NonNullable<typeof p> => p !== null);
+
+    // Derive status per lobby: if roundOutcomes not present, rank players within each lobby
+    // and eliminate bottom (lobbySize - advancementN) players.
+    const lobbyGroups = new Map<string, typeof rawPlayers>();
+    for (const p of rawPlayers) {
+      const key = p.lobbyId ?? 'unknown';
+      if (!lobbyGroups.has(key)) lobbyGroups.set(key, []);
+      lobbyGroups.get(key)!.push(p);
+    }
+
+    return rawPlayers.map((player) => {
+      let status: "advanced" | "eliminated";
+
+      if (player.roundOutcomeStatus) {
+        // Server-authoritative: use roundOutcome from DB
+        status = player.roundOutcomeStatus as "advanced" | "eliminated";
+      } else if (advancementN !== null && player.placements.length > 0) {
+        // Derive from score rank within this lobby
+        const lobbyPlayers = lobbyGroups.get(player.lobbyId ?? 'unknown') ?? [];
+        const sorted = [...lobbyPlayers].sort((a, b) => {
+          const scoreDiff = b.total - a.total;
+          if (scoreDiff !== 0) return scoreDiff;
+          return a.lastPlacement - b.lastPlacement; // tiebreaker: better last placement
+        });
+        const rank = sorted.findIndex(p => p.id === player.id) + 1;
+        status = rank <= advancementN ? "advanced" : "eliminated";
+      } else {
+        status = player.eliminatedGlobal ? "eliminated" : "advanced";
+      }
+
+      return {
+        id: player.id,
+        name: player.name,
+        region: player.region,
+        lobbyName: player.lobbyName,
+        placements: player.placements,
+        lastPlacement: player.lastPlacement,
+        points: player.points,
+        total: player.total,
+        status,
+      } as PlayerRoundStats;
+    });
   }, [currentTournament, roundData, matchResults])
 
   if (roundLoading || !roundData || !currentTournament) {

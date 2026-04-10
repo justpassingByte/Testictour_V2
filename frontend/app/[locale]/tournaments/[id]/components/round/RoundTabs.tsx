@@ -1,11 +1,12 @@
 "use client"
 
+import React, { useState, useEffect } from "react"
 import { useTournamentStore } from "@/app/stores/tournamentStore"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { IRound, PlayerRoundStats, ITournament } from "@/app/types/tournament"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Trophy, Medal, Star, ChevronDown, ChevronUp } from "lucide-react"
+import { Trophy, Medal, Star, ChevronDown, ChevronUp, Loader2 } from "lucide-react"
 import { format } from "date-fns"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Button } from "@/components/ui/button"
@@ -24,7 +25,61 @@ interface RoundTabsProps {
 }
 
 export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTabsProps) {
-  const { matchResults } = useTournamentStore()
+  const { matchResults, fetchRoundDetails } = useTournamentStore()
+  const [pollingMessage, setPollingMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let timeout: NodeJS.Timeout;
+    
+    const checkAndPoll = () => {
+      // 1. Kiểm tra xem có trận nào cài đặt chưa có kết quả (hoặc chưa fetch xong không)
+      let earliestStartTime = Number.MAX_SAFE_INTEGER;
+      let hasPending = false;
+      
+      round.lobbies?.forEach(l => {
+        if (!l.fetchedResult) {
+          hasPending = true;
+        }
+        l.matches?.forEach(m => {
+          if (!matchResults[m.id] || matchResults[m.id].length === 0) {
+            hasPending = true;
+            const createdMs = new Date(m.createdAt || Date.now()).getTime();
+            if (createdMs < earliestStartTime) earliestStartTime = createdMs;
+          }
+        });
+      });
+
+      if (!hasPending) {
+        setPollingMessage(null);
+        return; // Đã xong hết kết quả
+      }
+
+      if (earliestStartTime === Number.MAX_SAFE_INTEGER) {
+        earliestStartTime = Date.now();
+      }
+
+      const timeElapsedMs = Date.now() - earliestStartTime;
+      const minutesElapsed = Math.floor(timeElapsedMs / (1000 * 60));
+      const isDev = process.env.NODE_ENV === 'development';
+
+      if (!isDev && minutesElapsed < 20) {
+        const minLeft = 20 - minutesElapsed;
+        setPollingMessage(`Chờ kết quả sau ${minLeft} phút...`);
+        timeout = setTimeout(checkAndPoll, 60000);
+      } else {
+        setPollingMessage("Đang đồng bộ kết quả...");
+        fetchRoundDetails(tournament.id, round.id).then(() => {
+          timeout = setTimeout(checkAndPoll, 15000);
+        }).catch(() => {
+          timeout = setTimeout(checkAndPoll, 15000);
+        });
+      }
+    };
+
+    checkAndPoll();
+
+    return () => clearTimeout(timeout);
+  }, [round.id, tournament.id, fetchRoundDetails, round.lobbies, matchResults]);
 
   return (
     <Tabs defaultValue="results" className="w-full">
@@ -58,7 +113,13 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
               <span className="text-muted-foreground text-sm">
                 {lobby.matches?.length || 0} {(lobby.matches?.length || 0) === 1 ? 'match' : 'matches'}
               </span>
-              <span className="ml-auto">
+              <span className="ml-auto flex items-center gap-2">
+                {pollingMessage && !lobby.fetchedResult && (
+                  <div className="flex items-center gap-1.5 px-3 py-1 bg-blue-500/10 border border-blue-500/30 rounded-full">
+                    <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
+                    <span className="text-[10px] text-blue-400 font-medium whitespace-nowrap">{pollingMessage}</span>
+                  </div>
+                )}
                 <Badge variant={lobby.fetchedResult ? "default" : "outline"}>
                   {lobby.fetchedResult ? "Results Available" : "Pending Results"}
                 </Badge>
@@ -68,7 +129,7 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
             {lobby.matches?.map((match, matchIndex) => {
               // Support both Grimoire format (root-level participants) and legacy Riot format (info.participants)
               const isGrimoire = isGrimoireMatchData(match.matchData);
-              const matchInfo = match.matchData?.info; // legacy only
+              const matchInfo = (match.matchData as any)?.info; // legacy only
               const hasAnyData = isGrimoire || !!matchInfo;
 
               if (!hasAnyData) return (
@@ -181,8 +242,8 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
                             resultMap={Object.fromEntries(
                               tournamentMatchResults
                                 .map(r => {
-                                  // r.participantId is the DB participant row id
-                                  const participant = tournament.participants?.find(p => p.id === r.participantId);
+                                  // r.participantId is normalized to userId
+                                  const participant = tournament.participants?.find(p => p.userId === r.participantId);
                                   const puuid = participant?.user?.puuid;
                                   if (!puuid) return null;
                                   return [puuid, { placement: r.placement, points: r.points }];
@@ -205,11 +266,12 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
                                 {tournamentMatchResults
                                   .sort((a, b) => a.placement - b.placement)
                                   .map((result) => {
+                                    // After store normalization, result.participantId == userId
                                     const participant = tournament.participants?.find(p => p.userId === result.participantId);
                                     return (
                                       <tr key={result.participantId} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
                                         <td className="py-2 px-4">
-                                          {participant?.user?.riotGameName || "Unknown"}
+                                          {participant?.user?.riotGameName || participant?.user?.username || "Unknown"}
                                         </td>
                                         <td className="py-2 px-4 text-center">
                                           <span className={`

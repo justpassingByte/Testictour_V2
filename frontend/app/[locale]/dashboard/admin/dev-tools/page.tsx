@@ -39,6 +39,11 @@ export default function DevToolsPage() {
   const [roundId, setRoundId] = useState("");
   const [lobbyType, setLobbyType] = useState("minitour");
 
+  // Riot ID used as match source for simulate-match endpoint
+  const [simGameName, setSimGameName] = useState("");
+  const [simTagLine, setSimTagLine] = useState("");
+  const [simRegion, setSimRegion] = useState("sea");
+
   async function handleAutomation(endpoint: string, payload: any) {
     setAutomationLoading(true);
     setAutomationError(null);
@@ -276,9 +281,9 @@ export default function DevToolsPage() {
         </TabsContent>
 
         <TabsContent value="automation" className="space-y-6 animate-in slide-in-from-bottom-2 duration-300">
-          <div className="flex gap-4 items-center p-4 bg-background/40 border border-white/10 rounded-xl">
-            <h3 className="text-sm font-semibold text-muted-foreground w-1/4">Quick Setting</h3>
-            <div className="flex gap-3">
+          <div className="flex flex-wrap gap-4 items-center p-4 bg-background/40 border border-white/10 rounded-xl">
+            <h3 className="text-sm font-semibold text-muted-foreground">Quick Setup</h3>
+            <div className="flex gap-3 flex-wrap">
               <Button size="sm" variant="outline" className="border-orange-500/30 text-orange-400 bg-orange-500/10 hover:bg-orange-500/20" onClick={() => handleAutomation('seed-env', {})}>
                 1. Seed Test Environment
               </Button>
@@ -286,50 +291,183 @@ export default function DevToolsPage() {
                 Clear All Data
               </Button>
             </div>
+            <div className="flex items-center gap-2 ml-auto">
+              <Label className="text-xs text-muted-foreground">Flow:</Label>
+              <Select value={lobbyType} onValueChange={setLobbyType}>
+                <SelectTrigger className="w-[140px] h-8 bg-black/30 border-white/10 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="minitour">MiniTour</SelectItem>
+                  <SelectItem value="tournament">Tournament</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-6">
-            <Card className="border-white/10 bg-card/60 backdrop-blur-lg">
-              <CardHeader className="pb-3 flex flex-row justify-between items-center">
-                <div>
-                  <CardTitle className="text-base text-purple-400">Lobby & Match Tasks</CardTitle>
-                  <CardDescription>Auto-targets the latest WAITING or IN_PROGRESS Lobby</CardDescription>
+          {/* ── Riot Data Source ─────────────────────────────────────────────── */}
+          <Card className="border-yellow-500/20 bg-yellow-500/5 backdrop-blur-lg">
+            <CardHeader className="pb-2 pt-4 px-4">
+              <CardTitle className="text-sm text-yellow-400 flex items-center gap-2">
+                <Key className="w-4 h-4" /> Riot Data Source — Required for "Simulate Match"
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Enter a real TFT player's Riot ID. The simulate endpoint will fetch their latest match from Riot API via Grimoire.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <div className="grid md:grid-cols-4 gap-3 items-end">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Game Name</Label>
+                  <Input
+                    placeholder="e.g. Faker"
+                    value={simGameName}
+                    onChange={e => setSimGameName(e.target.value)}
+                    className="bg-black/30 border-white/10 h-8 text-xs"
+                  />
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-4 pt-2">
-                <div className="flex flex-col gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Tag Line</Label>
+                  <Input
+                    placeholder="e.g. VN2"
+                    value={simTagLine}
+                    onChange={e => setSimTagLine(e.target.value)}
+                    className="bg-black/30 border-white/10 h-8 text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Region</Label>
+                  <Select value={simRegion} onValueChange={setSimRegion}>
+                    <SelectTrigger className="bg-black/30 border-white/10 h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {REGIONS.map(r => <SelectItem key={r} value={r}>{r.toUpperCase()}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-end">
+                  {simGameName && simTagLine ? (
+                    <div className="text-xs text-emerald-400 flex items-center gap-1.5 pb-1">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
+                      {simGameName}#{simTagLine} ({simRegion.toUpperCase()})
+                    </div>
+                  ) : (
+                    <div className="text-xs text-yellow-500/70 pb-1">⚠ No Riot ID set — will fail if DB has no valid PUUIDs</div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {lobbyType === 'minitour' ? (
+            <div className="grid md:grid-cols-2 gap-6">
+              <Card className="border-emerald-500/20 bg-card/60 backdrop-blur-lg">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base text-emerald-400 flex items-center gap-2">
+                    <Zap className="w-4 h-4" /> MiniTour Lifecycle
+                  </CardTitle>
+                  <CardDescription>Full MiniTour lobby lifecycle — seed → start → simulate → complete</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3 pt-2">
+                  <Button size="sm" className="w-full justify-start border-emerald-500/20 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400" variant="outline"
+                    onClick={() => handleAutomation('seed-env', {})}>
+                    1. Seed Users + MiniTour Lobby (7/8)
+                  </Button>
+                  <Button size="sm" className="w-full justify-start border-white/20 bg-background/50 hover:bg-white/10" variant="outline"
+                    onClick={() => handleAutomation('auto-start', { type: 'minitour' })}>
+                    2. Force Start (WAITING → IN_PROGRESS)
+                  </Button>
+                  <Button size="sm" className="w-full justify-start border-blue-500/30 text-blue-400 bg-blue-500/10 hover:bg-blue-500/20" variant="outline"
+                    onClick={() => handleAutomation('simulate-match', {
+                      type: 'minitour',
+                      gameName: simGameName || undefined,
+                      tagLine: simTagLine || undefined,
+                      region: simRegion,
+                    })}>
+                    3. Simulate Match Results (Riot Data)
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card className="border-emerald-500/20 bg-card/60 backdrop-blur-lg">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base text-emerald-400 flex items-center gap-2">
+                    <Key className="w-4 h-4" /> MiniTour Manual Override
+                  </CardTitle>
+                  <CardDescription>Run with specific IDs if auto-targeting fails</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3 pt-2">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Lobby ID (optional)</Label>
+                    <Input placeholder="Auto-target latest" value={lobbyId} onChange={e => setLobbyId(e.target.value)} className="bg-black/30 border-white/10 h-8 text-xs" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">User ID (optional)</Label>
+                    <Input placeholder="Auto-target first participant" value={userId} onChange={e => setUserId(e.target.value)} className="bg-black/30 border-white/10 h-8 text-xs" />
+                  </div>
+                  <Button size="sm" className="w-full justify-start border-orange-500/30 text-orange-400 bg-orange-500/10 hover:bg-orange-500/20" variant="outline"
+                    onClick={() => handleAutomation('auto-start', { type: 'minitour', lobbyId: lobbyId || undefined })}>
+                    Force Start (with ID)
+                  </Button>
+                  <Button size="sm" className="w-full justify-start border-blue-500/30 text-blue-400 bg-blue-500/10 hover:bg-blue-500/20" variant="outline"
+                    onClick={() => handleAutomation('simulate-match', {
+                      type: 'minitour',
+                      lobbyId: lobbyId || undefined,
+                      gameName: simGameName || undefined,
+                      tagLine: simTagLine || undefined,
+                      region: simRegion,
+                    })}>
+                    Simulate Match (with ID)
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-2 gap-6">
+              <Card className="border-purple-500/20 bg-card/60 backdrop-blur-lg">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base text-purple-400 flex items-center gap-2">
+                    <PlaySquare className="w-4 h-4" /> Tournament Lobby & Match
+                  </CardTitle>
+                  <CardDescription>Auto-targets the latest WAITING or IN_PROGRESS Tournament Lobby</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3 pt-2">
                   <Button size="sm" className="w-full justify-start border-white/20 bg-background/50 hover:bg-white/10" variant="outline" onClick={() => handleAutomation('ready-toggle', {})}>
                     2. Toggle Ready (Latest Waiting)
                   </Button>
-                  <Button size="sm" className="w-full justify-start border-white/20 bg-background/50 hover:bg-white/10" variant="outline" onClick={() => handleAutomation('auto-start', { type: lobbyType })}>
+                  <Button size="sm" className="w-full justify-start border-white/20 bg-background/50 hover:bg-white/10" variant="outline" onClick={() => handleAutomation('auto-start', { type: 'tournament' })}>
                     3. Force Start (Latest Waiting)
                   </Button>
-                  <Button size="sm" className="w-full justify-start border-blue-500/30 text-blue-400 bg-blue-500/10 hover:bg-blue-500/20" variant="outline" onClick={() => handleAutomation('simulate-match', { type: lobbyType })}>
+                  <Button size="sm" className="w-full justify-start border-blue-500/30 text-blue-400 bg-blue-500/10 hover:bg-blue-500/20" variant="outline" onClick={() => handleAutomation('simulate-match', {
+                    type: 'tournament',
+                    gameName: simGameName || undefined,
+                    tagLine: simTagLine || undefined,
+                    region: simRegion,
+                  })}>
                     4. Simulate Match Results (Latest In Progress)
                   </Button>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
 
-            <Card className="border-white/10 bg-card/60 backdrop-blur-lg">
-              <CardHeader className="pb-3 flex flex-row justify-between items-center">
-                <div>
-                  <CardTitle className="text-base text-pink-400">Round Advancement</CardTitle>
+              <Card className="border-pink-500/20 bg-card/60 backdrop-blur-lg">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base text-pink-400 flex items-center gap-2">
+                    <Bot className="w-4 h-4" /> Round Advancement
+                  </CardTitle>
                   <CardDescription>Auto-targets the latest active Phase and Round</CardDescription>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4 pt-2">
-                <div className="flex flex-col gap-3">
+                </CardHeader>
+                <CardContent className="space-y-3 pt-2">
                   <Button size="sm" className="w-full justify-start border-white/20 bg-background/50 hover:bg-white/10" variant="outline" onClick={() => handleAutomation('assign-lobby', {})}>
                     Assign Lobbies (Latest Pending Round)
                   </Button>
                   <Button size="sm" className="w-full justify-start border-pink-500/30 text-pink-400 bg-pink-500/10 hover:bg-pink-500/20" variant="outline" onClick={() => handleAutomation('advance-round', {})}>
                     Auto Advance (Latest Completed Round)
                   </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
           <Card className="border-white/10 bg-black/40 shadow-inner">
             <CardHeader className="py-3 px-4 border-b border-white/10 flex flex-row items-center justify-between">
@@ -337,6 +475,9 @@ export default function DevToolsPage() {
                 <Loader2 className={`w-3 h-3 ${automationLoading ? 'animate-spin opacity-100' : 'opacity-0'}`} />
                 Execution Result
               </CardTitle>
+              <Badge variant="outline" className="text-[10px] px-2 py-0.5">
+                {lobbyType === 'minitour' ? 'MiniTour' : 'Tournament'} Mode
+              </Badge>
             </CardHeader>
             <CardContent className="p-4 overflow-auto max-h-[300px] font-mono text-xs">
               {automationError ? (

@@ -79,30 +79,37 @@ async function main() {
   // Mật khẩu này chỉ dùng cho seeding, không ảnh hưởng đến bảo mật thực tế
   const systemPassword = await bcrypt.hash('a_very_secure_system_password_!@#$', 10); 
 
-  const systemUser = await prisma.user.upsert({
-    where: { id: systemUserId },
-    update: {}, // Không cập nhật gì nếu đã tồn tại
-    create: {
-      id: systemUserId,
-      username: 'system_admin',
-      email: 'system@testic.tour',
-      password: systemPassword,
-      role: 'ADMIN',
-      riotGameName: 'System',
-      riotGameTag: 'SYS',
-      region: 'SYS',
-      // puuid là duy nhất, chúng ta tạo một giá trị đặc biệt cho người dùng hệ thống
-      puuid: `SYSTEM_PUUID_${systemUserId}` 
-    },
-  });
+  // First check if a 'system_admin' username already exists with a different id
+  const existingSystemByUsername = await prisma.user.findUnique({ where: { username: 'system_admin' } });
+  let systemUser;
+  if (existingSystemByUsername && existingSystemByUsername.id !== systemUserId) {
+    // Username taken by a different ID – update its ID field is not possible, so reuse
+    systemUser = existingSystemByUsername;
+  } else {
+    systemUser = await prisma.user.upsert({
+      where: { id: systemUserId },
+      update: {}, // Không cập nhật gì nếu đã tồn tại
+      create: {
+        id: systemUserId,
+        username: 'system_admin',
+        email: 'system@testic.tour',
+        password: systemPassword,
+        role: 'ADMIN',
+        riotGameName: 'System',
+        riotGameTag: 'SYS',
+        region: 'SYS',
+        puuid: `SYSTEM_PUUID_${systemUserId}` 
+      },
+    });
+  }
   console.log(`Đã đảm bảo người dùng hệ thống tồn tại: ${systemUser.username}`);
 
   // --- 2. Tạo số dư cho người dùng hệ thống ---
   await prisma.balance.upsert({
-      where: { userId: systemUserId },
+      where: { userId: systemUser.id },
       update: {},
       create: {
-          userId: systemUserId,
+          userId: systemUser.id,
           amount: 9999999, // Cho người dùng hệ thống nhiều tiền để nhận phí
       }
   });
@@ -114,18 +121,32 @@ async function main() {
   const hashedPassword = await bcrypt.hash(password, 10);
 
   for (const userData of usersToSeed) {
-    const user = await prisma.user.upsert({
-      where: { puuid: userData.puuid },
-      update: {
-        ...userData,
-      },
-      create: {
-        ...userData,
-        password: hashedPassword,
-      },
-    });
+    // Check both unique fields to prevent P2002 conflicts
+    const existingByUsername = await prisma.user.findUnique({ where: { username: userData.username } });
+    const existingByPuuid = userData.puuid ? await prisma.user.findUnique({ where: { puuid: userData.puuid } }) : null;
+
+    let user;
+    if (existingByUsername) {
+      // User with this username exists – update with latest data
+      user = await prisma.user.update({
+        where: { username: userData.username },
+        data: { ...userData, password: hashedPassword },
+      });
+    } else if (existingByPuuid) {
+      // User with this puuid exists – update username & other fields
+      user = await prisma.user.update({
+        where: { puuid: userData.puuid },
+        data: { ...userData, password: hashedPassword },
+      });
+    } else {
+      // Brand new user
+      user = await prisma.user.create({
+        data: { ...userData, password: hashedPassword },
+      });
+    }
     console.log(`Đã tạo/cập nhật người dùng: ${user.username} (ID: ${user.id})`);
   }
+
 
   // Find all seeded users to create balances for them
   const seededUsers = await prisma.user.findMany({

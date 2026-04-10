@@ -170,6 +170,8 @@ export interface IMatch {
   status: string;
   matchData?: IRiotMatchData | GrimoireMatchData; // accepts both raw and enriched
   fetchedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
   matchResults?: IMatchResult[];
 }
 

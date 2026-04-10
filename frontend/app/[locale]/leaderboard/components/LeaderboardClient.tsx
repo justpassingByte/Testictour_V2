@@ -3,7 +3,7 @@
 import { CardDescription } from "@/components/ui/card"
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Search, Trophy, Medal, Users, Crown, Loader2 } from "lucide-react"
+import { Search, Trophy, Medal, Crown, Loader2 } from "lucide-react"
 import { useTranslations } from 'next-intl'
 
 import { Badge } from "@/components/ui/badge"
@@ -26,7 +26,6 @@ export default function LeaderboardClient() {
   const [mainTab, setMainTab] = useState("rankings")
   const [total, setTotal] = useState(0)
 
-  // Fetch real players from public leaderboard endpoint
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true)
@@ -40,12 +39,10 @@ export default function LeaderboardClient() {
         setIsLoading(false)
       }
     }
-    // Debounce search
     const timer = setTimeout(fetchData, searchQuery ? 300 : 0)
     return () => clearTimeout(timer)
   }, [searchQuery])
 
-  // Sort players locally by selected column
   const sortedPlayers = [...players].sort((a, b) => {
     if (sortBy === "totalPoints") return (b.totalPoints || 0) - (a.totalPoints || 0)
     if (sortBy === "lobbiesPlayed") return (b.lobbiesPlayed || 0) - (a.lobbiesPlayed || 0)
@@ -55,8 +52,50 @@ export default function LeaderboardClient() {
     return 0
   })
 
-  // Top 3 for podium
   const topPlayers = sortedPlayers.slice(0, 3)
+
+  // Compute achievement category leaders
+  const topWinner = [...players].sort((a, b) => (b.tournamentsWon || 0) - (a.tournamentsWon || 0))[0]
+  const topWinRate = [...players].sort((a, b) => (b.topFourRate || 0) - (a.topFourRate || 0))[0]
+  const mostActive = [...players].sort((a, b) => (b.lobbiesPlayed || 0) - (a.lobbiesPlayed || 0))[0]
+  const bestPlacement = [...players]
+    .filter(p => p.averagePlacement != null && p.averagePlacement > 0)
+    .sort((a, b) => (a.averagePlacement || 99) - (b.averagePlacement || 99))[0]
+
+  const achievementCategories = [
+    {
+      title: "🏆 Tournament Champion",
+      description: "Most tournaments won across all events",
+      player: topWinner,
+      value: topWinner ? `${topWinner.tournamentsWon || 0} wins` : "—",
+      color: "from-yellow-500/20 to-amber-500/5 border-yellow-500/40",
+      badge: "bg-gradient-to-br from-yellow-400 to-amber-600",
+    },
+    {
+      title: "🎯 Top Win Rate",
+      description: "Highest Top-4 finish rate",
+      player: topWinRate,
+      value: topWinRate ? `${topWinRate.topFourRate || 0}% Top-4` : "—",
+      color: "from-sky-500/20 to-blue-500/5 border-sky-500/40",
+      badge: "bg-gradient-to-br from-sky-400 to-blue-600",
+    },
+    {
+      title: "⚡ Most Active",
+      description: "Most lobbies & matches played",
+      player: mostActive,
+      value: mostActive ? `${mostActive.lobbiesPlayed || 0} lobbies` : "—",
+      color: "from-purple-500/20 to-violet-500/5 border-purple-500/40",
+      badge: "bg-gradient-to-br from-purple-400 to-violet-600",
+    },
+    {
+      title: "📍 Best Placement",
+      description: "Lowest average placement overall",
+      player: bestPlacement,
+      value: bestPlacement ? `Avg. ${bestPlacement.averagePlacement?.toFixed(2) || "—"}` : "—",
+      color: "from-emerald-500/20 to-green-500/5 border-emerald-500/40",
+      badge: "bg-gradient-to-br from-emerald-400 to-green-600",
+    },
+  ]
 
   if (isLoading && players.length === 0) {
     return (
@@ -89,22 +128,21 @@ export default function LeaderboardClient() {
         </div>
       </div>
 
-      {/* Main Tabs: Rankings / Players */}
+      {/* Main Tabs */}
       <Tabs value={mainTab} onValueChange={setMainTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2 h-12">
           <TabsTrigger value="rankings" className="flex items-center gap-2 text-sm">
             <Trophy className="h-4 w-4" />
             {t('rankings_tab')}
           </TabsTrigger>
-          <TabsTrigger value="players" className="flex items-center gap-2 text-sm">
-            <Users className="h-4 w-4" />
-            {t('players_tab')}
+          <TabsTrigger value="achievements" className="flex items-center gap-2 text-sm">
+            <Medal className="h-4 w-4" />
+            Achievement Ranking
           </TabsTrigger>
         </TabsList>
 
         {/* ===================== RANKINGS TAB ===================== */}
         <TabsContent value="rankings" className="space-y-8 mt-6">
-          {/* Top 3 Podium */}
           {topPlayers.length > 0 && (
             <div className="grid gap-4 md:grid-cols-3">
               {topPlayers.map((player, index) => (
@@ -119,7 +157,6 @@ export default function LeaderboardClient() {
                     `}
                     style={{ animationDelay: `${index * 100}ms` }}
                   >
-                    {/* Rank badge */}
                     <div className={`
                       absolute top-3 right-3 w-10 h-10 rounded-full flex items-center justify-center text-white font-black text-lg shadow-lg
                       ${index === 0 ? "bg-gradient-to-br from-yellow-400 to-amber-600" : ""}
@@ -146,7 +183,10 @@ export default function LeaderboardClient() {
                           {player.riotGameName && (
                             <p className="text-sm text-muted-foreground truncate">{player.riotGameName}#{player.riotGameTag}</p>
                           )}
-                          <div className="text-2xl font-black text-primary mt-1">{(player.totalPoints || 0).toLocaleString()} <span className="text-sm font-medium text-muted-foreground">pts</span></div>
+                          <div className="text-2xl font-black text-primary mt-1">
+                            {(player.totalPoints || 0).toLocaleString()}{" "}
+                            <span className="text-sm font-medium text-muted-foreground">pts</span>
+                          </div>
                           <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
                             <span>{player.tournamentsWon || 0} {t('tournaments_won')}</span>
                             <span>·</span>
@@ -161,7 +201,7 @@ export default function LeaderboardClient() {
             </div>
           )}
 
-          {/* Filters */}
+          {/* Search */}
           <div className="flex flex-col space-y-4 md:flex-row md:items-center md:space-y-0 md:space-x-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -174,13 +214,11 @@ export default function LeaderboardClient() {
             </div>
           </div>
 
-          {/* Main Leaderboard Table */}
+          {/* Rankings Table */}
           <Card className="bg-card/95 dark:bg-card/40 backdrop-blur-lg border shadow-sm">
             <CardHeader className="pb-0">
               <CardTitle>{t('player_rankings')}</CardTitle>
-              <CardDescription>
-                {t('updated_rankings')}
-              </CardDescription>
+              <CardDescription>{t('updated_rankings')}</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
@@ -229,7 +267,9 @@ export default function LeaderboardClient() {
                         <TableCell className="text-center">
                           {player.region ? <Badge variant="outline" className="text-xs">{player.region}</Badge> : '-'}
                         </TableCell>
-                        <TableCell className="text-right font-bold text-primary">{(player.totalPoints || 0).toLocaleString()}</TableCell>
+                        <TableCell className="text-right font-bold text-primary">
+                          {(player.totalPoints || 0).toLocaleString()}
+                        </TableCell>
                         <TableCell className="text-center">
                           <span className="flex items-center justify-center gap-1">
                             <Trophy className="h-3 w-3 text-yellow-500" />
@@ -247,126 +287,106 @@ export default function LeaderboardClient() {
           </Card>
         </TabsContent>
 
-        {/* ===================== PLAYERS DIRECTORY TAB ===================== */}
-        <TabsContent value="players" className="space-y-8 mt-6">
-          {/* Featured Players */}
-          {topPlayers.length > 0 && (
-            <section className="space-y-6">
-              <div>
-                <h2 className="text-2xl font-bold mb-1">{t('featured_players')}</h2>
-                <p className="text-muted-foreground">{t('featured_players_description')}</p>
-              </div>
+        {/* ===================== ACHIEVEMENT RANKING TAB ===================== */}
+        <TabsContent value="achievements" className="space-y-8 mt-6">
+          {/* Section Header */}
+          <div>
+            <h2 className="text-2xl font-bold mb-1">Achievement Ranking</h2>
+            <p className="text-muted-foreground">
+              Top players in each special achievement category across all tournaments.
+            </p>
+          </div>
 
-              <div className="grid gap-6 md:grid-cols-3">
-                {topPlayers.map((player, index) => (
-                  <Card
-                    key={player.id}
-                    className={`
-                      overflow-hidden transition-all duration-500 hover:scale-[1.02]
-                      ${index === 0 ? "border-yellow-500/50 bg-gradient-to-br from-yellow-500/10 to-card dark:to-transparent shadow-md" : ""}
-                      ${index === 1 ? "border-gray-400/50 bg-gradient-to-br from-gray-400/10 to-card dark:to-transparent shadow-md" : ""}
-                      ${index === 2 ? "border-amber-700/50 bg-gradient-to-br from-amber-700/10 to-card dark:to-transparent shadow-md" : ""}
-                      card-hover-effect
-                    `}
-                  >
-                    <CardContent className="pt-6">
-                      <div className="flex items-center space-x-4 mb-4">
-                        <div className="relative">
-                          <Avatar className="h-16 w-16">
-                            <AvatarFallback className="text-lg">{player.username?.charAt(0) || "?"}</AvatarFallback>
-                          </Avatar>
-                          <div className={`
-                            absolute -top-2 -right-2 w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-md
-                            ${index === 0 ? "bg-gradient-to-br from-yellow-400 to-amber-600" : ""}
-                            ${index === 1 ? "bg-gradient-to-br from-gray-300 to-slate-500" : ""}
-                            ${index === 2 ? "bg-gradient-to-br from-amber-600 to-orange-800" : ""}
-                          `}>
-                            {index + 1}
-                          </div>
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="font-bold truncate">{player.username}</h3>
-                          {player.riotGameName && (
-                            <p className="text-sm text-muted-foreground">{player.riotGameName}#{player.riotGameTag}</p>
-                          )}
-                          {player.rank && player.rank !== 'Unknown' && (
-                            <Badge variant="secondary" className="mt-1 text-xs">{player.rank}</Badge>
-                          )}
+          {/* Achievement Category Cards */}
+          <div className="grid gap-5 md:grid-cols-2">
+            {achievementCategories.map((cat) => (
+              <Card
+                key={cat.title}
+                className={`relative overflow-hidden bg-gradient-to-br ${cat.color} transition-all duration-300 hover:scale-[1.01] shadow-sm`}
+              >
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base font-bold">{cat.title}</CardTitle>
+                  <CardDescription className="text-xs">{cat.description}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {cat.player ? (
+                    <Link href={`/players/${cat.player.id}`} className="flex items-center gap-4 group">
+                      <div className="relative">
+                        <Avatar className="h-14 w-14 ring-2 ring-offset-2 ring-offset-background ring-primary/20">
+                          <AvatarFallback className="text-base font-bold">
+                            {cat.player.username?.charAt(0) || "?"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className={`absolute -top-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-black shadow-md ${cat.badge}`}>
+                          1
                         </div>
                       </div>
-
-                      <div className="space-y-3">
-                        <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">{t('total_points')}:</span>
-                          <span className="font-bold text-primary">{(player.totalPoints || 0).toLocaleString()}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">{t('tournaments_won')}:</span>
-                          <span className="font-medium">{player.tournamentsWon || 0}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">{t('top_four_rate')}:</span>
-                          <span className="font-medium">{player.topFourRate || 0}%</span>
-                        </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-base truncate group-hover:text-primary transition-colors">
+                          {cat.player.username}
+                        </p>
+                        {cat.player.riotGameName && (
+                          <p className="text-xs text-muted-foreground truncate">
+                            {cat.player.riotGameName}#{cat.player.riotGameTag}
+                          </p>
+                        )}
+                        <Badge className={`mt-1 text-xs text-white border-0 ${cat.badge}`}>
+                          {cat.value}
+                        </Badge>
                       </div>
+                      <Button variant="ghost" size="sm" className="shrink-0">
+                        View →
+                      </Button>
+                    </Link>
+                  ) : (
+                    <p className="text-muted-foreground text-sm py-2">No data available</p>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
 
-                      <div className="mt-4">
-                        <Link href={`/players/${player.id}`}>
-                          <Button className="w-full">
-                            {t('view_profile')}
-                          </Button>
-                        </Link>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Player Directory Table */}
-          <section className="space-y-6">
-            <div>
-              <h2 className="text-2xl font-bold mb-1">{t('player_directory')}</h2>
-              <p className="text-muted-foreground">{t('player_directory_description')}</p>
-            </div>
-
+          {/* Full Achievement Board */}
+          <div className="space-y-4">
             <div className="flex flex-col space-y-4 md:flex-row md:items-center md:space-y-0 md:space-x-4">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder={t('search_players')}
+                  placeholder="Search players..."
                   className="pl-9"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
               <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder={t('sort_by')} />
+                <SelectTrigger className="w-[210px]">
+                  <SelectValue placeholder="Sort by achievement" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="totalPoints">{t('total_points')}</SelectItem>
-                  <SelectItem value="tournamentsWon">{t('tournaments_won')}</SelectItem>
-                  <SelectItem value="topFourRate">{t('top_four_rate')}</SelectItem>
-                  <SelectItem value="lobbiesPlayed">{t('match_history')}</SelectItem>
-                  <SelectItem value="username">{t('player')}</SelectItem>
+                  <SelectItem value="tournamentsWon">🏆 Tournaments Won</SelectItem>
+                  <SelectItem value="topFourRate">🎯 Top-4 Win Rate</SelectItem>
+                  <SelectItem value="lobbiesPlayed">⚡ Most Active</SelectItem>
+                  <SelectItem value="totalPoints">💎 Total Points</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <Card className="bg-card/95 dark:bg-card/40 backdrop-blur-lg border shadow-sm">
-              <CardContent className="pt-6">
+              <CardHeader className="pb-0">
+                <CardTitle className="text-base">Full Achievement Board</CardTitle>
+                <CardDescription>All players ranked by selected achievement metric</CardDescription>
+              </CardHeader>
+              <CardContent>
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-[60px]">Rank</TableHead>
                       <TableHead>{t('player')}</TableHead>
-                      <TableHead>{t('summoner_name')}</TableHead>
-                      <TableHead className="text-center">{t('region')}</TableHead>
-                      <TableHead className="text-center">{t('total_points')}</TableHead>
-                      <TableHead className="text-center">{t('tournaments_won')}</TableHead>
-                      <TableHead className="text-center">{t('top_four_rate')}</TableHead>
-                      <TableHead className="text-right">{t('action')}</TableHead>
+                      <TableHead className="text-center">🏆 Won</TableHead>
+                      <TableHead className="text-center">🎯 Top-4 Rate</TableHead>
+                      <TableHead className="text-center">⚡ Lobbies</TableHead>
+                      <TableHead className="text-center">📍 Avg. Place</TableHead>
+                      <TableHead className="text-right">💎 Points</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -377,32 +397,47 @@ export default function LeaderboardClient() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      sortedPlayers.map((player) => (
+                      sortedPlayers.map((player, idx) => (
                         <TableRow key={player.id} className="hover:bg-muted/50 transition-colors">
+                          <TableCell className="font-bold">
+                            <span className={`
+                              ${idx === 0 ? "text-yellow-500" : ""}
+                              ${idx === 1 ? "text-gray-400" : ""}
+                              ${idx === 2 ? "text-amber-700" : ""}
+                            `}>
+                              #{idx + 1}
+                            </span>
+                          </TableCell>
                           <TableCell>
-                            <div className="flex items-center space-x-3">
-                              <Avatar className="h-8 w-8">
+                            <Link href={`/players/${player.id}`} className="flex items-center group">
+                              <Avatar className="h-8 w-8 mr-3">
                                 <AvatarFallback className="text-xs">{player.username?.charAt(0) || "?"}</AvatarFallback>
                               </Avatar>
-                              <div className="font-medium">{player.username}</div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {player.riotGameName ? `${player.riotGameName}#${player.riotGameTag}` : '-'}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {player.region ? <Badge variant="outline" className="text-xs">{player.region}</Badge> : '-'}
-                          </TableCell>
-                          <TableCell className="text-center font-bold text-primary">{(player.totalPoints || 0).toLocaleString()}</TableCell>
-                          <TableCell className="text-center">{player.tournamentsWon || 0}</TableCell>
-                          <TableCell className="text-center">{player.topFourRate || 0}%</TableCell>
-                          <TableCell className="text-right">
-                            <Link href={`/players/${player.id}`}>
-                              <Button variant="ghost" size="sm">
-                                {t('view_profile')}
-                              </Button>
+                              <div>
+                                <p className="font-medium group-hover:text-primary transition-colors">{player.username}</p>
+                                {player.region && (
+                                  <Badge variant="outline" className="text-[10px] mt-0.5">{player.region}</Badge>
+                                )}
+                              </div>
                             </Link>
                           </TableCell>
+                          <TableCell className="text-center">
+                            <span className="flex items-center justify-center gap-1 font-medium">
+                              <Trophy className="h-3 w-3 text-yellow-500" />
+                              {player.tournamentsWon || 0}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge
+                              variant={player.topFourRate && player.topFourRate >= 50 ? "default" : "secondary"}
+                              className="text-xs"
+                            >
+                              {player.topFourRate || 0}%
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center text-muted-foreground">{player.lobbiesPlayed || 0}</TableCell>
+                          <TableCell className="text-center text-muted-foreground">{player.averagePlacement?.toFixed(1) || '-'}</TableCell>
+                          <TableCell className="text-right font-bold text-primary">{(player.totalPoints || 0).toLocaleString()}</TableCell>
                         </TableRow>
                       ))
                     )}
@@ -410,7 +445,7 @@ export default function LeaderboardClient() {
                 </Table>
               </CardContent>
             </Card>
-          </section>
+          </div>
         </TabsContent>
       </Tabs>
     </div>

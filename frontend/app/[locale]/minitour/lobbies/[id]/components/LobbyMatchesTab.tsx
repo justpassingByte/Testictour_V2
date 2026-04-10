@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -86,13 +86,28 @@ interface LobbyMatchesTabProps {
 export function LobbyMatchesTab({ lobby }: LobbyMatchesTabProps) {
   const { syncingMatchId, fetchMatchFromGrimoire, startPolling, stopPolling, isPolling, pollingMessage, isProcessingAction } = useMiniTourLobbyStore();
 
+  // Store actions are stable Zustand references — excluded from deps intentionally
+  // to prevent the isPolling state change from re-triggering the effect and creating
+  // an infinite loop (cleanup calls stopPolling → set() → re-render → effect → loop)
+  const pollingStartedRef = useRef(false);
+
   useEffect(() => {
     if (lobby.status === 'IN_PROGRESS') {
       const hasPendingMatch = lobby.matches?.some(m => m.status === 'PENDING');
-      if (hasPendingMatch && !isPolling) startPolling(lobby.id);
+      if (hasPendingMatch && !pollingStartedRef.current) {
+        pollingStartedRef.current = true;
+        startPolling(lobby.id);
+      }
     }
-    return () => { stopPolling(); };
-  }, [lobby.status, lobby.id, lobby.matches, isPolling, startPolling, stopPolling]);
+    // Only stop polling when component unmounts or lobby is no longer IN_PROGRESS
+    return () => {
+      if (lobby.status !== 'IN_PROGRESS') {
+        pollingStartedRef.current = false;
+        stopPolling();
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lobby.status, lobby.id, lobby.matches]);
 
   if (!lobby.matches || lobby.matches.length === 0) {
     return <div className="text-center text-muted-foreground py-8">No matches have been created yet.</div>;

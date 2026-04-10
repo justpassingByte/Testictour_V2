@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { CheckCircle2, Circle, Clock, AlertTriangle, ChevronRight, Wifi, WifiOff, Timer, Users, Zap, ShieldAlert, Play, Pause, ExternalLink } from 'lucide-react';
@@ -181,6 +182,7 @@ interface LobbyPageClientProps {
 export default function LobbyPageClient({ lobbyId, tournamentId, initialState, lobbyData, participantMap }: LobbyPageClientProps) {
   const { currentUser } = useUserStore();
   const userId = currentUser?.id;
+  const router = useRouter();
 
   const { state, isConnected, error, toggleReady, requestDelay, isReadyToggling } = useLobbySocket({
     lobbyId,
@@ -188,6 +190,34 @@ export default function LobbyPageClient({ lobbyId, tournamentId, initialState, l
     tournamentId,
     initialState,
   });
+
+  // Auto navigate to new lobby if advanced
+  useEffect(() => {
+    if (state?.state === 'FINISHED' && userId) {
+      let isSubscribed = true;
+      const checkNextLobby = async () => {
+        try {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'}/api/players/${userId}/incoming-matches`, { credentials: 'include' });
+          const data = await res.json();
+          if (data.success && data.data && isSubscribed) {
+            const match = data.data.find((m: any) => m.tournamentId === tournamentId);
+            if (match && match.lobbyId && match.lobbyId !== lobbyId) {
+              router.push(`/tournaments/${tournamentId}/lobbies/${match.lobbyId}`);
+            }
+          }
+        } catch (e) {
+          // Ignore fetch errors during polling
+        }
+      };
+
+      checkNextLobby();
+      const interval = setInterval(checkNextLobby, 5000);
+      return () => {
+        isSubscribed = false;
+        clearInterval(interval);
+      };
+    }
+  }, [state?.state, userId, tournamentId, lobbyId, router]);
 
   const { formatted: timeLeft, remaining } = useCountdown(
     state?.phaseStartedAt,

@@ -505,11 +505,35 @@ export const useMiniTourLobbyStore = create<MiniTourLobbyState & MiniTourLobbyAc
     const state = get();
     if (state.isPolling) return;
 
-    set({ isPolling: true, pollingMessage: 'Bắt đầu tìm trận đấu...' });
+    set({ isPolling: true, pollingMessage: 'Đang kiểm tra thời gian trận đấu...' });
 
     const poll = async () => {
       const currentState = get();
       if (!currentState.isPolling) return;
+
+      // 1. Kiểm tra pending match và thời gian bắt đầu (chờ 20 phút trên production)
+      const pendingMatch = currentState.lobby?.matches?.find(m => m.status === 'PENDING');
+      if (pendingMatch && pendingMatch.createdAt) {
+        const timeElapsedMs = Date.now() - new Date(pendingMatch.createdAt).getTime();
+        const minutesElapsed = Math.floor(timeElapsedMs / (1000 * 60));
+        
+        // Trong môi trường dev/local, KHÔNG CHỜ (bypass 20 phút) để test cho lẹ.
+        const isDev = process.env.NODE_ENV === 'development';
+        
+        if (!isDev && minutesElapsed < 20) {
+          const minutesLeft = 20 - minutesElapsed;
+          set({ pollingMessage: `Trận đấu đang diễn ra. Tự động lấy kết quả sau ${minutesLeft} phút...` });
+          
+          // Đợi 1 phút rồi check lại, thay vì gọi Riot API liên tục gây tốn rate limit
+          if (get().isPolling) {
+            setTimeout(poll, 60000); 
+          }
+          return;
+        }
+      }
+
+      // 2. Nếu đã qua 20 phút, bắt đầu gọi API mỗi 15 giây
+      set({ pollingMessage: 'Bắt đầu tìm trận đấu trên Riot API...' });
 
       try {
         const result = await MiniTourLobbyService.fetchMatchFromGrimoire(lobbyId);

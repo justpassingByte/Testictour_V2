@@ -515,18 +515,61 @@ router.post('/automation/auto-start', async (req: Request, res: Response) => {
 
 /**
  * POST /dev/automation/simulate-match
+ * Body: { type?, gameName?, tagLine?, region?, lobbyId? }
+ * 
+ * Fetches a REAL Riot match using the provided Riot ID (gameName#tagLine).
+ * If no Riot ID provided, tries to find a user with a valid PUUID in the DB.
  */
 router.post('/automation/simulate-match', async (req: Request, res: Response) => {
   try {
     const { prisma } = require('../services/prisma');
-    const { type = 'minitour' } = req.body;
-
-    const dummyPuuid = 'DH7MwwQjP_IRTHXCK0TlDM0jADBBOa8h1Fb9KLGwlRXTfx9LttT0bHW5rGHpQwWREyX7_xVyobDPXQ';
-    const startTime = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
+    const { type = 'minitour', gameName, tagLine, region = 'sea' } = req.body;
     const GrimoireSvc = require('../services/GrimoireService').default;
-    const result = await GrimoireSvc.fetchLatestMatch([dummyPuuid], 'sea', startTime, undefined, undefined);
-    
-    if (!result.match) throw new Error("No valid Riot match found to simulate");
+
+    // ── Resolve PUUID ──────────────────────────────────────────────────────────
+    let puuid: string;
+
+    if (gameName && tagLine) {
+      // Caller provided a Riot ID → fetch real PUUID
+      try {
+        puuid = await GrimoireSvc.fetchPuuid(gameName, tagLine, region);
+      } catch (e: any) {
+        return res.status(400).json({ success: false, error: `Cannot find PUUID for ${gameName}#${tagLine}: ${e.message}` });
+      }
+    } else {
+      // Fallback: find a user in DB whose PUUID looks valid (not a dev-mutated one)
+      const userWithPuuid = await prisma.user.findFirst({
+        where: {
+          puuid: { not: null },
+          AND: [
+            { puuid: { not: { contains: '_mt_' } } },
+            { puuid: { not: { contains: '_ft_' } } },
+            { puuid: { not: { contains: '_tour_' } } },
+          ],
+          riotGameName: { not: null },
+        },
+        select: { puuid: true, riotGameName: true, riotGameTag: true },
+      });
+
+      if (!userWithPuuid?.puuid) {
+        return res.status(400).json({
+          success: false,
+          error: 'No valid Riot ID provided and no users with valid PUUIDs found in DB. Please provide gameName and tagLine.',
+        });
+      }
+      puuid = userWithPuuid.puuid;
+    }
+
+    const startTime = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
+    const result = await GrimoireSvc.fetchLatestMatch([puuid], region, startTime, undefined, undefined);
+
+    if (!result.match) {
+      return res.status(404).json({
+        success: false,
+        error: `No recent Riot match found for ${gameName ? `${gameName}#${tagLine}` : `PUUID ${puuid.substring(0, 12)}...`}. Make sure they played a TFT match in the last 30 days.`,
+        matchIds: result.matchIds,
+      });
+    }
 
     if (type === 'minitour') {
       const lobby = await prisma.miniTourLobby.findFirst({
@@ -543,10 +586,15 @@ router.post('/automation/simulate-match', async (req: Request, res: Response) =>
       const pool = lobby.prizePool || 100000;
       const ptsFormat = [8, 7, 6, 5, 4, 3, 2, 1];
       const prizeFormat = [Math.floor(pool * 0.5), Math.floor(pool * 0.3), Math.floor(pool * 0.2), 0, 0, 0, 0, 0];
+
+      // Delete existing placeholder results before inserting real ones
+      await prisma.miniTourMatchResult.deleteMany({
+        where: { miniTourMatchId: matchDb.id },
+      });
       
       await prisma.miniTourMatch.update({
         where: { id: matchDb.id },
-        data: { matchIdRiotApi: result.match.matchId + '_' + Date.now(), matchData: rawMatch as any, status: 'COMPLETED', fetchedAt: new Date() }
+        data: { matchIdRiotApi: result.match.matchId + '_sim_' + Date.now(), matchData: rawMatch as any, status: 'COMPLETED', fetchedAt: new Date() }
       });
 
       for (let i = 0; i < lobby.participants.length && i < rawMatch.participants.length; i++) {
@@ -578,7 +626,7 @@ router.post('/automation/simulate-match', async (req: Request, res: Response) =>
       const ptsFormat = [8, 7, 6, 5, 4, 3, 2, 1];
 
       const newMatch = await prisma.match.create({
-        data: { lobbyId: lobby.id, matchIdRiotApi: result.match.matchId + '_' + Date.now(), matchData: rawMatch as any }
+        data: { lobbyId: lobby.id, matchIdRiotApi: result.match.matchId + '_sim_' + Date.now(), matchData: rawMatch as any }
       });
 
       for (let i = 0; i < participants.length && i < 8; i++) {
