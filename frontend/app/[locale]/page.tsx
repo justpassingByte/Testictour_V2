@@ -12,11 +12,19 @@ export const metadata = {
 
 export const revalidate = 60; // Cache the page for 60 seconds (ISR) to fix fetching delay
 
-// Server-side data fetching
+// Server-side data fetching directly using fetch to utilize Next.js Data Cache
 async function getTournaments() {
   try {
-    const data = await TournamentService.list()
-    return data.tournaments || []
+    const isServer = typeof window === 'undefined';
+    const baseURL = isServer 
+      ? (process.env.INTERNAL_BACKEND_URL || (process.env.NEXT_PUBLIC_API_URL ? `${process.env.NEXT_PUBLIC_API_URL.replace(/\/+$/, '')}/api` : 'http://localhost:4000/api'))
+      : (process.env.NEXT_PUBLIC_API_URL ? `${process.env.NEXT_PUBLIC_API_URL.replace(/\/+$/, '')}/api` : 'http://localhost:4000/api');
+
+    const res = await fetch(`${baseURL}/tournaments`, { 
+      next: { revalidate: 60 } // Aggressive cache for 60 seconds
+    });
+    const data = await res.json();
+    return data.tournaments || [];
   } catch (error) {
     console.error("Error fetching tournaments:", error)
     return []
@@ -25,9 +33,17 @@ async function getTournaments() {
 
 async function getMiniTourLobbies(): Promise<MiniTourLobby[]> {
   try {
-    const response = await api.get("/minitour-lobbies")
-    if (response.data && response.data.success) {
-      return response.data.data
+    const isServer = typeof window === 'undefined';
+    const baseURL = isServer 
+      ? (process.env.INTERNAL_BACKEND_URL || (process.env.NEXT_PUBLIC_API_URL ? `${process.env.NEXT_PUBLIC_API_URL.replace(/\/+$/, '')}/api` : 'http://localhost:4000/api'))
+      : (process.env.NEXT_PUBLIC_API_URL ? `${process.env.NEXT_PUBLIC_API_URL.replace(/\/+$/, '')}/api` : 'http://localhost:4000/api');
+
+    const res = await fetch(`${baseURL}/minitour-lobbies`, {
+      next: { revalidate: 60 } // Aggressive cache for 60 seconds
+    });
+    const data = await res.json();
+    if (data && data.success) {
+      return data.data;
     }
     return []
   } catch (error) {
