@@ -116,7 +116,7 @@ function LobbyCard({ lobby }: { lobby: MiniTourLobby }) {
         <div className="space-y-2">
           <Button
             asChild
-            className="w-full"
+            className={lobby.status === "WAITING" ? "w-full btn-zodiac text-white font-semibold" : "w-full"}
             disabled={lobby.status === "COMPLETED" || lobby.status === "CANCELLED" || lobby.status === "IN_PROGRESS"}
             variant={lobby.status === "IN_PROGRESS" ? "outline" : "default"}
           >
@@ -186,7 +186,7 @@ export function LobbyList({ initialLobbies }: { initialLobbies: MiniTourLobby[] 
         </div>
         <div className="flex gap-2">
           <Select value={selectedGameMode} onValueChange={setSelectedGameMode}>
-            <SelectTrigger className="w-[140px]">
+            <SelectTrigger className="w-[140px]" aria-label="Filter by Game Mode">
               <SelectValue placeholder="Game Mode" />
             </SelectTrigger>
             <SelectContent>
@@ -197,7 +197,7 @@ export function LobbyList({ initialLobbies }: { initialLobbies: MiniTourLobby[] 
             </SelectContent>
           </Select>
           <Select value={selectedEntryType} onValueChange={setSelectedEntryType}>
-            <SelectTrigger className="w-[120px]">
+            <SelectTrigger className="w-[120px]" aria-label="Filter by Entry Type">
               <SelectValue placeholder="Entry Type" />
             </SelectTrigger>
             <SelectContent>
@@ -207,7 +207,7 @@ export function LobbyList({ initialLobbies }: { initialLobbies: MiniTourLobby[] 
             </SelectContent>
           </Select>
           <Select value={sortBy} onValueChange={setSortBy}>
-            <SelectTrigger className="w-[140px]">
+            <SelectTrigger className="w-[140px]" aria-label="Sort by Rating">
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
             <SelectContent>
@@ -216,7 +216,7 @@ export function LobbyList({ initialLobbies }: { initialLobbies: MiniTourLobby[] 
               <SelectItem value="entryFee">Entry Fee</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" size="icon">
+          <Button variant="outline" size="icon" aria-label="Filter options">
             <Filter className="h-4 w-4" />
           </Button>
         </div>
