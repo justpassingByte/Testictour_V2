@@ -217,7 +217,12 @@ export default class GrimoireService {
       });
 
       return response.data;
-
+    } catch (error: any) {
+      if (error.isAxiosError) {
+        throw new ApiError(error.response?.status || 500, error.response?.data?.error || error.message);
+      }
+      throw error;
+    }
   }
 
   /**

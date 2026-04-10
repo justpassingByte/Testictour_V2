@@ -256,7 +256,7 @@ router.post('/seed-full-tournament', async (req: Request, res: Response) => {
     const phases = await prisma.phase.findMany({
       where: { tournamentId: tour.id },
       include: { rounds: { orderBy: { roundNumber: 'asc' }, include: { lobbies: true } } },
-      orderBy: { createdAt: 'asc' }
+      orderBy: { phaseNumber: 'asc' }
     });
 
     const ptsFormat = [8, 7, 6, 5, 4, 3, 2, 1];
@@ -324,7 +324,7 @@ router.get('/tournament-statistics/:id', async (req: Request, res: Response) => 
 
     const matches = await prisma.match.findMany({
       where: { lobby: { round: { phase: { tournamentId: id } } } },
-      include: { results: { include: { user: true } } }
+      include: { matchResults: { include: { user: true } } }
     });
 
     if (!matches.length) {
