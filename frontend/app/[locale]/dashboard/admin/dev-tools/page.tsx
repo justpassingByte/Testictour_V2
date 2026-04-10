@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Zap, AlertCircle, FlaskConical, Database, FileDigit, PlaySquare } from "lucide-react";
+import { Loader2, Zap, AlertCircle, FlaskConical, Database, FileDigit, PlaySquare, Bot, Key } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,6 +29,33 @@ export default function DevToolsPage() {
   const [loading2, setLoading2] = useState(false);
   const [seedResult, setSeedResult] = useState<any>(null);
   const [error2, setError2] = useState<string | null>(null);
+
+  // Automation states
+  const [automationLoading, setAutomationLoading] = useState(false);
+  const [automationResult, setAutomationResult] = useState<any>(null);
+  const [automationError, setAutomationError] = useState<string | null>(null);
+  const [lobbyId, setLobbyId] = useState("");
+  const [userId, setUserId] = useState("");
+  const [roundId, setRoundId] = useState("");
+  const [lobbyType, setLobbyType] = useState("minitour");
+
+  async function handleAutomation(endpoint: string, payload: any) {
+    setAutomationLoading(true);
+    setAutomationError(null);
+    setAutomationResult(null);
+    try {
+      const res = await api.post(`/dev/automation/${endpoint}`, payload);
+      if (res.data.success) {
+        setAutomationResult(res.data);
+      } else {
+        setAutomationError(res.data.error || "Action failed");
+      }
+    } catch (e: any) {
+      setAutomationError(e.response?.data?.error ?? e.message);
+    } finally {
+      setAutomationLoading(false);
+    }
+  }
 
   async function fetchSingleMatch() {
     setLoading1(true);
@@ -93,6 +120,9 @@ export default function DevToolsPage() {
           </TabsTrigger>
           <TabsTrigger value="full" className="flex items-center gap-2">
             <PlaySquare className="h-4 w-4" /> Seed Full Tournament
+          </TabsTrigger>
+          <TabsTrigger value="automation" className="flex items-center gap-2">
+            <Bot className="h-4 w-4" /> Automation Flow
           </TabsTrigger>
         </TabsList>
 
@@ -243,6 +273,81 @@ export default function DevToolsPage() {
               </div>
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="automation" className="space-y-6 animate-in slide-in-from-bottom-2 duration-300">
+          <div className="flex gap-4 items-center p-4 bg-background/40 border border-white/10 rounded-xl">
+            <h3 className="text-sm font-semibold text-muted-foreground w-1/4">Quick Setting</h3>
+            <div className="flex gap-3">
+              <Button size="sm" variant="outline" className="border-orange-500/30 text-orange-400 bg-orange-500/10 hover:bg-orange-500/20" onClick={() => handleAutomation('seed-env', {})}>
+                1. Seed Test Environment
+              </Button>
+              <Button size="sm" variant="outline" className="border-red-500/30 text-red-500 bg-red-500/10 hover:bg-red-500/20" onClick={() => handleAutomation('clear-env', {})}>
+                Clear All Data
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            <Card className="border-white/10 bg-card/60 backdrop-blur-lg">
+              <CardHeader className="pb-3 flex flex-row justify-between items-center">
+                <div>
+                  <CardTitle className="text-base text-purple-400">Lobby & Match Tasks</CardTitle>
+                  <CardDescription>Auto-targets the latest WAITING or IN_PROGRESS Lobby</CardDescription>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4 pt-2">
+                <div className="flex flex-col gap-3">
+                  <Button size="sm" className="w-full justify-start border-white/20 bg-background/50 hover:bg-white/10" variant="outline" onClick={() => handleAutomation('ready-toggle', {})}>
+                    2. Toggle Ready (Latest Waiting)
+                  </Button>
+                  <Button size="sm" className="w-full justify-start border-white/20 bg-background/50 hover:bg-white/10" variant="outline" onClick={() => handleAutomation('auto-start', { type: lobbyType })}>
+                    3. Force Start (Latest Waiting)
+                  </Button>
+                  <Button size="sm" className="w-full justify-start border-blue-500/30 text-blue-400 bg-blue-500/10 hover:bg-blue-500/20" variant="outline" onClick={() => handleAutomation('simulate-match', { type: lobbyType })}>
+                    4. Simulate Match Results (Latest In Progress)
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-white/10 bg-card/60 backdrop-blur-lg">
+              <CardHeader className="pb-3 flex flex-row justify-between items-center">
+                <div>
+                  <CardTitle className="text-base text-pink-400">Round Advancement</CardTitle>
+                  <CardDescription>Auto-targets the latest active Phase and Round</CardDescription>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4 pt-2">
+                <div className="flex flex-col gap-3">
+                  <Button size="sm" className="w-full justify-start border-white/20 bg-background/50 hover:bg-white/10" variant="outline" onClick={() => handleAutomation('assign-lobby', {})}>
+                    Assign Lobbies (Latest Pending Round)
+                  </Button>
+                  <Button size="sm" className="w-full justify-start border-pink-500/30 text-pink-400 bg-pink-500/10 hover:bg-pink-500/20" variant="outline" onClick={() => handleAutomation('advance-round', {})}>
+                    Auto Advance (Latest Completed Round)
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="border-white/10 bg-black/40 shadow-inner">
+            <CardHeader className="py-3 px-4 border-b border-white/10 flex flex-row items-center justify-between">
+              <CardTitle className="text-xs tracking-wider uppercase text-muted-foreground flex items-center gap-2">
+                <Loader2 className={`w-3 h-3 ${automationLoading ? 'animate-spin opacity-100' : 'opacity-0'}`} />
+                Execution Result
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 overflow-auto max-h-[300px] font-mono text-xs">
+              {automationError ? (
+                <div className="text-red-400">{automationError}</div>
+              ) : automationResult ? (
+                <pre className="text-emerald-400/90 whitespace-pre-wrap">{JSON.stringify(automationResult, null, 2)}</pre>
+              ) : (
+                <div className="text-muted-foreground/30">Select an action to view the result payload here.</div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

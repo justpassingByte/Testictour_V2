@@ -388,4 +388,269 @@ router.get('/tournament-statistics/:id', async (req: Request, res: Response) => 
   }
 });
 
+import LobbyStateService from '../services/LobbyStateService';
+import MatchService from '../services/MatchService';
+import LobbyService from '../services/LobbyService';
+import RoundService from '../services/RoundService';
+
+/**
+ * POST /dev/automation/seed-env
+ */
+router.post('/automation/seed-env', async (req: Request, res: Response) => {
+  try {
+    const { execSync } = require('child_process');
+    execSync('npx ts-node scripts/seedUsers.ts', { stdio: 'inherit' });
+    execSync('npx ts-node scripts/seedGrimoireTournament.ts', { stdio: 'inherit' });
+    execSync('npx ts-node scripts/testMiniTourLobby.ts', { stdio: 'inherit' });
+    return res.json({ success: true, message: "Environment seeded successfully" });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /dev/automation/clear-env
+ */
+router.post('/automation/clear-env', async (req: Request, res: Response) => {
+  try {
+    const { prisma } = require('../services/prisma');
+    await prisma.playerMatchSummary.deleteMany({});
+    await prisma.userTournamentSummary.deleteMany({});
+    await prisma.roundOutcome.deleteMany({});
+    await prisma.matchResult.deleteMany({});
+    await prisma.match.deleteMany({});
+    await prisma.miniTourMatchResult.deleteMany({});
+    await prisma.miniTourMatch.deleteMany({});
+    await prisma.miniTourLobbyParticipant.deleteMany({});
+    await prisma.miniTourLobby.deleteMany({});
+    await prisma.lobby.deleteMany({});
+    await prisma.round.deleteMany({});
+    await prisma.phase.deleteMany({});
+    await prisma.participant.deleteMany({});
+    await prisma.tournament.deleteMany({});
+    return res.json({ success: true, message: "All Tournaments and MiniTours cleared" });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /dev/automation/ready-toggle
+ */
+router.post('/automation/ready-toggle', async (req: Request, res: Response) => {
+  try {
+    const { prisma } = require('../services/prisma');
+    const { lobbyId, userId } = req.body;
+    if (lobbyId && userId) {
+      const state = await LobbyStateService.toggleReady(lobbyId, userId);
+      return res.json({ success: true, state });
+    }
+
+    const latestLobby = await prisma.lobby.findFirst({
+      where: { state: 'WAITING' },
+      orderBy: { phaseStartedAt: 'desc' }
+    });
+
+    if (latestLobby) {
+      const parsed = latestLobby.participants as any[];
+      const readyObj: Record<string, boolean> = {};
+      parsed.forEach((p: any) => readyObj[p.userId] = true);
+      
+      const io = (req as any).io;
+      if (io) {
+        io.to(`lobby_${latestLobby.id}`).emit('lobby_state_update', {
+          id: latestLobby.id,
+          state: 'STARTING',
+          readyStatus: readyObj
+        });
+      }
+      return res.json({ success: true, message: "Forced Ready for latest Tournament Lobby", lobbyId: latestLobby.id });
+    }
+    return res.json({ success: true, message: "No WAITING lobby found to ready" });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /dev/automation/auto-start
+ */
+router.post('/automation/auto-start', async (req: Request, res: Response) => {
+  try {
+    const { prisma } = require('../services/prisma');
+    const { type = 'minitour' } = req.body;
+    let targetLobbyId = req.body.lobbyId;
+
+    if (!targetLobbyId && type === 'minitour') {
+      const minitour = await prisma.miniTourLobby.findFirst({ where: { status: 'WAITING' }, orderBy: { createdAt: 'desc' }});
+      if (minitour) targetLobbyId = minitour.id;
+    } else if (!targetLobbyId) {
+      const lobby = await prisma.lobby.findFirst({ where: { state: 'WAITING' } });
+      if (lobby) targetLobbyId = lobby.id;
+    }
+
+    if (!targetLobbyId) throw new Error("No waiting lobby found.");
+
+    if (type === 'minitour') {
+      const updated = await prisma.miniTourLobby.update({
+        where: { id: targetLobbyId },
+        data: { status: 'IN_PROGRESS' },
+      });
+      const existing = await prisma.miniTourMatch.findFirst({ where: { miniTourLobbyId: targetLobbyId }});
+      if (!existing) {
+        await prisma.miniTourMatch.create({ data: { miniTourLobbyId: targetLobbyId, status: 'PENDING' }});
+      }
+      return res.json({ success: true, lobby: updated });
+    } else {
+      const updated = await prisma.lobby.update({
+        where: { id: targetLobbyId },
+        data: { state: 'IN_PROGRESS' }
+      });
+      return res.json({ success: true, lobby: updated });
+    }
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /dev/automation/simulate-match
+ */
+router.post('/automation/simulate-match', async (req: Request, res: Response) => {
+  try {
+    const { prisma } = require('../services/prisma');
+    const { type = 'minitour' } = req.body;
+
+    const dummyPuuid = 'DH7MwwQjP_IRTHXCK0TlDM0jADBBOa8h1Fb9KLGwlRXTfx9LttT0bHW5rGHpQwWREyX7_xVyobDPXQ';
+    const startTime = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
+    const GrimoireSvc = require('../services/GrimoireService').default;
+    const result = await GrimoireSvc.fetchLatestMatch([dummyPuuid], 'sea', startTime, undefined, undefined);
+    
+    if (!result.match) throw new Error("No valid Riot match found to simulate");
+
+    if (type === 'minitour') {
+      const lobby = await prisma.miniTourLobby.findFirst({
+        where: { status: 'IN_PROGRESS' },
+        orderBy: { createdAt: 'desc' },
+        include: { participants: true, matches: { where: { status: 'PENDING' } } }
+      });
+      if (!lobby) throw new Error("No IN_PROGRESS MiniTour lobby found");
+      
+      const matchDb = lobby.matches[0];
+      if (!matchDb) throw new Error("No pending match in MiniTour to override");
+
+      const rawMatch = JSON.parse(JSON.stringify(result.match));
+      const pool = lobby.prizePool || 100000;
+      const ptsFormat = [8, 7, 6, 5, 4, 3, 2, 1];
+      const prizeFormat = [Math.floor(pool * 0.5), Math.floor(pool * 0.3), Math.floor(pool * 0.2), 0, 0, 0, 0, 0];
+      
+      await prisma.miniTourMatch.update({
+        where: { id: matchDb.id },
+        data: { matchIdRiotApi: result.match.matchId + '_' + Date.now(), matchData: rawMatch as any, status: 'COMPLETED', fetchedAt: new Date() }
+      });
+
+      for (let i = 0; i < lobby.participants.length && i < rawMatch.participants.length; i++) {
+        const p = lobby.participants[i];
+        const realP = rawMatch.participants[i];
+        await prisma.miniTourMatchResult.create({
+          data: {
+            miniTourMatchId: matchDb.id,
+            userId: p.userId,
+            placement: realP.placement,
+            points: ptsFormat[i] || 0,
+            prize: prizeFormat[i] || 0
+          }
+        });
+      }
+      await prisma.miniTourLobby.update({ where: { id: lobby.id }, data: { status: 'COMPLETED' }});
+
+      return res.json({ success: true, message: "Simulated Riot Match for MiniTour Lobby", lobbyId: lobby.id });
+    } else {
+      const lobby = await prisma.lobby.findFirst({
+        where: { state: 'IN_PROGRESS' },
+        orderBy: { roundId: 'desc' },
+        include: { round: { include: { phase: true } } }
+      });
+      if (!lobby) throw new Error("No IN_PROGRESS Tournament lobby found");
+
+      const participants = lobby.participants as any[];
+      const rawMatch = JSON.parse(JSON.stringify(result.match));
+      const ptsFormat = [8, 7, 6, 5, 4, 3, 2, 1];
+
+      const newMatch = await prisma.match.create({
+        data: { lobbyId: lobby.id, matchIdRiotApi: result.match.matchId + '_' + Date.now(), matchData: rawMatch as any }
+      });
+
+      for (let i = 0; i < participants.length && i < 8; i++) {
+        const p = participants[i];
+        const realP = rawMatch.participants[i];
+        await prisma.matchResult.create({
+          data: { matchId: newMatch.id, userId: p.userId, placement: realP?.placement || i+1, points: ptsFormat[i] || 0 }
+        });
+      }
+
+      await prisma.lobby.update({ where: { id: lobby.id }, data: { state: 'COMPLETED', completedMatchesCount: { increment: 1 } } });
+      return res.json({ success: true, message: "Simulated Riot Match for Tournament Lobby", lobbyId: lobby.id });
+    }
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /dev/automation/assign-lobby
+ */
+router.post('/automation/assign-lobby', async (req: Request, res: Response) => {
+  try {
+    const { prisma } = require('../services/prisma');
+    let targetRoundId = req.body.roundId;
+    let targetRound: any = null;
+
+    if (!targetRoundId) {
+      targetRound = await prisma.round.findFirst({
+        where: { lobbies: { none: {} } },
+        orderBy: { roundNumber: 'asc' }
+      });
+      if (targetRound) targetRoundId = targetRound.id;
+    } else {
+      targetRound = await prisma.round.findUnique({ where: { id: targetRoundId }});
+    }
+
+    if (!targetRound) throw new Error("No valid Round found to assign lobbies");
+    
+    await RoundService.autoAdvance(targetRound.id);
+    return res.json({ success: true, message: "Lobbies assigned / round advanced for " + targetRound.roundNumber, roundId: targetRound.id });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /dev/automation/advance-round
+ */
+router.post('/automation/advance-round', async (req: Request, res: Response) => {
+  try {
+    const { prisma } = require('../services/prisma');
+    let targetRoundId = req.body.roundId;
+    let targetRound: any = null;
+
+    if (!targetRoundId) {
+      targetRound = await prisma.round.findFirst({
+        where: { lobbies: { some: { state: 'COMPLETED' } } },
+        orderBy: { roundNumber: 'desc' },
+        include: { phase: true }
+      });
+      if (targetRound) targetRoundId = targetRound.id;
+    } else {
+      targetRound = await prisma.round.findUnique({ where: { id: targetRoundId }, include: { phase: true } });
+    }
+
+    if (!targetRound) throw new Error("No valid Round found to advance");
+    await RoundService.autoAdvance(targetRound.id);
+    return res.json({ success: true, message: "Auto advance triggered for round " + targetRound.roundNumber });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;
