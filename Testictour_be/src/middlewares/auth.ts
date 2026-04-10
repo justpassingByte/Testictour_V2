@@ -10,7 +10,6 @@ interface JwtPayload {
 
 export default function auth(...requiredRoles: string[]) {
   return function (req: Request, _res: Response, next: NextFunction) {
-    console.log("[Auth Middleware] Invoked with requiredRoles:", requiredRoles, "Length:", requiredRoles.length);
     const token = req.cookies?.authToken;
     
     if (!token) {

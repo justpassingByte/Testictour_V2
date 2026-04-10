@@ -216,39 +216,10 @@ export default function PlayerPage() {
 
                 <TabsContent value="achievements" className="mt-6">
                   <h2 className="text-2xl font-bold mb-4">Achievements</h2>
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {[
-                      { title: "First Blood", desc: "Win your first tournament", icon: "🏆", unlocked: true, rarity: "Common" },
-                      { title: "Top 4 Machine", desc: "Get top 4 in 10 games", icon: "🎯", unlocked: true, rarity: "Common" },
-                      { title: "MiniTour Master", desc: "Play 25 MiniTour lobbies", icon: "🎮", unlocked: false, progress: 12, target: 25, rarity: "Rare" },
-                      { title: "Social Butterfly", desc: "Refer 3 friends", icon: "👥", unlocked: false, progress: 1, target: 3, rarity: "Rare" },
-                      { title: "Diamond Grinder", desc: "Earn 5,000 coins total", icon: "💎", unlocked: false, progress: 1850, target: 5000, rarity: "Epic" },
-                      { title: "Untouchable", desc: "Win 5 tournaments with 1st place", icon: "👑", unlocked: false, progress: 2, target: 5, rarity: "Epic" },
-                    ].map((ach, idx) => (
-                      <Card key={idx} className={`card-hover-effect overflow-hidden ${ach.unlocked ? "bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20" : "opacity-60 hover:opacity-100"}`}>
-                        {ach.unlocked && <div className="h-1 bg-gradient-to-r from-violet-500 to-purple-600" />}
-                        <CardContent className="pt-5 pb-4">
-                          <div className="flex flex-col items-center text-center space-y-2">
-                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl ${ach.unlocked ? "bg-gradient-to-br from-violet-500 to-purple-700 shadow-lg shadow-violet-500/20" : "bg-muted"}`}>
-                              {ach.unlocked ? ach.icon : "🔒"}
-                            </div>
-                            <h3 className="font-bold text-sm">{ach.title}</h3>
-                            <p className="text-xs text-muted-foreground">{ach.desc}</p>
-                            <span className={`text-xs px-2 py-0.5 rounded-full border ${ach.rarity === "Common" ? "text-gray-400 border-gray-400/30" : ach.rarity === "Rare" ? "text-blue-400 border-blue-400/30" : "text-violet-400 border-violet-400/30"}`}>
-                              {ach.rarity}
-                            </span>
-                            {!ach.unlocked && ach.progress !== undefined && (
-                              <div className="w-full">
-                                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                                  <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${Math.min((ach.progress / (ach.target || 1)) * 100, 100)}%` }} />
-                                </div>
-                                <div className="text-xs text-muted-foreground mt-1">{ach.progress}/{ach.target}</div>
-                              </div>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+                  <div className="text-center py-12 text-muted-foreground bg-card/30 rounded-lg border border-white/5">
+                    <span className="text-4xl mb-4 block">🏆</span>
+                    <p>Achievements system is currently under development.</p>
+                    <p className="text-sm">Check back later for exciting challenges and rewards!</p>
                   </div>
                 </TabsContent>
               </Tabs>

@@ -36,7 +36,12 @@ export function useLobbySocket({
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    const socket = io(BACKEND_URL, { transports: ['websocket', 'polling'] });
+    const socket = io(BACKEND_URL, {
+      transports: ['websocket', 'polling'],
+      withCredentials: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 2000,
+    });
     socketRef.current = socket;
 
     socket.on('connect', () => {

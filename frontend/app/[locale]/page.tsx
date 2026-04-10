@@ -1,4 +1,3 @@
-import { Suspense } from "react"
 import { getTranslations } from 'next-intl/server';
 import HomePageClient from './components/HomePageClient';
 import { TournamentService } from "@/app/services/TournamentService"
@@ -37,13 +36,13 @@ async function getMiniTourLobbies(): Promise<MiniTourLobby[]> {
 
 export default async function HomePage() {
   const t = await getTranslations('common');
-  const tournaments = await getTournaments();
-  const lobbies = await getMiniTourLobbies();
+  const [tournaments, lobbies] = await Promise.all([
+    getTournaments(),
+    getMiniTourLobbies(),
+  ]);
 
   return (
-    <Suspense fallback={<HomePageSkeleton />}>
-      <HomePageClient tournaments={tournaments} lobbies={lobbies} />
-    </Suspense>
+    <HomePageClient tournaments={tournaments} lobbies={lobbies} />
   )
 }
 

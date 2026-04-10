@@ -37,14 +37,6 @@ export function StatisticsTab({ allPlayers }: StatisticsTabProps) {
                 {highestScorePlayer.total} pts ({highestScorePlayer.name})
               </span>
             </div>
-            <div className="flex justify-between">
-              <span>Average Match Duration:</span>
-              <span className="font-medium">30:10 (mock)</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Most Popular Composition:</span>
-              <span className="font-medium">Azir Reroll (mock)</span>
-            </div>
           </div>
         </CardContent>
       </Card>

@@ -37,8 +37,7 @@ export default async function LocaleLayout({
   children: React.ReactNode;
   params: { locale: string };
 }) {
-  // Debug locale detection
-  console.log('[LocaleLayout] Requested locale:', locale);
+
 
   // Validate that the incoming locale is supported
   if (!routing.locales.includes(locale as any)) {
@@ -57,9 +56,7 @@ export default async function LocaleLayout({
       common: (await import(`../../locales/${locale}/common.json`)).default
     };
 
-    console.log(`[LocaleLayout] Loaded ${locale} messages directly:`,
-      Object.keys(messages.common).slice(0, 5).join(', ')
-    );
+
   } catch (error) {
     console.error(`[LocaleLayout] Error loading ${locale} messages:`, error);
 
@@ -68,7 +65,7 @@ export default async function LocaleLayout({
       messages = {
         common: (await import(`../../locales/en/common.json`)).default
       };
-      console.log('[LocaleLayout] Falling back to en messages');
+
     } catch (fallbackError) {
       console.error('[LocaleLayout] Even fallback failed:', fallbackError);
       messages = { common: {} };
@@ -87,9 +84,7 @@ export default async function LocaleLayout({
           >
             <GlobalProviders>
               <div className="relative flex min-h-screen flex-col">
-                <div className="fixed top-0 right-0 z-50 p-2 text-xs bg-black text-white">
-                  Current locale: {locale}
-                </div>
+
                 <MainNav />
                 <main className="flex-1 min-h-[calc(100vh-theme(spacing.16)-theme(spacing.16))] ">
                   <AuthClientWrapper>{children}</AuthClientWrapper>

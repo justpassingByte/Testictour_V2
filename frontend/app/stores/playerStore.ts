@@ -1,42 +1,13 @@
 import { create } from 'zustand';
-import { PlayerService, PlayerMatchSummary } from '../services/PlayerService';
+import { PlayerService, PlayerMatchSummary, PlayerStats, PlayerDetails } from '../services/PlayerService';
 import { IUser } from '../types/user';
 import { Player } from './miniTourLobbyStore';
 import { AdminService } from '../services/AdminService';
 import { PartnerService } from '../services/PartnerService';
 
-// New PlayerStats interface to match backend
-interface PlayerStats {
-  tournamentsPlayed: number;
-  tournamentsWon: number;
-  completedTournaments: number;
-  matchesPlayed: number;
-  averagePlacement: number;
-  topFourRate: number;
-  firstPlaceRate: number;
-  tournamentStats: Array<{
-    tournamentId: string;
-    tournamentName: string;
-    status: string;
-    matches: number;
-    eliminated: boolean;
-    scoreTotal: number;
-  }>;
-}
 
-interface PlayerDetails {
-  id: string;
-  inGameName: string;
-  gameSpecificId: string;
-  region: string;
-  rank: string;
-  user?: IUser;
-  eliminated: boolean;
-  scoreTotal: number;
-  joinedAt: string;
-  stats: PlayerStats;
-  level?: number;
-}
+// Re-export for convenience
+export type { PlayerStats, PlayerDetails };
 
 export interface PlayerTournamentDisplay {
   id: string;

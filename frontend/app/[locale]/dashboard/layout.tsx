@@ -20,10 +20,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   useEffect(() => {
     if (user === null && !loading) {
-      console.log('[DashboardLayout Client] No user found and loading complete, redirecting to login.');
+
       router.push('/?auth=login');
     } else if (user && !['admin', 'partner', 'user'].includes(user.role)) {
-      console.log('[DashboardLayout Client] User role is not authorized for dashboard:', user.role);
+
       router.push('/');
     }
   }, [user, loading, router]);

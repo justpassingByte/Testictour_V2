@@ -11,10 +11,10 @@ export default function AuthClientWrapper({ children }: AuthClientWrapperProps) 
   const initializeUser = useUserStore((state) => state.initializeUser);
   const isLoading = useUserStore((state) => state.isLoading);
 
-  console.log("[AuthClientWrapper] Rendering. Current isLoading from store:", isLoading);
+
 
   useEffect(() => {
-    console.log("[AuthClientWrapper] useEffect triggered. Calling initializeUser...");
+
     initializeUser();
   }, [initializeUser]);
 

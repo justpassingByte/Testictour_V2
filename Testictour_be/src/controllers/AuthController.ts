@@ -17,24 +17,16 @@ const loginSchema = z.object({
 });
 
 const isProduction = process.env.NODE_ENV === 'production';
+// Detect if actually running behind HTTPS (check FRONTEND_URL for https://)
+const isHttps = (process.env.FRONTEND_URL || '').startsWith('https://');
 
-const productionCookieOptions = {
+const cookieOptions = {
   httpOnly: true,
-  secure: true,
-  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-  sameSite: 'none' as const,
-  path: '/', // Accessible across the entire domain
+  secure: isHttps,                                    // Only true when actually using HTTPS
+  maxAge: 7 * 24 * 60 * 60 * 1000,                   // 7 days
+  sameSite: (isHttps ? 'none' : 'lax') as 'none' | 'lax',  // 'none' requires secure=true (HTTPS)
+  path: '/',
 };
-
-const developmentCookieOptions = {
-  httpOnly: true,
-  secure: false, // Set to false for development (HTTP)
-  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-  // sameSite omitted for development to allow cross-origin HTTP cookies
-  path: '/', // Accessible across the entire domain
-};
-
-const cookieOptions = isProduction ? productionCookieOptions : developmentCookieOptions;
 
 export default {
   async register(req: Request, res: Response, next: NextFunction) {
@@ -53,7 +45,6 @@ export default {
       const { login, password } = loginSchema.parse(req.body);
       const { user, token } = await UserService.login({ login, password });
       res.cookie('authToken', token, cookieOptions);
-      console.log("[AuthController] Sending login response, user data:", user);
       res.json({ user });
     } catch (err) {
       next(err);

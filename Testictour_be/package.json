@@ -12,8 +12,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "worker": "node dist/worker.js",
-    "seed": "ts-node scripts/seed.ts",
-    "seed:empty": "ts-node scripts/seedEmptyTournament.ts",
+    "seed": "ts-node scripts/seedAll.ts",
     "migrate:player-optimizations": "prisma migrate dev --name player_optimizations && ts-node prisma/migrations/apply_player_optimizations.ts"
   },
   "dependencies": {

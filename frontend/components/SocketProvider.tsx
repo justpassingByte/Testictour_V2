@@ -15,7 +15,11 @@ export function SocketProvider({ children, role, tier }: {
 
     useEffect(() => {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-        const s = io(apiUrl, { withCredentials: true });
+        const s = io(apiUrl, {
+            withCredentials: true,
+            reconnectionAttempts: 5,
+            reconnectionDelay: 3000,
+        });
         socketRef.current = s;
         setSocket(s);
 

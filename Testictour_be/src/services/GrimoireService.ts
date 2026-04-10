@@ -218,14 +218,26 @@ export default class GrimoireService {
 
       return response.data;
 
+  }
+
+  /**
+   * Fetch a specific match by its Riot match ID via Grimoire's enriched endpoint.
+   * Used by seed-full-tournament to retrieve multiple matches in sequence.
+   */
+  static async fetchMatchById(matchId: string, region: string): Promise<GrimoireMatchData | null> {
+    try {
+      const response = await axios.post(`${GRIMOIRE_API_URL}/api/internal/match/fetch-latest`, {
+        puuids: [],
+        region,
+        matchId,
+        count: 1,
+      }, { timeout: 30000 });
+
+      if (!response.data.success) return null;
+      return response.data.match || null;
     } catch (error: any) {
-      if (error.isAxiosError) {
-        const status = error.response?.status || 500;
-        const message = error.response?.data?.reason || error.response?.data?.error || error.message;
-        logger.error(`[GrimoireService] Grimoire /validate error (${status}): ${message}`);
-        throw new ApiError(status, `Grimoire validate error: ${message}`);
-      }
-      throw error;
+      logger.warn(`[GrimoireService] fetchMatchById failed for ${matchId}: ${error.message}`);
+      return null;
     }
   }
 }

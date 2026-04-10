@@ -18,6 +18,7 @@ import {
   Gift,
   ChevronLeft,
   ChevronRight,
+  Database,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useMemo } from "react";
@@ -40,6 +41,7 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
     { label: t("achievements_tab", { defaultValue: "Achievements" }), href: "/dashboard/admin/achievements", icon: Star },
     { label: t("loyalty_program", { defaultValue: "Loyalty" }),      href: "/dashboard/admin/loyalty",      icon: Gift },
     { label: "---" },
+    { label: t("dev_tools", { defaultValue: "Dev Tools" }),          href: "/dashboard/admin/dev-tools",    icon: Database },
     { label: t("settings", { defaultValue: "Settings" }),     href: "/dashboard/admin/settings",     icon: Settings },
   ], [t]);
 

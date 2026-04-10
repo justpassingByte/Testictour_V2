@@ -16,20 +16,19 @@ import { REDIS_ENABLED } from './lib/queues';
 import { prisma } from './services/prisma';
 import logger from './utils/logger';
 import path from 'path';
-// Log the environment variables at startup for debugging
-console.log("--- Server Environment Variables ---");
-console.log("REDIS_URL:", process.env.REDIS_URL);
-console.log("DATABASE_URL:", process.env.DATABASE_URL);
-console.log("FRONTEND_URL:", process.env.FRONTEND_URL);
-console.log("PORT:", process.env.PORT);
-console.log("NODE_ENV:", process.env.NODE_ENV);
-console.log("------------------------------------");
+
 const app = express();
 const server = http.createServer(app);
+const allowedOrigins = [
+  process.env.FRONTEND_URL || 'http://localhost:3000',
+  'http://localhost:3000',
+].filter(Boolean);
+
 const io = new SocketIOServer(server, {
   cors: {
-    origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE']
+    origin: allowedOrigins,
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true,
   }
 });
 

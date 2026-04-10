@@ -51,6 +51,8 @@ export default function TournamentManagePage() {
   const [syncing, setSyncing] = useState(false)
   const [statusChanging, setStatusChanging] = useState(false)
   const [removeDialog, setRemoveDialog] = useState<{ open: boolean; participant: IParticipant | null }>({ open: false, participant: null })
+  const [stats, setStats] = useState<{ topUnits: any[]; topTraits: any[]; avgDuration: string | null } | null>(null)
+  const [statsLoading, setStatsLoading] = useState(true)
 
   const [editForm, setEditForm] = useState({
     name: "",
@@ -80,6 +82,18 @@ export default function TournamentManagePage() {
         hostFeePercent: t.hostFeePercent || 0.1,
         status: t.status,
       })
+
+      // Fetch stats asynchronously in the background so it doesn't block main UI
+      setStatsLoading(true)
+      api.get(`/dev/tournament-statistics/${tournamentId}`)
+        .then(res => {
+          if (res.data?.success && res.data?.stats) {
+            setStats(res.data.stats)
+          }
+        })
+        .catch(console.error)
+        .finally(() => setStatsLoading(false))
+
     } catch (error) {
       toast({ title: "Error", description: "Failed to load tournament data.", variant: "destructive" })
     }
@@ -427,67 +441,76 @@ export default function TournamentManagePage() {
 
         {/* ─── STATISTICS TAB ─── */}
         <TabsContent value="stats">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            <Card className="bg-card/60 border-white/10 lg:col-span-2">
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-primary" />
-                  Most Played Champions <span className="text-xs text-muted-foreground ml-2 font-normal">(Mock Data)</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {[
-                    { name: "Kai'Sa", count: 45, winrate: 65, color: 'text-violet-400', bg: 'bg-violet-500' },
-                    { name: 'Sylas', count: 38, winrate: 52, color: 'text-blue-400', bg: 'bg-blue-500' },
-                    { name: 'Ashe', count: 31, winrate: 48, color: 'text-emerald-400', bg: 'bg-emerald-500' },
-                    { name: 'Lillia', count: 24, winrate: 55, color: 'text-amber-400', bg: 'bg-amber-500' },
-                    { name: 'Galio', count: 19, winrate: 42, color: 'text-rose-400', bg: 'bg-rose-500' },
-                    { name: 'Annie', count: 15, winrate: 38, color: 'text-red-400', bg: 'bg-red-500' },
-                  ].map(champ => (
-                    <div key={champ.name} className="flex items-center gap-3 text-sm">
-                      <div className={`w-16 font-medium ${champ.color}`}>{champ.name}</div>
-                      <div className="flex-1">
-                        <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
-                          <div className={`h-full ${champ.bg} rounded-full`} style={{ width: `${(champ.count / 45) * 100}%` }} />
+          {statsLoading ? (
+            <div className="flex justify-center items-center h-48">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : !stats || (stats.topUnits.length === 0 && stats.topTraits.length === 0) ? (
+            <Card className="bg-card/60 border-white/10">
+              <CardContent className="text-center py-12 text-muted-foreground">
+                <PieChart className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                <p>No matches have been played yet. Play matches to generate statistics.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <Card className="bg-card/60 border-white/10 lg:col-span-2">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-primary" />
+                    Most Played Units
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {stats.topUnits.map((champ, i) => (
+                      <div key={champ.name} className="flex items-center gap-3 text-sm">
+                        <div className="w-4 text-muted-foreground font-mono">{i + 1}</div>
+                        <div className="w-32 font-medium capitalize truncate flex-shrink-0" title={champ.name}>{champ.name}</div>
+                        <div className="flex-1">
+                          <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
+                            <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${Math.max(5, (champ.count / stats.topUnits[0].count) * 100)}%` }} />
+                          </div>
+                        </div>
+                        <div className="w-16 text-right font-medium">{champ.count} <span className="text-muted-foreground text-xs font-normal">picks</span></div>
+                        <div className="w-16 text-right text-muted-foreground">{champ.winrate}% WR</div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-card/60 border-white/10">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Sword className="h-4 w-4 text-emerald-400" />
+                    Popular Traits
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {stats.topTraits.map((trait, i) => (
+                      <div key={`${trait.name}-${trait.level}`} className="flex items-center justify-between p-2 rounded-md bg-white/5">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="bg-white/10 border-white/20 w-6 h-6 flex items-center justify-center p-0 rounded-full">{trait.level}</Badge>
+                          <span className="font-medium text-sm truncate max-w-[120px]">{trait.name.replace('Set14_', '').replace('Set13_', '')}</span>
+                        </div>
+                        <span className="text-sm text-muted-foreground font-mono">{trait.count} plays</span>
+                      </div>
+                    ))}
+                    {stats.avgDuration && (
+                      <div className="mt-6 pt-4 border-t border-white/10">
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-muted-foreground">Average Match Duration</span>
+                          <span className="font-mono font-medium">{stats.avgDuration} min</span>
                         </div>
                       </div>
-                      <div className="w-12 text-right font-medium">{champ.count}</div>
-                      <div className="w-16 text-right text-muted-foreground">{champ.winrate}% WR</div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-card/60 border-white/10">
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Sword className="h-4 w-4 text-emerald-400" />
-                  Popular Traits
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {[
-                    { name: 'Trickshot', level: '4', count: 28 },
-                    { name: 'Bruiser', level: '6', count: 22 },
-                    { name: 'Invoker', level: '6', count: 18 },
-                    { name: 'Dragonlord', level: '3', count: 15 },
-                    { name: 'Dryad', level: '4', count: 11 },
-                  ].map((trait, i) => (
-                    <div key={trait.name} className="flex items-center justify-between p-2 rounded-md bg-white/5">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="bg-white/10 border-white/20 w-6 h-6 flex items-center justify-center p-0 rounded-full">{trait.level}</Badge>
-                        <span className="font-medium text-sm">{trait.name}</span>
-                      </div>
-                      <span className="text-sm text-muted-foreground font-mono">{trait.count} plays</span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </TabsContent>
 
         {/* ─── SETTINGS TAB ─── */}

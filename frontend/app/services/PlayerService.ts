@@ -4,7 +4,7 @@ import { IUser } from '../types/user';
 import { Player } from '../stores/miniTourLobbyStore';
 
 // New PlayerStats interface to match backend
-interface PlayerStats {
+export interface PlayerStats {
   tournamentsPlayed: number;
   tournamentsWon: number;
   completedTournaments: number;
@@ -23,7 +23,7 @@ interface PlayerStats {
 }
 
 // Updated PlayerDetails interface
-interface PlayerDetails {
+export interface PlayerDetails {
   id: string;
   inGameName: string;
   gameSpecificId: string;
@@ -33,7 +33,7 @@ interface PlayerDetails {
   eliminated: boolean;
   scoreTotal: number;
   joinedAt: string;
-  stats: PlayerStats; // Use the comprehensive PlayerStats interface
+  stats: PlayerStats;
 }
 
 // Keep PlayerMatchSummary as is, it's the raw data from backend /players/:id/matches

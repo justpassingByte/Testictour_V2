@@ -37,14 +37,7 @@ export function MainNav({
   const { openModal } = useAuthModalStore()
   const { currentUser, clearUser } = useUserStore();
 
-  // Debug logs
-  console.log("[MainNav] Current locale:", locale);
-  try {
-    console.log("[MainNav] Translation test - home:", t("home"));
-    console.log("[MainNav] Translation test - tournaments:", t("tournaments"));
-  } catch (e) {
-    console.error("[MainNav] Translation failed:", e);
-  }
+
 
   const toggleMenu = () => setIsOpen(!isOpen)
 
