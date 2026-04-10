@@ -84,7 +84,7 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
         </div>
         <div className="flex gap-2">
           <Select value={selectedLobby} onValueChange={setSelectedLobby}>
-            <SelectTrigger className="w-[120px]">
+            <SelectTrigger className="w-[120px]" aria-label="Filter by Lobby">
               <SelectValue placeholder="Lobby" />
             </SelectTrigger>
             <SelectContent>
@@ -97,7 +97,7 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
             </SelectContent>
           </Select>
           <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-            <SelectTrigger className="w-[120px]">
+            <SelectTrigger className="w-[120px]" aria-label="Filter by Status">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -106,7 +106,7 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
               <SelectItem value="eliminated">Eliminated</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" size="icon">
+          <Button variant="outline" size="icon" aria-label="Download Filtered Results">
             <Download className="h-4 w-4" />
           </Button>
         </div>

@@ -114,6 +114,7 @@ export default function HomePageClient({ tournaments, lobbies }: HomePageClientP
                     alt="TFT Characters Cutout"
                     className="object-contain drop-shadow-[0_25px_35px_rgba(0,0,0,0.9)] scale-[1.6] -translate-x-24 xl:-translate-x-40 -translate-y-8 transition-transform duration-500 ease-out group-hover:scale-[1.65]"
                     priority
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                   />
                 </div>
               </div>
@@ -203,7 +204,7 @@ export default function HomePageClient({ tournaments, lobbies }: HomePageClientP
               {t('cta_description')}
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
-              <Button size="lg" asChild>
+              <Button size="lg" asChild className="text-primary-foreground">
                 <Link href="/tournaments">{t('find_tournament')}</Link>
               </Button>
               <Button size="lg" variant="outline" asChild>
@@ -233,6 +234,7 @@ function FeaturedTournamentCard({ tournament, index }: { tournament: ITournament
             src={tournament.image || defaultTFTImage}
             alt={tournament.name}
             className="object-cover w-full h-full transition-transform duration-300 hover:scale-105"
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           />
           <div className="absolute inset-0 bg-transparent"></div>
           <div className="absolute bottom-4 left-4 right-4">

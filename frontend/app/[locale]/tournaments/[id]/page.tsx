@@ -104,7 +104,9 @@ export default async function TournamentPage({ params }: { params: { id: string 
                   height={1000}
                   src={tournament.image || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80'}
                   alt={tournament.name}
-                  className="object-cover"
+                  className="object-cover w-full h-full"
+                  priority
+                  sizes="(max-width: 768px) 100vw, 33vw"
                 />
               </CardHeader>
               <CardContent className="p-6 space-y-4">

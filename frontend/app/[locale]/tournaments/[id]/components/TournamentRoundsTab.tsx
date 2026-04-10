@@ -103,7 +103,7 @@ export function TournamentRoundsTab({ tournamentId, phases }: TournamentRoundsTa
                         <Link href={`/tournaments/${tournamentId}/rounds/${round.id}`}>
                           <Button
                             variant={normalizedStatus === "pending" ? "secondary" : "default"}
-                            className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-6 shadow-md shadow-primary/20"
+                            className="btn-zodiac text-white font-semibold px-6 shadow-md shadow-primary/20"
                           >
                             {normalizedStatus === "completed" && "View Results"}
                             {normalizedStatus === "in_progress" && "View Live Scoreboard"}

@@ -49,6 +49,7 @@ export function TournamentCard({ tournament, index }: { tournament: ITournament;
               src={tournament.image || defaultTFTImage}
               alt={tournament.name}
               className="object-cover w-full h-full transition-transform duration-300 hover:scale-105"
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
             />
             <div className="absolute top-4 left-4 right-4 flex justify-between">
               <Badge variant="outline" className={`${statusColor} capitalize`}>

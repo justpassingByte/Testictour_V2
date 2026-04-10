@@ -52,21 +52,21 @@ export function Footer() {
 
           {/* Links */}
           <div className="flex flex-col gap-3">
-            <h3 className="font-semibold text-foreground">Platform</h3>
+            <h2 className="font-semibold text-foreground">Platform</h2>
             <Link href="/tournaments" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Tournaments</Link>
             <Link href="/leaderboard" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Leaderboards</Link>
             <Link href="/players" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Players</Link>
           </div>
 
           <div className="flex flex-col gap-3">
-            <h3 className="font-semibold text-foreground">Community & Partners</h3>
+            <h2 className="font-semibold text-foreground">Community & Partners</h2>
             <Link href="/organize" className="text-sm text-[#D4B263] hover:text-[#f4d17f] transition-colors font-medium">Partner Program</Link>
             <Link href="https://discord.com/invite/R3rez3qDbf" target="_blank" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Join Discord</Link>
             <Link href="/jobs" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Careers / Jobs</Link>
           </div>
 
           <div className="flex flex-col gap-3">
-            <h3 className="font-semibold text-foreground">Legal</h3>
+            <h2 className="font-semibold text-foreground">Legal</h2>
             <Link href="/terms" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Terms of Service</Link>
             <Link href="/privacy" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Privacy Policy</Link>
             <Link href="/contact" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Contact Us</Link>

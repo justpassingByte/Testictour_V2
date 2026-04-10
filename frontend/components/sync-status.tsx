@@ -60,6 +60,7 @@ export function SyncStatus({ status = "idle", onSync }: SyncStatusProps) {
               className="h-7 w-7"
               onClick={handleSync}
               disabled={currentStatus === "syncing"}
+              aria-label={t("syncing")}
             >
               {currentStatus === "syncing" ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

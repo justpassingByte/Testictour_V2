@@ -42,14 +42,14 @@ export function PointSystemCard({ tournament }: PointSystemCardProps) {
   return (
     <div className="bg-muted/10 rounded-xl p-5 border border-border/50">
       <div className="pb-4">
-        <h3 className="text-sm font-semibold uppercase tracking-wider flex items-center text-muted-foreground">
+        <h2 className="text-sm font-semibold uppercase tracking-wider flex items-center text-muted-foreground">
           <Medal className="mr-2 h-4 w-4" />
           Point System
-        </h3>
+        </h2>
       </div>
       <div>
           <div>
-            {showPhaseTitle && <h4 className="font-semibold text-md mb-2">{name}</h4>}
+            {showPhaseTitle && <h3 className="font-semibold text-md mb-2">{name}</h3>}
             <div className="grid grid-cols-4 gap-x-2 gap-y-4 text-center">
               {pointsMapping.map((points: number, index: number) => {
                 const position = index + 1;
