@@ -3,6 +3,7 @@ import ApiError from '../utils/ApiError';
 import { Prisma } from '@prisma/client';
 import logger from '../utils/logger';
 import { autoAdvanceRoundQueue, checkRoundCompletionQueue, fetchMatchDataQueue } from '../lib/queues';
+import { checkAndAdvanceRound } from '../jobs/roundCompletionWorker';
 import RoundService from './RoundService';
 import crypto from 'crypto';
 import { Socket } from 'socket.io-client';
@@ -293,13 +294,14 @@ export default class MatchResultService {
                         name: updatedLobbyFinal.name,
                     }); 
 
-                    // Add job to check round completion after a lobby is marked fetchedResult = true
-                    logger.info(`Adding job to checkRoundCompletionQueue for round ${updatedLobbyFinal.round.id} (from non-checkmate branch).`);
-                    await checkRoundCompletionQueue.add(
-                      'checkRoundCompletion', 
-                      { roundId: updatedLobbyFinal.round.id }, 
-                      { jobId: `check-round-completion-${updatedLobbyFinal.round.id}`, removeOnComplete: true, removeOnFail: true }
-                    );
+                    // Trigger round completion check — queue if Redis available, else call directly
+                    logger.info(`Triggering completion check for round ${updatedLobbyFinal.round.id} (non-checkmate).`);
+                    if (checkRoundCompletionQueue) {
+                      await checkRoundCompletionQueue.add('checkRoundCompletion', { roundId: updatedLobbyFinal.round.id }, { jobId: `check-round-completion-${updatedLobbyFinal.round.id}`, removeOnComplete: true, removeOnFail: true });
+                    } else {
+                      const _roundIdCheck = updatedLobbyFinal.round.id;
+                      setTimeout(() => { checkAndAdvanceRound(_roundIdCheck).catch(e => logger.error(`[NoRedis] checkAndAdvanceRound: ${e}`)); }, 300);
+                    }
                 } 
             } 
         } else { // It's a checkmate phase
@@ -340,13 +342,14 @@ export default class MatchResultService {
                         name: updatedLobbyCheckmate.name,
                     });
 
-                    // Add job to check round completion after a checkmate lobby is marked fetchedResult = true
-                    logger.info(`Adding job to checkRoundCompletionQueue for round ${updatedLobbyCheckmate.round.id} (from checkmate branch).`);
-                    await checkRoundCompletionQueue.add(
-                      'checkRoundCompletion', 
-                      { roundId: updatedLobbyCheckmate.round.id }, 
-                      { jobId: `check-round-completion-${updatedLobbyCheckmate.round.id}`, removeOnComplete: true, removeOnFail: true }
-                    );
+                    // Trigger round completion check — queue if Redis available, else call directly
+                    logger.info(`Triggering completion check for round ${updatedLobbyCheckmate.round.id} (checkmate).`);
+                    if (checkRoundCompletionQueue) {
+                      await checkRoundCompletionQueue.add('checkRoundCompletion', { roundId: updatedLobbyCheckmate.round.id }, { jobId: `check-round-completion-${updatedLobbyCheckmate.round.id}`, removeOnComplete: true, removeOnFail: true });
+                    } else {
+                      const _roundIdCheck = updatedLobbyCheckmate.round.id;
+                      setTimeout(() => { checkAndAdvanceRound(_roundIdCheck).catch(e => logger.error(`[NoRedis] checkAndAdvanceRound: ${e}`)); }, 300);
+                    }
                 }
             }
         }

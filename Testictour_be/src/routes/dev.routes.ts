@@ -407,55 +407,56 @@ router.post('/automation/seed-env', async (req: Request, res: Response) => {
     const { prisma } = require('../services/prisma');
     const GrimoireSvc = require('../services/GrimoireService').default;
 
-    const puuid = await GrimoireSvc.fetchPuuid(gameName, tagLine, region);
-    const startTime = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
-    const result = await GrimoireSvc.fetchLatestMatch([puuid], region, startTime, undefined, undefined);
+    const { gameName2, tagLine2, gameName3, tagLine3, gameName4, tagLine4 } = req.body;
+    const riotPlayers = [
+      { gameName, tagLine },
+      { gameName: gameName2, tagLine: tagLine2 },
+      { gameName: gameName3, tagLine: tagLine3 },
+      { gameName: gameName4, tagLine: tagLine4 },
+    ].filter(p => p.gameName && p.tagLine);
 
-    if (!result.match) {
-      throw new Error(`No recent match found for ${gameName}#${tagLine}. Cannot seed realistic environment.`);
+    const startTime = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
+    let allRealParticipants: any[] = [];
+    let allMatchIds: string[] = [];
+    let fetchedAny = false;
+
+    for (const p of riotPlayers) {
+      try {
+        const puuid = await GrimoireSvc.fetchPuuid(p.gameName, p.tagLine, region);
+        const result = await GrimoireSvc.fetchLatestMatch([puuid], region, startTime, undefined, undefined);
+        if (result.match) {
+          fetchedAny = true;
+          if (result.match.participants) allRealParticipants = allRealParticipants.concat(result.match.participants);
+          const mIds = result.matchIds || [];
+          if (!mIds.includes(result.match.matchId)) mIds.unshift(result.match.matchId);
+          allMatchIds = allMatchIds.concat(mIds.filter((id: string) => id !== result.match.matchId));
+        }
+      } catch (err) {
+        console.warn(`Failed to fetch for ${p.gameName}#${p.tagLine}:`, err);
+      }
+    }
+
+    if (!fetchedAny) {
+      throw new Error(`No recent match found for any provided Riot IDs. Cannot seed realistic environment.`);
     }
 
     const numPlayers = req.body.numPlayers || (type === 'minitour' ? 8 : 16);
-    const neededMatches = Math.ceil(numPlayers / 8);
-    
-    let allRealParticipants: any[] = [];
-    const matchIds = result.matchIds || [];
-    if (!matchIds.includes(result.match.matchId)) matchIds.unshift(result.match.matchId);
-
-    // Fetch extra matches to get enough unique PUUIDs
-    for (let i = 0; i < Math.min(neededMatches + 1, matchIds.length); i++) {
-      let m;
-      if (matchIds[i] === result.match.matchId) {
-        m = result.match;
-      } else {
-        m = await GrimoireSvc.fetchMatchById(matchIds[i], region);
-      }
-      if (m && m.participants) {
-        allRealParticipants = allRealParticipants.concat(m.participants);
-      }
-    }
-
     let uniqueParticipants = Array.from(new Map(allRealParticipants.map(item => [item.puuid, item])).values());
+    allMatchIds = Array.from(new Set(allMatchIds)); // Unique queue of older matches
+    let matchIdx = 0;
 
-    // If still missing players and fallback gameName2 is provided, fetch matches for the fallback ID
-    const { gameName2, tagLine2 } = req.body;
-    if (uniqueParticipants.length < numPlayers && gameName2 && tagLine2) {
+    // Pluck older matches only if we still lack participants
+    while (uniqueParticipants.length < numPlayers && matchIdx < allMatchIds.length) {
       try {
-        const puuid2 = await GrimoireSvc.fetchPuuid(gameName2, tagLine2, region);
-        const result2 = await GrimoireSvc.fetchLatestMatch([puuid2], region, startTime, undefined, undefined);
-        if (result2.match) {
-          const matchIds2 = result2.matchIds || [result2.match.matchId];
-          for (let i = 0; i < Math.min(neededMatches + 1, matchIds2.length); i++) {
-            let m = (matchIds2[i] === result2.match.matchId) ? result2.match : await GrimoireSvc.fetchMatchById(matchIds2[i], region);
-            if (m && m.participants) {
-              allRealParticipants = allRealParticipants.concat(m.participants);
-            }
-          }
+        const m = await GrimoireSvc.fetchMatchById(allMatchIds[matchIdx], region);
+        if (m && m.participants) {
+          allRealParticipants = allRealParticipants.concat(m.participants);
           uniqueParticipants = Array.from(new Map(allRealParticipants.map(item => [item.puuid, item])).values());
         }
       } catch (err) {
-        console.warn(`Fallback Riot ID (${gameName2}#${tagLine2}) failed to fetch:`, err);
+        console.warn(`Failed older match fetch ${allMatchIds[matchIdx]}:`, err);
       }
+      matchIdx++;
     }
 
     // Filter down to the exactly requested numPlayers limit
@@ -926,6 +927,36 @@ router.post('/automation/simulate-match', async (req: Request, res: Response) =>
       });
       if (lobbies.length === 0) throw new Error("No PLAYING Tournament lobbies found");
 
+      // Pre-fetch a pool of match results — one distinct fetch per lobby so results differ
+      // We try to find a participant in each lobby who has a real PUUID and fetch their latest match.
+      const lobbyMatchResults: Map<string, any> = new Map();
+      for (const lobby of lobbies) {
+        const lobbyUserIds = lobby.participants as string[];
+        // Find a real PUUID from a participant in this specific lobby
+        const lobbyUser = await prisma.user.findFirst({
+          where: {
+            id: { in: lobbyUserIds },
+            puuid: { not: '' },
+            AND: [
+              { puuid: { not: { contains: 'puuid_' } } },
+              { puuid: { not: { contains: '_mt_' } } },
+            ],
+          },
+          select: { puuid: true },
+        });
+        if (lobbyUser?.puuid) {
+          try {
+            const lobbyResult = await GrimoireSvc.fetchLatestMatch([lobbyUser.puuid], region, startTime, undefined, undefined);
+            if (lobbyResult.match) {
+              lobbyMatchResults.set(lobby.id, lobbyResult.match);
+              continue;
+            }
+          } catch (_) {}
+        }
+        // Fallback: use the original fetched match (already fetched above)
+        lobbyMatchResults.set(lobby.id, result.match);
+      }
+
       for (const lobby of lobbies) {
         // Delete any existing simulated matches to prevent spawning duplicates when clicking multiple times
         const existingMatches = await prisma.match.findMany({ where: { lobbyId: lobby.id } });
@@ -934,7 +965,9 @@ router.post('/automation/simulate-match', async (req: Request, res: Response) =>
           await prisma.match.delete({ where: { id: m.id } });
         }
 
-        const rawMatch = JSON.parse(JSON.stringify(result.match));
+        // Use lobby-specific match data to ensure different lobbies get different results
+        const lobbyMatchData = lobbyMatchResults.get(lobby.id) || result.match;
+        const rawMatch = JSON.parse(JSON.stringify(lobbyMatchData));
         const ptsFormat = [8, 7, 6, 5, 4, 3, 2, 1];
 
         const newMatch = await prisma.match.create({

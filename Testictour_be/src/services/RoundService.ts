@@ -385,6 +385,26 @@ export default class RoundService {
     logger.info(`[Reshuffle] Completed reshuffle for tournament ${tournamentId}`);
   }
 
+  /**
+   * Safely enqueue an autoAdvance job, or call it directly if BullMQ is unavailable (no Redis).
+   * Using setTimeout(0) for direct calls avoids blocking the current call stack and
+   * prevents recursive stack overflows when advancing multiple phases in sequence.
+   */
+  private static async _queueOrCallAutoAdvance(roundId: string): Promise<void> {
+    if (autoAdvanceRoundQueue) {
+      await autoAdvanceRoundQueue.add('autoAdvanceRound', { roundId });
+    } else {
+      // Redis not available — run directly in a deferred microtask so the caller's
+      // transaction / response can finish first before we recurse.
+      logger.info(`[NoRedis] Queue unavailable — scheduling direct autoAdvance for round ${roundId}`);
+      setTimeout(() => {
+        RoundService.autoAdvance(roundId).catch(err => {
+          logger.error(`[NoRedis] Direct autoAdvance failed for round ${roundId}: ${err instanceof Error ? err.message : String(err)}`);
+        });
+      }, 100);
+    }
+  }
+
   static async autoAdvance(roundId: string) {
     // Initial check to prevent transaction for non-existent round
     const initialRound = await prisma.round.findUnique({ where: { id: roundId } });
@@ -397,6 +417,9 @@ export default class RoundService {
     let jobsToQueue: any[] = [];
 
     try {
+      // Use explicit timeouts to prevent P2028 on complex tournaments.
+      // maxWait: how long Prisma waits to obtain a connection (5s default → 10s)
+      // timeout: max transaction duration (5s default → 30s)
       result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         const currentRound = await tx.round.findUnique({
           where: { id: roundId },
@@ -544,10 +567,13 @@ export default class RoundService {
               data: { startTime: new Date(Date.now() + 1000 * 60 * 5) } // 5 minutes from now
             });
 
-            // Queue up the next round to be started immediately
-            await autoAdvanceRoundQueue.add('autoAdvanceRound', { roundId: updatedNextRound.id });
-            logger.info(`Round ${currentRound.id} completed. Next round ${updatedNextRound.id} queued for start.`);
-            return { message: `Round ${currentRound.id} completed. Next round ${updatedNextRound.id} queued.` };
+            // Return a sentinel so the next round is started OUTSIDE the transaction
+            // (avoids calling BullMQ from inside a Prisma transaction boundary)
+            return {
+              _action: 'queue_next_round',
+              nextRoundId: updatedNextRound.id,
+              message: `Round ${currentRound.id} completed. Next round ${updatedNextRound.id} queued.`,
+            };
           }
 
           logger.debug(`Round ${currentRound.id}: All rounds in current phase (${currentPhase.id}) are completed. Checking for next phase.`);
@@ -569,43 +595,20 @@ export default class RoundService {
             
             await tx.phase.update({ where: { id: nextPhase.id }, data: { status: 'in_progress' } });
             logger.info(`Phase ${nextPhase.id} status updated to 'in_progress'.`);
-            
-            // --- NEW LOGIC: Create rounds for the new phase ---
-            const numberOfRounds = (nextPhase as any).numberOfRounds || 1;
-            let lastRoundStartTime = new Date(Date.now() + 1000 * 60 * 5); // 5 minutes from now
-            let firstRoundOfNextPhaseId: string | null = null;
 
-            logger.debug(`Round ${currentRound.id}: Creating ${numberOfRounds} rounds for new phase ${nextPhase.id}.`);
-            for (let i = 1; i <= numberOfRounds; i++) {
-              const currentRoundStartTime = (i === 1)
-                ? lastRoundStartTime
-                : new Date(lastRoundStartTime.getTime() + 45 * 60 * 1000); // 45 mins between rounds
-
-              const newRound = await tx.round.create({
-                data: {
-                  phaseId: nextPhase.id,
-                  roundNumber: i,
-                  startTime: currentRoundStartTime,
-                  status: 'pending',
-                },
-              });
-
-              if (i === 1) {
-                firstRoundOfNextPhaseId = newRound.id;
-              }
-              lastRoundStartTime = currentRoundStartTime;
-              logger.debug(`Round ${currentRound.id}: Created round ${newRound.id} (number ${newRound.roundNumber}) for phase ${nextPhase.id}.`);
-            }
-
-            if (!firstRoundOfNextPhaseId) {
-              logger.error(`Round ${currentRound.id}: Failed to create the first round of the next phase ${nextPhase.id}.`);
-              throw new ApiError(500, 'Failed to create the first round of the next phase.');
-            }
-            
-            // Queue up the first round of the next phase to be started
-            await autoAdvanceRoundQueue.add('autoAdvanceRound', { roundId: firstRoundOfNextPhaseId });
-            logger.info(`Phase ${currentPhase.id} completed. Next phase ${nextPhase.id} started and first round (${firstRoundOfNextPhaseId}) queued.`);
-            return { message: `Phase ${currentPhase.id} completed. Next phase ${nextPhase.id} scheduled.` };
+            // ── IMPORTANT: Do NOT create rounds inside the transaction ──
+            // Creating rounds here causes P2028 (transaction timeout) because the transaction
+            // has already spent too long on score updates and advancement logic.
+            // Instead, return a sentinel so rounds are created AFTER the transaction commits.
+            logger.debug(`Round ${currentRound.id}: Deferring round creation for new phase ${nextPhase.id} to post-transaction.`);
+            return {
+              _action: 'create_next_phase_rounds',
+              completedPhaseId: currentPhase.id,
+              nextPhaseId: nextPhase.id,
+              numberOfRounds: (nextPhase as any).numberOfRounds || 1,
+              tournamentId: currentRound.phase.tournament.id,
+              message: `Phase ${currentPhase.id} completed. Next phase ${nextPhase.id} scheduled.`,
+            };
           }
           
           logger.info(`Round ${currentRound.id}: This was the last round of the last phase. Finalizing tournament.`);
@@ -638,16 +641,68 @@ export default class RoundService {
         // If status is neither pending nor in_progress, do nothing.
         logger.warn(`autoAdvance called for round ${roundId} with unexpected status: ${currentRound.status}`);
         return { message: 'Round in unexpected state, no action taken.' };
-      });
+      }, { maxWait: 10000, timeout: 30000 }); // 30s timeout to handle large tournaments
 
-      // After the transaction commits, queue the jobs
-      if (jobsToQueue.length > 0) {
+      // After the transaction commits, queue the jobs (only if queue is available)
+      if (jobsToQueue.length > 0 && fetchMatchDataQueue) {
         logger.info(`Queuing ${jobsToQueue.length} match data jobs after transaction commit.`);
         for (const jobData of jobsToQueue) {
           await fetchMatchDataQueue.add('fetchMatchData', jobData);
         }
       }
-      
+
+      // ── Handle 'queue_next_round' sentinel (same-phase, next sequential round) ──
+      if (result && result._action === 'queue_next_round') {
+        logger.info(`[PostTx] Queuing/starting next round ${result.nextRoundId} after transaction commit.`);
+        await RoundService._queueOrCallAutoAdvance(result.nextRoundId);
+        return result;
+      }
+
+      // ── Handle deferred round creation for next phase (post-transaction, no timeout risk) ──
+      if (result && result._action === 'create_next_phase_rounds') {
+        const { nextPhaseId, numberOfRounds, completedPhaseId, tournamentId: tId } = result;
+        logger.info(`[PostTx] Creating ${numberOfRounds} rounds for new phase ${nextPhaseId} outside transaction.`);
+
+        let lastRoundStartTime = new Date(Date.now() + 1000 * 60 * 5); // 5 min from now
+        let firstRoundOfNextPhaseId: string | null = null;
+
+        for (let i = 1; i <= numberOfRounds; i++) {
+          const currentRoundStartTime = i === 1
+            ? lastRoundStartTime
+            : new Date(lastRoundStartTime.getTime() + 45 * 60 * 1000); // 45 min between rounds
+
+          const newRound = await prisma.round.create({
+            data: {
+              phaseId: nextPhaseId,
+              roundNumber: i,
+              startTime: currentRoundStartTime,
+              status: 'pending',
+            },
+          });
+
+          if (i === 1) firstRoundOfNextPhaseId = newRound.id;
+          lastRoundStartTime = currentRoundStartTime;
+          logger.debug(`[PostTx] Created round ${newRound.id} (number ${i}) for phase ${nextPhaseId}.`);
+        }
+
+        if (!firstRoundOfNextPhaseId) {
+          logger.error(`[PostTx] Failed to create first round for phase ${nextPhaseId}.`);
+          throw new ApiError(500, 'Failed to create the first round of the next phase (post-transaction).');
+        }
+
+        // Emit bracket update so frontend sees the new rounds immediately
+        if ((global as any).io) {
+          (global as any).io.to(`tournament:${tId}`).emit('bracket_update', { tournamentId: tId });
+          (global as any).io.to(`tournament:${tId}`).emit('tournament_update', { type: 'phase_advanced' });
+        }
+
+        // Queue (or directly call) first round of next phase
+        await RoundService._queueOrCallAutoAdvance(firstRoundOfNextPhaseId!);
+        logger.info(`[PostTx] Phase ${completedPhaseId} completed. Next phase ${nextPhaseId} first round (${firstRoundOfNextPhaseId}) queued.`);
+
+        return result; // return original sentinel message
+      }
+
       // Process tournament summary after transaction if tournament was completed
       if (result && result.tournamentId) {
         // Log để biết rằng xử lý async đã được lên lịch
@@ -1135,90 +1190,97 @@ export default class RoundService {
     logger.debug(`[Scores] Finished _updateParticipantTotalScores.`);
   }
 
-  private static async _advanceByPlacement(tx: Prisma.TransactionClient, round: any, scoreThreshold: number) {
-    logger.debug(`[Advancement] Starting score-based advancement for round ${round.id} with scoreThreshold=${scoreThreshold}`);
-    logger.debug(`[Advancement] Actual scoreThreshold received: ${scoreThreshold}`);
+  private static async _advanceByPlacement(tx: Prisma.TransactionClient, round: any, topNPerLobby: number) {
+    logger.debug(`[Advancement] Starting per-lobby top-${topNPerLobby} advancement for round ${round.id}`);
 
-    // Calculate scores for all participants in this round
-    const scoreMap = await this._calculateScoresForRound(tx, round.id);
-    
-    // Get participants who have scores in this round
-    const participantUserIdsInRound = Array.from(scoreMap.keys());
-
-    if (participantUserIdsInRound.length === 0) {
-      logger.warn(`[Advancement] No participants with scores found for round ${round.id}. Skipping score advancement.`);
-      return;
-    }
-
-    const participantsInRound = await tx.participant.findMany({
-      where: {
-        userId: { in: participantUserIdsInRound },
-        tournamentId: round.phase.tournamentId, // Ensure they belong to the current tournament
-      },
-      include: { // Include roundOutcomes to update existing ones if needed
-        roundOutcomes: {
-          where: { roundId: round.id }
+    // Fetch all lobbies in this round with their match results
+    const lobbies = await tx.lobby.findMany({
+      where: { roundId: round.id },
+      include: {
+        matches: {
+          include: { matchResults: true }
         }
       }
     });
 
-    // Combine participants with their scores in the current round
-    const participantsWithScores = participantsInRound.map(p => ({
-      ...p,
-      roundScore: scoreMap.get(p.userId) || 0, // Should always find a score now
-    }));
+    if (lobbies.length === 0) {
+      logger.warn(`[Advancement] No lobbies found for round ${round.id}. Skipping.`);
+      return;
+    }
 
-    // Sort participants by their round score in descending order (for logging/understanding, not strictly needed for this logic)
-    const sortedParticipants = participantsWithScores.sort((a, b) => b.roundScore - a.roundScore);
+    // Collect sets of advanced vs eliminated userIds — processed per lobby so top-N is per lobby
+    const advancedUserIds = new Set<string>();
+    const eliminatedUserIds = new Set<string>();
 
-    logger.debug(`[Advancement] Sorted participants by round score: ${sortedParticipants.map(p => `${p.userId}: ${p.roundScore}`).join(', ')}`);
+    for (const lobby of lobbies) {
+      const lobbyParticipantIds = lobby.participants as string[];
+      if (!Array.isArray(lobbyParticipantIds) || lobbyParticipantIds.length === 0) continue;
 
-    // Process each active participant to create/update their round outcome
-    for (const participant of participantsWithScores) { // Use participantsWithScores directly, no need for sorting here for advancement logic
-      const userId = participant.userId;
-      if (!userId) continue; // Skip participants without a userId
-      
-      logger.debug(`[Advancement] Processing participant ID: ${participant.id}, User ID: ${userId}`);
+      // Build a score map for this lobby from its match results
+      const lobbyScoreMap = new Map<string, number>();
+      for (const match of lobby.matches) {
+        for (const result of match.matchResults) {
+          const prev = lobbyScoreMap.get(result.userId) || 0;
+          lobbyScoreMap.set(result.userId, prev + (result.points || 0));
+        }
+      }
 
-      const participantScoreInRound = participant.roundScore; // Already combined
-      
-      const status: "advanced" | "eliminated" = participantScoreInRound >= scoreThreshold ? 'advanced' : 'eliminated';
+      // Sort players in this lobby by score descending (higher score = better placement)
+      const lobbyRanked = lobbyParticipantIds
+        .map(uid => ({ userId: uid, score: lobbyScoreMap.get(uid) || 0 }))
+        .sort((a, b) => b.score - a.score);
+
+      logger.debug(`[Advancement] Lobby ${lobby.id} ranking (top ${topNPerLobby} advance): ${lobbyRanked.map((p, i) => `#${i+1} ${p.userId}(${p.score}pts)`).join(', ')}`);
+
+      // Top-N advance, rest are eliminated
+      lobbyRanked.forEach((player, index) => {
+        if (index < topNPerLobby) {
+          advancedUserIds.add(player.userId);
+        } else {
+          eliminatedUserIds.add(player.userId);
+        }
+      });
+    }
+
+    logger.info(`[Advancement] Round ${round.id}: ${advancedUserIds.size} will advance (top ${topNPerLobby}/lobby), ${eliminatedUserIds.size} will be eliminated`);
+
+    // Fetch participant records for everyone in this round
+    const allUserIds = [...advancedUserIds, ...eliminatedUserIds];
+    const participantsInRound = await tx.participant.findMany({
+      where: {
+        userId: { in: allUserIds },
+        tournamentId: round.phase.tournamentId,
+      },
+    });
+
+    // Calculate score map for roundOutcome records
+    const scoreMap = await this._calculateScoresForRound(tx, round.id);
+
+    // Apply advancement / elimination
+    for (const participant of participantsInRound) {
+      const status: 'advanced' | 'eliminated' = advancedUserIds.has(participant.userId) ? 'advanced' : 'eliminated';
+      const scoreInRound = scoreMap.get(participant.userId) || 0;
 
       await tx.roundOutcome.upsert({
         where: { participantId_roundId: { participantId: participant.id, roundId: round.id } },
-        update: {
-          scoreInRound: participantScoreInRound,
-          status: status,
-        },
-        create: {
-          participantId: participant.id,
-          roundId: round.id,
-          scoreInRound: participantScoreInRound,
-          status: status,
-        },
+        update: { scoreInRound, status },
+        create: { participantId: participant.id, roundId: round.id, scoreInRound, status },
       });
-      logger.info(`[Advancement] Upserted roundOutcome for participant ${participant.id} (User ${userId}) with scoreInRound: ${participantScoreInRound} and status: ${status}`);
-        
-      // If eliminated by this round's logic, mark participant as eliminated in the tournament
+
       if (status === 'eliminated') {
         await tx.participant.update({
           where: { id: participant.id },
           data: { eliminated: true },
         });
-        logger.info(`[Advancement] Marked participant ${participant.id} (User ${userId}) as eliminated.`);
+        logger.info(`[Advancement] Eliminated participant ${participant.id} (User ${participant.userId}) — placed outside top ${topNPerLobby} in their lobby.`);
+      } else {
+        logger.info(`[Advancement] Advanced participant ${participant.id} (User ${participant.userId}) — top ${topNPerLobby} in their lobby.`);
       }
     }
 
-    // Log a summary of outcome - count directly from upserted results
-    const advancedCount = await tx.roundOutcome.count({
-      where: { roundId: round.id, status: 'advanced' }
-    });
-    
-    const eliminatedCount = await tx.roundOutcome.count({
-      where: { roundId: round.id, status: 'eliminated' }
-    });
-    
-    logger.info(`[Advancement] Round ${round.id} score-based advancement complete: ${advancedCount} advanced, ${eliminatedCount} eliminated`);
+    const advancedCount = await tx.roundOutcome.count({ where: { roundId: round.id, status: 'advanced' } });
+    const eliminatedCount = await tx.roundOutcome.count({ where: { roundId: round.id, status: 'eliminated' } });
+    logger.info(`[Advancement] Round ${round.id} complete: ${advancedCount} advanced, ${eliminatedCount} eliminated.`);
   }
 
   private static async _advanceTopNPlayers(tx: Prisma.TransactionClient, round: any, topN: number) {

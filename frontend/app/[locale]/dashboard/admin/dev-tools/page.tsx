@@ -47,6 +47,10 @@ export default function DevToolsPage() {
   const [simTagLine, setSimTagLine] = useState("");
   const [simGameName2, setSimGameName2] = useState("");
   const [simTagLine2, setSimTagLine2] = useState("");
+  const [simGameName3, setSimGameName3] = useState("");
+  const [simTagLine3, setSimTagLine3] = useState("");
+  const [simGameName4, setSimGameName4] = useState("");
+  const [simTagLine4, setSimTagLine4] = useState("");
   const [simRegion, setSimRegion] = useState("sea");
   const [simTourPlayers, setSimTourPlayers] = useState("16"); // Default 16 players (2 groups)
 
@@ -386,63 +390,82 @@ export default function DevToolsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="px-4 pb-4">
-              <div className="grid md:grid-cols-4 gap-3 items-end">
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Game Name</Label>
-                  <Input
-                    placeholder="e.g. Faker"
-                    value={simGameName}
-                    onChange={e => setSimGameName(e.target.value)}
-                    className="bg-black/30 border-white/10 h-8 text-xs"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Tag Line</Label>
-                  <Input
-                    placeholder="e.g. VN2"
-                    value={simTagLine}
-                    onChange={e => setSimTagLine(e.target.value)}
-                    className="bg-black/30 border-white/10 h-8 text-xs"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Fallback Game Name</Label>
-                  <Input
-                    placeholder="(Optional) game name"
-                    value={simGameName2}
-                    onChange={e => setSimGameName2(e.target.value)}
-                    className="bg-black/30 border-white/10 h-8 text-xs"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Fallback Tag Line</Label>
-                  <Input
-                    placeholder="(Optional) VN2"
-                    value={simTagLine2}
-                    onChange={e => setSimTagLine2(e.target.value)}
-                    className="bg-black/30 border-white/10 h-8 text-xs"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Region</Label>
-                  <Select value={simRegion} onValueChange={setSimRegion}>
-                    <SelectTrigger className="bg-black/30 border-white/10 h-8 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {REGIONS.map(r => <SelectItem key={r} value={r}>{r.toUpperCase()}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-end">
-                  {simGameName && simTagLine ? (
-                    <div className="text-xs text-emerald-400 flex items-center gap-1.5 pb-1">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
-                      {simGameName}#{simTagLine} ({simRegion.toUpperCase()})
+              <div className="space-y-4">
+                <div className="grid md:grid-cols-2 gap-4 items-end">
+                  {/* Player 1 & 2 */}
+                  <div className="grid grid-cols-2 gap-3 border border-white/5 p-3 rounded-lg bg-black/20">
+                    <div className="col-span-2 text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">Player 1 (Primary)</div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Game Name</Label>
+                      <Input placeholder="e.g. Faker" value={simGameName} onChange={e => setSimGameName(e.target.value)} className="bg-black/30 border-white/10 h-8 text-xs" />
                     </div>
-                  ) : (
-                    <div className="text-xs text-yellow-500/70 pb-1">⚠ No Riot ID set — will fail if DB has no valid PUUIDs</div>
-                  )}
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Tag Line</Label>
+                      <Input placeholder="e.g. VN2" value={simTagLine} onChange={e => setSimTagLine(e.target.value)} className="bg-black/30 border-white/10 h-8 text-xs" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 border border-white/5 p-3 rounded-lg bg-black/20">
+                    <div className="col-span-2 text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">Player 2</div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Game Name</Label>
+                      <Input placeholder="(Optional)" value={simGameName2} onChange={e => setSimGameName2(e.target.value)} className="bg-black/30 border-white/10 h-8 text-xs" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Tag Line</Label>
+                      <Input placeholder="(Optional)" value={simTagLine2} onChange={e => setSimTagLine2(e.target.value)} className="bg-black/30 border-white/10 h-8 text-xs" />
+                    </div>
+                  </div>
+
+                  {/* Player 3 & 4 */}
+                  <div className="grid grid-cols-2 gap-3 border border-white/5 p-3 rounded-lg bg-black/20">
+                    <div className="col-span-2 text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">Player 3</div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Game Name</Label>
+                      <Input placeholder="(Optional)" value={simGameName3} onChange={e => setSimGameName3(e.target.value)} className="bg-black/30 border-white/10 h-8 text-xs" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Tag Line</Label>
+                      <Input placeholder="(Optional)" value={simTagLine3} onChange={e => setTagLine3(e.target.value)} className="bg-black/30 border-white/10 h-8 text-xs" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 border border-white/5 p-3 rounded-lg bg-black/20">
+                    <div className="col-span-2 text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">Player 4</div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Game Name</Label>
+                      <Input placeholder="(Optional)" value={simGameName4} onChange={e => setSimGameName4(e.target.value)} className="bg-black/30 border-white/10 h-8 text-xs" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Tag Line</Label>
+                      <Input placeholder="(Optional)" value={simTagLine4} onChange={e => setTagLine4(e.target.value)} className="bg-black/30 border-white/10 h-8 text-xs" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-end gap-3 justify-between">
+                  <div className="space-y-1 w-1/4">
+                    <Label className="text-xs text-muted-foreground">Region</Label>
+                    <Select value={simRegion} onValueChange={setSimRegion}>
+                      <SelectTrigger className="bg-black/30 border-white/10 h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {REGIONS.map(r => <SelectItem key={r} value={r}>{r.toUpperCase()}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex items-end">
+                    {simGameName && simTagLine ? (
+                      <div className="text-xs text-emerald-400 flex items-center gap-1.5 pb-1">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
+                        Provided players will be fetched in Region: {simRegion.toUpperCase()}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-yellow-500/70 pb-1">⚠ No Player 1 set — will fail if DB has no valid PUUIDs</div>
+                    )}
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -466,6 +489,10 @@ export default function DevToolsPage() {
                         tagLine: simTagLine || undefined,
                         gameName2: simGameName2 || undefined,
                         tagLine2: simTagLine2 || undefined,
+                        gameName3: simGameName3 || undefined,
+                        tagLine3: simTagLine3 || undefined,
+                        gameName4: simGameName4 || undefined,
+                        tagLine4: simTagLine4 || undefined,
                         region: simRegion,
                       })}>
                       1. Seed Users + MiniTour Lobby (7/8)
@@ -514,6 +541,10 @@ export default function DevToolsPage() {
                         tagLine: simTagLine || undefined,
                         gameName2: simGameName2 || undefined,
                         tagLine2: simTagLine2 || undefined,
+                        gameName3: simGameName3 || undefined,
+                        tagLine3: simTagLine3 || undefined,
+                        gameName4: simGameName4 || undefined,
+                        tagLine4: simTagLine4 || undefined,
                         region: simRegion,
                         numPlayers: parseInt(simTourPlayers)
                       })}>
