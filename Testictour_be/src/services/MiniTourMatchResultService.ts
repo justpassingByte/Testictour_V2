@@ -163,7 +163,10 @@ export default class MiniTourMatchResultService {
         const updatedStatusCheck = await tx.miniTourMatch.findUnique({ where: { id: miniTourMatchId }, select: { status: true } });
         logger.info(`MiniTourMatch ${miniTourMatchId} status after update: ${updatedStatusCheck?.status}`);
 
-        // Check if all matches for this lobby are COMPLETED
+        // IMPORT PRIZE CALCULATION IF NOT AT TOP -> we'll dynamically require or we can assume it's imported (wait we must import it at the top, I'll do a multi_replace for that later! but let me use require here to be safe and clean, or just use Prisma transactions)
+        const PrizeCalculationService = require('./PrizeCalculationService').default;
+
+        // Check if all CURRENTLY active matches are finished
         const remainingInProgressMatches = await tx.miniTourMatch.count({
           where: {
             miniTourLobbyId: miniTourLobby.id,
@@ -172,11 +175,197 @@ export default class MiniTourMatchResultService {
         });
 
         if (remainingInProgressMatches === 0) {
-          await tx.miniTourLobby.update({
-            where: { id: miniTourLobby.id },
-            data: { status: 'COMPLETED' },
+          // Count total completed matches
+          const completedMatchesCount = await tx.miniTourMatch.count({
+            where: {
+              miniTourLobbyId: miniTourLobby.id,
+              status: 'COMPLETED',
+            },
           });
-          logger.info(`MiniTourLobby ${miniTourLobby.id} status updated to COMPLETED as all its matches are finished.`);
+
+          const isInfinite = miniTourLobby.totalMatches === -1 || miniTourLobby.totalMatches === 0;
+          const isSeriesFinished = !isInfinite && completedMatchesCount >= miniTourLobby.totalMatches;
+
+          if (isInfinite) {
+            // INFINITE LOBBY SETTINGS: Payout PER MATCH
+            logger.info(`Infinite Match for Lobby ${miniTourLobby.id} finished. Processing per-match payout.`);
+            
+            // Get participants of this specific match
+            const currentMatchResults = await tx.miniTourMatchResult.findMany({
+              where: { miniTourMatchId: miniTourMatchId }
+            });
+            
+            // Payout calculation based on actual participant count
+            const numActualParticipants = currentMatchResults.length;
+            const dynamicDistribution = PrizeCalculationService.getDynamicPrizeDistribution(numActualParticipants);
+            
+            let totalDistributed = 0;
+            if (dynamicDistribution && miniTourLobby.prizePool > 0) {
+              const { adjusted } = PrizeCalculationService.autoAdjustPrizeStructure(dynamicDistribution, miniTourLobby.prizePool);
+              
+              const winners = currentMatchResults.filter(r => adjusted[r.placement.toString()]);
+              for (const winner of winners) {
+                const amount = adjusted[winner.placement.toString()];
+                if (amount > 0) {
+                  // Ensure frontend player profile sees the prize exactly for this match
+                  await tx.miniTourMatchResult.update({
+                    where: { id: winner.id },
+                    data: { prize: amount }
+                  });
+
+                  await tx.balance.upsert({
+                    where: { userId: winner.userId },
+                    update: { amount: { increment: amount } },
+                    create: { userId: winner.userId, amount: amount }
+                  });
+                  await tx.transaction.create({
+                    data: {
+                      userId: winner.userId,
+                      type: 'reward',
+                      amount: amount,
+                      status: 'success',
+                      refId: miniTourLobby.id
+                    }
+                  });
+                  totalDistributed += amount;
+                }
+              }
+              logger.info(`Infinite Lobby payouts distributed for match ${miniTourMatchId}. Total: ${totalDistributed}`);
+            }
+
+            // Reset lobby to WAITING and empty the prize pool if we just distributed it
+            await tx.miniTourLobby.update({
+              where: { id: miniTourLobby.id },
+              data: { 
+                status: 'WAITING',
+                prizePool: { decrement: totalDistributed } // Prevent infinite money glitch!
+              },
+            });
+            logger.info(`MiniTourLobby ${miniTourLobby.id} status updated to WAITING for infinite mode.`);
+            
+            if (ioClient) {
+              ioClient.emit('worker_mini_tour_lobby_update', {
+                miniTourLobbyId: miniTourLobby.id,
+                status: 'WAITING',
+                notification: 'Match Completed! Lobby is ready for the next game.',
+              });
+            }
+          } 
+          else if (isSeriesFinished) {
+            // MULTI-MATCH SERIES FINISHED: Payout cumulatively
+            logger.info(`Series for Lobby ${miniTourLobby.id} finished. Processing cumulative payout.`);
+
+            const allLobbyResults = await tx.miniTourMatchResult.findMany({
+              where: { miniTourMatch: { miniTourLobbyId: miniTourLobby.id } }
+            });
+
+            // Group by userId -> { totalPoints, firstPlaces }
+            const playerStats: Record<string, { totalPoints: number, firstPlaces: number }> = {};
+            allLobbyResults.forEach(r => {
+              if (!playerStats[r.userId]) playerStats[r.userId] = { totalPoints: 0, firstPlaces: 0 };
+              playerStats[r.userId].totalPoints += (r.points || 0);
+              if (r.placement === 1) playerStats[r.userId].firstPlaces += 1;
+            });
+
+            // Create array and sort
+            const sortedPlayers = Object.entries(playerStats)
+              .map(([userId, stats]) => ({ userId, ...stats }))
+              .sort((a, b) => b.totalPoints - a.totalPoints || b.firstPlaces - a.firstPlaces);
+
+            // Assign ranks (Handle ties if points and top 1s are identical)
+            const rankedPlayers: Array<{ userId: string, rank: number }> = [];
+            let currentRank = 1;
+            let tiedRankCount = 0;
+            let previousPlayer: { totalPoints: number, firstPlaces: number } | null = null;
+
+            for (const player of sortedPlayers) {
+              if (
+                previousPlayer !== null &&
+                (player.totalPoints < previousPlayer.totalPoints || 
+                (player.totalPoints === previousPlayer.totalPoints && player.firstPlaces < previousPlayer.firstPlaces))
+              ) {
+                currentRank += tiedRankCount;
+                tiedRankCount = 1;
+              } else if (previousPlayer === null || (player.totalPoints === previousPlayer.totalPoints && player.firstPlaces === previousPlayer.firstPlaces)) {
+                tiedRankCount++;
+              } else {
+                tiedRankCount = 1;
+              }
+              previousPlayer = player;
+              rankedPlayers.push({ userId: player.userId, rank: currentRank });
+            }
+
+            // Payout calculation
+            const numActualParticipants = rankedPlayers.length;
+            const dynamicDistribution = PrizeCalculationService.getDynamicPrizeDistribution(numActualParticipants);
+            
+            if (dynamicDistribution && miniTourLobby.prizePool > 0) {
+              const { adjusted } = PrizeCalculationService.autoAdjustPrizeStructure(dynamicDistribution, miniTourLobby.prizePool);
+              
+              for (const rp of rankedPlayers) {
+                const amount = adjusted[rp.rank.toString()];
+                if (amount && amount > 0) {
+                  // For the very final visual representation, update the LAST match's result's prize
+                  // (so the frontend MatchDetailsModal can catch it)
+                  const lastResult = allLobbyResults
+                    .filter(r => r.userId === rp.userId)
+                    .sort((a, b) => a.id.localeCompare(b.id)).pop();
+                  
+                  if (lastResult) {
+                    await tx.miniTourMatchResult.update({
+                      where: { id: lastResult.id },
+                      data: { prize: amount }
+                    });
+                  }
+
+                  await tx.balance.upsert({
+                    where: { userId: rp.userId },
+                    update: { amount: { increment: amount } },
+                    create: { userId: rp.userId, amount: amount }
+                  });
+                  await tx.transaction.create({
+                    data: {
+                      userId: rp.userId,
+                      type: 'reward',
+                      amount: amount,
+                      status: 'success',
+                      refId: miniTourLobby.id
+                    }
+                  });
+                }
+              }
+              logger.info(`Series Lobby payouts distributed for lobby ${miniTourLobby.id}.`);
+            }
+
+            await tx.miniTourLobby.update({
+              where: { id: miniTourLobby.id },
+              data: { status: 'COMPLETED' },
+            });
+            logger.info(`MiniTourLobby ${miniTourLobby.id} status updated to COMPLETED as all matches finished.`);
+            
+            if (ioClient) {
+              ioClient.emit('worker_mini_tour_lobby_update', {
+                miniTourLobbyId: miniTourLobby.id,
+                status: 'COMPLETED',
+                notification: 'Tournament has officially ended! Prize distribution complete.',
+              });
+            }
+          }
+          // If multi-match but NOT finished, do nothing. It goes to WAITING manually when players want to start next?
+          // Actually, if it's not finished, maybe it should automatically go to WAITING so they can ready up for match 2!
+          else if (!isSeriesFinished) {
+            await tx.miniTourLobby.update({
+              where: { id: miniTourLobby.id },
+              data: { status: 'WAITING' },
+            });
+            logger.info(`MiniTourLobby ${miniTourLobby.id} status updated to WAITING for next match in series.`);
+            if (ioClient) {
+              ioClient.emit('worker_mini_tour_lobby_update', {
+                miniTourLobbyId: miniTourLobby.id,
+                status: 'WAITING',
+              });
+            }
+          }
         }
 
         return { message: 'MiniTour match results processed', newJob: jobToQueue };

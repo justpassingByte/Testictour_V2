@@ -4,11 +4,12 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { CheckCircle2, Circle, Clock, AlertTriangle, ChevronRight, Wifi, WifiOff, Timer, Users, Zap, ShieldAlert, Play, Pause, ExternalLink } from 'lucide-react';
+import { CheckCircle2, Circle, Clock, AlertTriangle, ChevronRight, ChevronDown, Wifi, WifiOff, Timer, Users, Zap, ShieldAlert, Play, Pause, ExternalLink, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useLobbySocket } from '@/app/hooks/useLobbySocket';
 import { useUserStore } from '@/app/stores/userStore';
@@ -17,7 +18,7 @@ import { GrimoireParticipantData, GrimoireTraitData, GrimoireUnitData, GrimoireA
 import { MatchCompPanel, isGrimoireMatchData } from '@/components/match/MatchCompPanel';
 
 // ── Countdown Timer ──────────────────────────────────────────────────────────
-function useCountdown(phaseStartedAt: string | undefined, phaseDurationSeconds: number) {
+function useCountdown(phaseStartedAt: string | undefined, phaseDurationSeconds: number, countUp: boolean = false) {
   const [remaining, setRemaining] = useState(0);
 
   useEffect(() => {
@@ -25,15 +26,20 @@ function useCountdown(phaseStartedAt: string | undefined, phaseDurationSeconds: 
 
     const tick = () => {
       const started = new Date(phaseStartedAt).getTime();
-      const endsAt = started + phaseDurationSeconds * 1000;
-      const rem = Math.max(0, Math.floor((endsAt - Date.now()) / 1000));
-      setRemaining(rem);
+      if (countUp) {
+        const elapsed = Math.floor((Date.now() - started) / 1000);
+        setRemaining(Math.max(0, elapsed));
+      } else {
+        const endsAt = started + phaseDurationSeconds * 1000;
+        const rem = Math.max(0, Math.floor((endsAt - Date.now()) / 1000));
+        setRemaining(rem);
+      }
     };
 
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [phaseStartedAt, phaseDurationSeconds]);
+  }, [phaseStartedAt, phaseDurationSeconds, countUp]);
 
   const m = Math.floor(remaining / 60).toString().padStart(2, '0');
   const s = (remaining % 60).toString().padStart(2, '0');
@@ -184,6 +190,8 @@ export default function LobbyPageClient({ lobbyId, tournamentId, initialState, l
   const userId = currentUser?.id;
   const router = useRouter();
 
+  const [liveLobbyData, setLiveLobbyData] = useState(lobbyData);
+
   const { state, isConnected, error, toggleReady, requestDelay, isReadyToggling } = useLobbySocket({
     lobbyId,
     userId,
@@ -191,42 +199,84 @@ export default function LobbyPageClient({ lobbyId, tournamentId, initialState, l
     initialState,
   });
 
+  // Fetch lobby data on WebSocket events (No teardown when state changes)
+  useEffect(() => {
+    let isSubscribed = true;
+    const checkUpdates = async () => {
+      try {
+        // Fetch fresh lobby data using timestamp to bypass all caches (browser/Next.js) safely without CORS issues
+        const lobbyRes = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'}/api/lobbies/${lobbyId}?t=${Date.now()}`);
+        const lobbyJson = await lobbyRes.json();
+        
+        // Ensure we actually got new data before updating
+        if (lobbyJson.success && isSubscribed) {
+          setLiveLobbyData(lobbyJson.data);
+        }
+      } catch (e) {
+        // Ignore fetch errors
+      }
+    };
+
+    checkUpdates(); // Initial fetch
+
+    const { io } = require('socket.io-client');
+    const socket = io(process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000', {
+      transports: ['websocket', 'polling'],
+      withCredentials: true,
+    });
+
+    socket.on('connect', () => {
+      socket.emit('join', { tournamentId, lobbyId });
+    });
+
+    socket.on('tournament_update', () => {
+      if (isSubscribed) checkUpdates();
+    });
+
+    // Also trigger update on lobby state changes in case tournament_update is missed
+    socket.on('lobby:state_update', () => {
+      if (isSubscribed) checkUpdates();
+    });
+
+    return () => {
+      isSubscribed = false;
+      socket.disconnect();
+    };
+  }, [lobbyId, tournamentId]); // Removed state?.state to prevent socket teardown
+
   // Auto navigate to new lobby if advanced
   useEffect(() => {
-    if (state?.state === 'FINISHED' && userId) {
-      let isSubscribed = true;
+    if (userId && state?.state === 'FINISHED') {
       const checkNextLobby = async () => {
         try {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'}/api/players/${userId}/incoming-matches`, { credentials: 'include' });
-          const data = await res.json();
-          if (data.success && data.data && isSubscribed) {
+          const nextLobbyRes = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'}/api/players/${userId}/incoming-matches?t=${Date.now()}`, { credentials: 'include' });
+          const data = await nextLobbyRes.json();
+          if (data.success && data.data) {
             const match = data.data.find((m: any) => m.tournamentId === tournamentId);
             if (match && match.lobbyId && match.lobbyId !== lobbyId) {
               router.push(`/tournaments/${tournamentId}/lobbies/${match.lobbyId}`);
             }
           }
-        } catch (e) {
-          // Ignore fetch errors during polling
-        }
+        } catch (e) {}
       };
-
-      checkNextLobby();
-      const interval = setInterval(checkNextLobby, 5000);
-      return () => {
-        isSubscribed = false;
-        clearInterval(interval);
-      };
+      
+      // Add slight delay to ensure DB commits are finalized before routing
+      const timer = setTimeout(checkNextLobby, 1000);
+      return () => clearTimeout(timer);
     }
   }, [state?.state, userId, tournamentId, lobbyId, router]);
 
+  const isPlaying = state?.state === 'PLAYING';
   const { formatted: timeLeft, remaining } = useCountdown(
     state?.phaseStartedAt,
     state?.remainingDurationOnPause ?? state?.phaseDuration ?? 0,
+    isPlaying
   );
 
   const isReady = state && userId ? state.readyPlayerIds.includes(userId) : false;
+  const isParticipant = userId && (liveLobbyData?.participantDetails?.some((p: any) => p.id === userId) || liveLobbyData?.participants?.includes(userId));
   const hasUsedDelay = state?.delayRequests.some(d => d.userId === userId) ?? false;
-  const canDelay = !hasUsedDelay && (state?.totalDelaysUsed ?? 0) < 3 && state?.state !== 'FINISHED';
+  const canDelay = isParticipant && !hasUsedDelay && (state?.totalDelaysUsed ?? 0) < 3 && state?.state !== 'FINISHED';
   const sc = state ? stateConfig(state.state) : null;
 
   return (
@@ -238,10 +288,10 @@ export default function LobbyPageClient({ lobbyId, tournamentId, initialState, l
         <Link href="/tournaments" className="hover:text-foreground">Tournaments</Link>
         <ChevronRight className="h-3.5 w-3.5" />
         <Link href={`/tournaments/${tournamentId}`} className="hover:text-foreground">
-          {lobbyData?.round?.phase?.tournament?.name || 'Tournament'}
+          {liveLobbyData?.round?.phase?.tournament?.name || 'Tournament'}
         </Link>
         <ChevronRight className="h-3.5 w-3.5" />
-        <span className="text-foreground font-medium">{lobbyData?.name || 'Lobby'}</span>
+        <span className="text-foreground font-medium">{liveLobbyData?.name || 'Lobby'}</span>
       </div>
 
       {state ? (
@@ -256,17 +306,17 @@ export default function LobbyPageClient({ lobbyId, tournamentId, initialState, l
                   <div>
                     <div className="flex items-center gap-3 mb-2">
                       <Badge variant="outline" className="text-primary border-primary/20">
-                        {lobbyData?.round?.phase?.type || 'Tournament Round'}
+                        {liveLobbyData?.round?.phase?.type || 'Tournament Round'}
                       </Badge>
                       <Badge variant="outline" className="text-muted-foreground">
-                        Round {lobbyData?.round?.roundNumber || '?'}
+                        Round {liveLobbyData?.round?.roundNumber || '?'}
                       </Badge>
                     </div>
                     <h1 className="text-3xl md:text-4xl font-black uppercase tracking-tight mb-2 text-transparent bg-clip-text bg-gradient-to-r from-white to-white/70">
-                      {lobbyData?.name || 'Lobby'}
+                      {liveLobbyData?.name || 'Lobby'}
                     </h1>
                     <p className="text-muted-foreground max-w-xl">
-                      {lobbyData?.round?.phase?.tournament?.name}
+                      {liveLobbyData?.round?.phase?.tournament?.name}
                     </p>
                   </div>
                 </div>
@@ -295,7 +345,7 @@ export default function LobbyPageClient({ lobbyId, tournamentId, initialState, l
 
               <TabsContent value="players" className="space-y-4 pt-4">
                 <div className="grid gap-4 sm:grid-cols-2">
-                  {lobbyData?.participantDetails?.map((p: any) => (
+                  {liveLobbyData?.participantDetails?.map((p: any) => (
                     <Link key={p.id} href={`/players/${p.id}`}>
                       <Card className="border-white/10 bg-card/60 hover:bg-card/80 transition-colors backdrop-blur-lg cursor-pointer">
                         <CardContent className="p-4 flex items-center justify-between">
@@ -313,7 +363,7 @@ export default function LobbyPageClient({ lobbyId, tournamentId, initialState, l
                       </Card>
                     </Link>
                   ))}
-                  {(!lobbyData?.participantDetails || lobbyData.participantDetails.length === 0) && (
+                  {(!liveLobbyData?.participantDetails || liveLobbyData.participantDetails.length === 0) && (
                      <div className="col-span-2 py-8 text-center text-muted-foreground border border-dashed rounded-lg">
                        Waiting for participants to be assigned...
                      </div>
@@ -322,59 +372,87 @@ export default function LobbyPageClient({ lobbyId, tournamentId, initialState, l
               </TabsContent>
 
               <TabsContent value="matches" className="space-y-4 pt-4">
-                {state.state === 'FINISHED' && lobbyData?.matches?.length > 0 ? (
-                  lobbyData.matches.map((match: any, idx: number) => {
-                    const hasGrimoire = isGrimoireMatchData(match.matchData);
-                    return (
-                      <div key={match.id} className="space-y-2">
-                        {lobbyData.matches.length > 1 && (
-                          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide px-1">
-                            Match {idx + 1}
-                          </p>
-                        )}
-                        <Card className="border-white/10 bg-card/60 backdrop-blur-lg">
-                          <CardHeader className="pb-2">
-                            <div className="flex items-center justify-between">
-                              <CardTitle className="text-base">Match Results</CardTitle>
-                              {match.matchIdRiotApi && (
-                                <Badge variant="outline" className="text-[10px] font-mono">
-                                  {match.matchIdRiotApi.split('_').pop()?.slice(0, 8)}…
+                {['PLAYING', 'FINISHED'].includes(state.state) ? (
+                  <div className="space-y-3">
+                    {Array.from({ length: Math.max(liveLobbyData?.round?.phase?.matchesPerRound || 1, liveLobbyData?.matches?.length || 0) }).map((_, idx: number) => {
+                      const match = liveLobbyData?.matches?.[idx];
+                      const isSynced = match && !!match.fetchedAt && (match.matchResults?.length > 0 || match.miniTourMatchResults?.length > 0);
+                      const hasGrimoire = match && isGrimoireMatchData(match.matchData);
+                      const key = match?.id || `pending-${idx}`;
+                      
+                      return (
+                        <Collapsible key={key} className="border border-white/10 rounded-xl bg-card/60 backdrop-blur-lg overflow-hidden" defaultOpen={isSynced}>
+                          <CollapsibleTrigger className="flex items-center justify-between w-full p-4 hover:bg-muted/50 transition-colors">
+                            <div className="text-left flex items-center gap-3">
+                              <Badge variant="outline" className="text-xs">Match {idx + 1}</Badge>
+                              <div>
+                                <p className="font-semibold text-sm">Match Results</p>
+                                <div className="text-xs text-muted-foreground mt-0.5">
+                                  Status: <Badge variant={isSynced ? 'default' : 'secondary'} className="text-[10px] ml-1">{isSynced ? 'Completed' : (state.state === 'PLAYING' ? 'In Progress' : 'Pending Riot Sync')}</Badge>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              {match?.matchIdRiotApi && (
+                                <Badge variant="outline" className="text-[10px] font-mono opacity-50 hidden sm:inline-flex">
+                                  Riot ID: {match.matchIdRiotApi}
                                 </Badge>
                               )}
+                              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 [[data-state=open]>&]:-rotate-180" />
                             </div>
-                          </CardHeader>
-                          <CardContent>
-                            {hasGrimoire ? (
-                              <MatchCompPanel
-                                matchData={match.matchData as GrimoireMatchData}
-                                resultMap={Object.fromEntries(
-                                  (match.matchResults ?? []).map((r: any) => [
-                                    r.user?.puuid ?? r.userId,
-                                    { placement: r.placement, points: r.points }
-                                  ])
-                                )}
-                              />
+                          </CollapsibleTrigger>
+                          <CollapsibleContent className="px-4 pb-4">
+                            {isSynced && hasGrimoire ? (
+                              <div className="mt-2 bg-zinc-950/50 rounded-xl overflow-hidden border border-zinc-800">
+                                <MatchCompPanel
+                                  matchData={match.matchData as GrimoireMatchData}
+                                  resultMap={Object.fromEntries(
+                                    (match.matchResults ?? []).map((r: any) => [
+                                      r.user?.puuid ?? r.userId,
+                                      { placement: r.placement, points: r.points }
+                                    ])
+                                  )}
+                                />
+                              </div>
                             ) : (
-                              <div className="text-sm text-emerald-400 font-medium py-2">
-                                Match finished. Results are syncing from Riot API...
+                              <div className="space-y-3 pt-2">
+                                {!isSynced && ['PLAYING', 'FINISHED'].includes(state.state) ? (
+                                  <div className="flex flex-col items-center justify-center gap-3 py-8 bg-blue-500/5 rounded-xl border border-blue-500/20 text-center">
+                                    <Loader2 className="h-10 w-10 animate-spin text-blue-500 opacity-80" />
+                                    <div>
+                                      <p className="text-sm font-semibold text-blue-400">Waiting for Riot APIs...</p>
+                                      <p className="text-xs text-muted-foreground mt-1 text-blue-400/80 max-w-[250px]">
+                                        System is actively polling Riot for match completion.
+                                      </p>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="flex flex-col items-center justify-center gap-3 py-8 bg-muted/20 rounded-xl border border-dashed border-white/10 text-center">
+                                    <Zap className="h-10 w-10 text-blue-400 opacity-40" />
+                                    <div>
+                                      <p className="text-sm font-semibold text-foreground/80">No details available</p>
+                                      <p className="text-xs text-muted-foreground mt-1 max-w-[250px]">
+                                        {isSynced && !hasGrimoire 
+                                          ? "Results are synced, but full match data is unavailable." 
+                                          : "Match data is currently unavailable."}
+                                      </p>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             )}
-                          </CardContent>
-                        </Card>
-                      </div>
-                    );
-                  })
-                ) : state.state === 'FINISHED' ? (
-                  <Card className="border-white/10 bg-card/60 backdrop-blur-lg">
-                    <CardContent className="py-8 text-center text-sm text-emerald-400 font-medium">
-                      Match finished. Results are syncing from Riot API...
-                    </CardContent>
-                  </Card>
+                          </CollapsibleContent>
+                        </Collapsible>
+                      );
+                    })}
+                  </div>
                 ) : (
-                  <Card className="border-white/10 bg-card/60 backdrop-blur-lg">
-                    <CardContent>
-                      <div className="text-sm text-muted-foreground text-center py-6 border border-dashed rounded-lg border-white/10">
-                        Match is not finished yet. Results will appear here after the match concludes.
+                  <Card className="border-white/10 bg-card/60 backdrop-blur-lg shadow-inner">
+                    <CardContent className="p-0">
+                      <div className="flex flex-col items-center text-sm text-muted-foreground text-center py-12 px-4 rounded-lg bg-black/20">
+                        <Timer className="h-8 w-8 text-muted-foreground/50 mb-3" />
+                        <p className="font-medium text-foreground/80">Match is not started yet.</p>
+                        <p className="text-xs mt-1">Results will appear here automatically after the match concludes.</p>
                       </div>
                     </CardContent>
                   </Card>
@@ -454,7 +532,7 @@ export default function LobbyPageClient({ lobbyId, tournamentId, initialState, l
                 )}
 
                 {/* Actions */}
-                {userId && (
+                {isParticipant && (
                   <div className="space-y-2 pt-2">
                     {['WAITING', 'READY_CHECK', 'GRACE_PERIOD'].includes(state.state) && (
                       <Button
@@ -494,7 +572,7 @@ export default function LobbyPageClient({ lobbyId, tournamentId, initialState, l
               </CardHeader>
               <CardContent>
                 <div className="space-y-1">
-                  {lobbyData?.participantDetails?.map((p: any) => {
+                  {liveLobbyData?.participantDetails?.map((p: any) => {
                     const rid = p.id;
                     const ready = state.readyPlayerIds.includes(rid);
                     return (
@@ -504,7 +582,7 @@ export default function LobbyPageClient({ lobbyId, tournamentId, initialState, l
                       </div>
                     );
                   })}
-                  {!lobbyData?.participantDetails && state.readyPlayerIds.map((rid) => (
+                  {!liveLobbyData?.participantDetails && state.readyPlayerIds.map((rid) => (
                     <div key={rid} className="flex justify-between items-center text-sm py-1 border-b border-white/5 last:border-0">
                        <span className="text-foreground">{participantMap[rid] ?? rid.slice(0, 8)}</span>
                        <CheckCircle2 className="h-3 w-3 text-green-400" />

@@ -1,5 +1,6 @@
 import { Server } from 'socket.io';
 import LobbyStateService from '../services/LobbyStateService';
+import MiniTourLobbyStateService from '../services/MiniTourLobbyStateService';
 import logger from '../utils/logger';
 
 export default function registerTournamentSocket(io: Server) {
@@ -21,6 +22,28 @@ export default function registerTournamentSocket(io: Server) {
       } catch (err: any) {
         socket.emit('lobby:error', { message: err.message });
         logger.warn(`lobby:ready_toggle error (lobby=${lobbyId}, user=${userId}): ${err.message}`);
+      }
+    });
+
+    // Minitour ready toggle
+    socket.on('minitour:ready_toggle', async ({ lobbyId, userId }) => {
+      try {
+        const state = await MiniTourLobbyStateService.toggleReady(lobbyId, userId);
+        // Emits 'minitour_lobby_state_update' inside toggleReady, but emit here just in case wrapper needed
+        // The service already emits it to 'minitour:lobbyId'
+      } catch (err: any) {
+        socket.emit('minitour_lobby:error', { message: err.message });
+        logger.warn(`minitour:ready_toggle error (lobby=${lobbyId}, user=${userId}): ${err.message}`);
+      }
+    });
+
+    // On reconnect / page load: send current state snapshot
+    socket.on('minitour:sync', async ({ lobbyId }) => {
+      try {
+        const state = await MiniTourLobbyStateService.getLobbyState(lobbyId);
+        socket.emit('minitour_lobby_state_update', state);
+      } catch (err: any) {
+        socket.emit('minitour_lobby:error', { message: err.message });
       }
     });
 

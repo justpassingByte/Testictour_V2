@@ -84,8 +84,8 @@ export default function AdminLoyaltyPage() {
           api.get('/admin/loyalty/tiers').catch(() => null),
           api.get('/admin/loyalty/items').catch(() => null),
         ])
-        if (t?.data?.tiers?.length > 0) setTiers(t.data.tiers)
-        if (it?.data?.items?.length > 0) setItems(it.data.items)
+        if (t?.data?.tiers?.length > 0) setTiers(t!.data.tiers)
+        if (it?.data?.items?.length > 0) setItems(it!.data.items)
       } catch {}
     }
     fetch()

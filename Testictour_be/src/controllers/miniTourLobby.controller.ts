@@ -476,10 +476,8 @@ export const joinMiniTourLobby = asyncHandler(async (req: Request, res: Response
 // @desc    Start a MiniTour Lobby game
 // @route   POST /api/minitour-lobbies/:id/start
 // @access  Public (any player can start)
-export const startMiniTourLobby = asyncHandler(async (req: Request, res: Response) => {
-  const { id } = req.params;
-
-  const updatedLobby = await prisma.$transaction(async (tx) => {
+export const startMiniTourLobbyInternal = async (id: string) => {
+  return await prisma.$transaction(async (tx) => {
     // 1. Find the lobby and its current participants with user details
     const lobby = await tx.miniTourLobby.findUnique({
       where: { id },
@@ -496,6 +494,7 @@ export const startMiniTourLobby = asyncHandler(async (req: Request, res: Respons
           },
         },
         creator: { select: { region: true } },
+        matches: { select: { id: true } } // Fetch matches to know if it's the 1st match
       },
     });
 
@@ -511,6 +510,54 @@ export const startMiniTourLobby = asyncHandler(async (req: Request, res: Respons
     // Check for minimum players
     if (lobby.participants.length < 2) {
       throw new Error('Not enough players in the lobby to start a new match.');
+    }
+
+    // BO1/Infinite Mode: Check if this is a subsequent match
+    const isInfinite = lobby.totalMatches === -1 || lobby.totalMatches === 0;
+    let addedPrizePool = 0;
+    
+    if (isInfinite && lobby.matches.length > 0 && lobby.entryFee > 0) {
+      // Need to deduct entry fee for all players for Match N
+      for (const p of lobby.participants) {
+        const userBalance = await tx.balance.findUnique({ where: { userId: p.userId } });
+        if (!userBalance || userBalance.amount < lobby.entryFee) {
+          throw new Error(`Cannot start: Player ${p.user.id} does not have enough coins (${lobby.entryFee}) for the next match.`);
+        }
+        
+        await tx.balance.update({
+          where: { userId: p.userId },
+          data: { amount: { decrement: lobby.entryFee } }
+        });
+
+        // Split fees
+        const CREATOR_FEE_PERCENT = 0.10;
+        const PLATFORM_FEE_PERCENT = 0.10;
+        const creatorFee = lobby.entryFee * CREATOR_FEE_PERCENT;
+        const platformFee = lobby.entryFee * PLATFORM_FEE_PERCENT;
+        const distributable = lobby.entryFee - creatorFee - platformFee;
+
+        if (creatorFee > 0) {
+          await tx.balance.update({
+            where: { userId: lobby.creatorId },
+            data: { amount: { increment: creatorFee } }
+          });
+        }
+
+        if (platformFee > 0) {
+          await tx.balance.update({
+            where: { userId: 'SYSTEM_USER_ID' },
+            data: { amount: { increment: platformFee } }
+          });
+        }
+
+        await tx.transaction.create({
+          data: {
+            userId: p.userId, type: 'entry_fee', amount: -lobby.entryFee, status: 'success', refId: id,
+          }
+        });
+
+        addedPrizePool += distributable;
+      }
     }
 
     // 2. Create a new placeholder match with a start time.
@@ -533,11 +580,15 @@ export const startMiniTourLobby = asyncHandler(async (req: Request, res: Respons
     });
 
     // 3. Update lobby status
-    const dataToUpdate: { status?: 'IN_PROGRESS' } = {};
+    const dataToUpdate: any = {};
 
     // If this is the first match, update lobby status to IN_PROGRESS
     if (lobby.status === 'WAITING') {
       dataToUpdate.status = 'IN_PROGRESS';
+    }
+
+    if (addedPrizePool > 0) {
+       dataToUpdate.prizePool = { increment: addedPrizePool };
     }
 
     const updatedLobbyState = await tx.miniTourLobby.update({
@@ -559,7 +610,11 @@ export const startMiniTourLobby = asyncHandler(async (req: Request, res: Respons
       }
     });
   });
+};
 
+export const startMiniTourLobby = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const updatedLobby = await startMiniTourLobbyInternal(id);
   res.status(200).json({ success: true, data: updatedLobby });
 });
 
@@ -905,9 +960,8 @@ export const submitManualResult = asyncHandler(async (req: Request, res: Respons
       },
     });
 
-    // Check if all matches are completed
     const totalCompletedMatches = lobby.matches.filter(m => m.status === 'COMPLETED').length + 1;
-    if (totalCompletedMatches >= lobby.totalMatches) {
+    if (totalCompletedMatches >= lobby.totalMatches && lobby.totalMatches > 0) {
       await tx.miniTourLobby.update({
         where: { id: lobbyId },
         data: { status: 'COMPLETED' },

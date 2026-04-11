@@ -60,7 +60,7 @@ router.post('/test-riot-match', async (req: Request, res: Response) => {
           execSync('npx ts-node scripts/seedUsers.ts', { stdio: 'inherit' });
           execSync('npx ts-node scripts/seedGrimoireTournament.ts', { stdio: 'inherit' });
           execSync('npx ts-node scripts/testMiniTourLobby.ts', { stdio: 'inherit' });
-        } catch(seedingErr) {
+        } catch (seedingErr) {
           console.error('Initial seeding scripts failed:', seedingErr);
         }
         tour = await prisma.tournament.findFirst({ orderBy: { createdAt: 'desc' } });
@@ -74,7 +74,7 @@ router.post('/test-riot-match', async (req: Request, res: Response) => {
       if (allMiniTours.length > 1) {
         for (let i = 1; i < allMiniTours.length; i++) {
           const oldLobbyId = allMiniTours[i].id;
-          await prisma.miniTourMatchResult.deleteMany({ where: { miniTourMatch: { miniTourLobbyId: oldLobbyId } }});
+          await prisma.miniTourMatchResult.deleteMany({ where: { miniTourMatch: { miniTourLobbyId: oldLobbyId } } });
           await prisma.miniTourMatch.deleteMany({ where: { miniTourLobbyId: oldLobbyId } });
           await prisma.miniTourLobbyParticipant.deleteMany({ where: { miniTourLobbyId: oldLobbyId } });
           await prisma.miniTourLobby.deleteMany({ where: { id: oldLobbyId } });
@@ -95,7 +95,7 @@ router.post('/test-riot-match', async (req: Request, res: Response) => {
 
         if (lobby) {
           const tourMatchData = JSON.parse(JSON.stringify(result.match));
-          const lobbyParticipants = lobby.participants as { userId: string; [key: string]: any }[];
+          const lobbyParticipants = lobby.participants as { userId: string;[key: string]: any }[];
           const ptsFormat = [8, 7, 6, 5, 4, 3, 2, 1];
           const userMappingArr = [];
 
@@ -158,9 +158,10 @@ router.post('/test-riot-match', async (req: Request, res: Response) => {
           data: {
             miniTourLobbyId: miniTourLobby.id,
             matchIdRiotApi: result.match.matchId,
-            matchData: mtMatchData as any,
-            status: 'COMPLETED',
-            fetchedAt: new Date()
+            matchData: { info: mtMatchData, metadata: (result.match as any).metadata } as any,
+            status: 'IN_PROGRESS',
+            fetchedAt: new Date(),
+            startTime: new Date(mtMatchData.gameStartTimestamp ? mtMatchData.gameStartTimestamp * 1000 : Date.now())
           }
         });
 
@@ -169,16 +170,10 @@ router.post('/test-riot-match', async (req: Request, res: Response) => {
             where: { id: m.mtP.userId },
             data: { puuid: m.uniquePuuid, riotGameName: m.realP.gameName || m.mtP.user?.username || 'Player' }
           });
-          await prisma.miniTourMatchResult.create({
-            data: {
-              miniTourMatchId: mtMatch.id,
-              userId: m.mtP.userId,
-              placement: m.realP.placement,
-              points: ptsFormat[m.index] || 0,
-              prize: prizeFormat[m.index] || 0
-            }
-          });
         }
+
+        const MiniTourMatchResultService = require('../services/MiniTourMatchResultService').default;
+        await MiniTourMatchResultService.processMiniTourMatchResults(mtMatch.id, { info: mtMatchData, metadata: (result.match as any).metadata }, req.app.get('io'));
 
         seededLobbyIds.push(`MiniTourMatch:${mtMatch.id}`);
       }
@@ -398,11 +393,221 @@ import RoundService from '../services/RoundService';
  */
 router.post('/automation/seed-env', async (req: Request, res: Response) => {
   try {
-    const { execSync } = require('child_process');
-    execSync('npx ts-node scripts/seedUsers.ts', { stdio: 'inherit' });
-    execSync('npx ts-node scripts/seedGrimoireTournament.ts', { stdio: 'inherit' });
-    execSync('npx ts-node scripts/testMiniTourLobby.ts', { stdio: 'inherit' });
-    return res.json({ success: true, message: "Environment seeded successfully" });
+    const { gameName, tagLine, region = 'sea', type = 'minitour' } = req.body;
+
+    // If no specific Riot ID given, use the old generic seed scripts
+    if (!gameName || !tagLine) {
+      const { execSync } = require('child_process');
+      execSync('npx ts-node scripts/seedUsers.ts', { stdio: 'inherit' });
+      execSync('npx ts-node scripts/seedGrimoireTournament.ts', { stdio: 'inherit' });
+      execSync('npx ts-node scripts/testMiniTourLobby.ts', { stdio: 'inherit' });
+      return res.json({ success: true, message: "Generic environment seeded successfully" });
+    }
+
+    const { prisma } = require('../services/prisma');
+    const GrimoireSvc = require('../services/GrimoireService').default;
+
+    const puuid = await GrimoireSvc.fetchPuuid(gameName, tagLine, region);
+    const startTime = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
+    const result = await GrimoireSvc.fetchLatestMatch([puuid], region, startTime, undefined, undefined);
+
+    if (!result.match) {
+      throw new Error(`No recent match found for ${gameName}#${tagLine}. Cannot seed realistic environment.`);
+    }
+
+    const numPlayers = req.body.numPlayers || (type === 'minitour' ? 8 : 16);
+    const neededMatches = Math.ceil(numPlayers / 8);
+    
+    let allRealParticipants: any[] = [];
+    const matchIds = result.matchIds || [];
+    if (!matchIds.includes(result.match.matchId)) matchIds.unshift(result.match.matchId);
+
+    // Fetch extra matches to get enough unique PUUIDs
+    for (let i = 0; i < Math.min(neededMatches + 1, matchIds.length); i++) {
+      let m;
+      if (matchIds[i] === result.match.matchId) {
+        m = result.match;
+      } else {
+        m = await GrimoireSvc.fetchMatchById(matchIds[i], region);
+      }
+      if (m && m.participants) {
+        allRealParticipants = allRealParticipants.concat(m.participants);
+      }
+    }
+
+    let uniqueParticipants = Array.from(new Map(allRealParticipants.map(item => [item.puuid, item])).values());
+
+    // If still missing players and fallback gameName2 is provided, fetch matches for the fallback ID
+    const { gameName2, tagLine2 } = req.body;
+    if (uniqueParticipants.length < numPlayers && gameName2 && tagLine2) {
+      try {
+        const puuid2 = await GrimoireSvc.fetchPuuid(gameName2, tagLine2, region);
+        const result2 = await GrimoireSvc.fetchLatestMatch([puuid2], region, startTime, undefined, undefined);
+        if (result2.match) {
+          const matchIds2 = result2.matchIds || [result2.match.matchId];
+          for (let i = 0; i < Math.min(neededMatches + 1, matchIds2.length); i++) {
+            let m = (matchIds2[i] === result2.match.matchId) ? result2.match : await GrimoireSvc.fetchMatchById(matchIds2[i], region);
+            if (m && m.participants) {
+              allRealParticipants = allRealParticipants.concat(m.participants);
+            }
+          }
+          uniqueParticipants = Array.from(new Map(allRealParticipants.map(item => [item.puuid, item])).values());
+        }
+      } catch (err) {
+        console.warn(`Fallback Riot ID (${gameName2}#${tagLine2}) failed to fetch:`, err);
+      }
+    }
+
+    // Filter down to the exactly requested numPlayers limit
+    uniqueParticipants = uniqueParticipants.slice(0, numPlayers);
+
+    // Upsert the users from those match histories
+    const dbUsers = [];
+    for (let i = 0; i < uniqueParticipants.length; i++) {
+      const p = uniqueParticipants[i];
+      const u = await prisma.user.upsert({
+        where: { puuid: p.puuid },
+        update: { riotGameName: p.gameName || `Player${i}`, riotGameTag: p.tagLine || 'VN1' },
+        create: {
+          username: (p.gameName || `TestUser${i}`) + `_${i}_${Date.now().toString(36)}`,
+          email: `${p.puuid.slice(0, 10)}@test.com`,
+          puuid: p.puuid,
+          riotGameName: p.gameName || `Player${i}`,
+          riotGameTag: p.tagLine || 'VN1',
+          password: 'dummy_dev_password',
+          region: region,
+        }
+      });
+      dbUsers.push(u);
+    }
+
+    if (type === 'minitour') {
+      const lobby = await prisma.miniTourLobby.create({
+        data: {
+          name: `Realistic MiniTour - ${gameName}`,
+          status: 'WAITING',
+          entryFee: 0,
+          prizePool: 1000,
+          creatorId: dbUsers[0].id,
+          currentPlayers: dbUsers.length,
+          maxPlayers: 8,
+          gameMode: 'Standard',
+          skillLevel: 'Any',
+          theme: 'Default',
+          entryType: 'free',
+          prizeDistribution: { "1": 500, "2": 300, "3": 200 }
+        }
+      });
+      for (const u of dbUsers) {
+        await prisma.miniTourLobbyParticipant.create({
+          data: { miniTourLobbyId: lobby.id, userId: u.id }
+        });
+      }
+      try {
+        const io = (global as any).__io || (global as any).io;
+        if (io) io.emit('tournaments_refresh');
+      } catch (_) { }
+      return res.json({ success: true, message: `Realistic MiniTour seeded with history from ${gameName}`, lobbyId: lobby.id });
+    } else {
+      // Tournament mode realistic seed
+      const numPlayers = req.body.numPlayers || 8;
+      const numberOfGroups = req.body.numberOfGroups || Math.ceil(numPlayers / 32);
+
+      const admin = await prisma.user.findFirst({ where: { role: 'admin' } });
+      const tour = await prisma.tournament.create({
+        data: {
+          name: `Realistic Tournament - ${gameName} - ${numPlayers}P`,
+          description: 'Live test tournament seeded from history.',
+          image: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80',
+          region, startTime: new Date(Date.now() + 6 * 60 * 1000), // starts in 6 minutes to allow pre-assign
+          entryFee: 100, maxPlayers: numPlayers, status: 'UPCOMING',
+          organizerId: admin?.id || dbUsers[0]?.id,
+          expectedParticipants: numPlayers, actualParticipantsCount: numPlayers,
+          registrationDeadline: new Date(Date.now() + 5 * 60 * 1000),
+          prizeStructure: [50, 30, 20, 0, 0, 0, 0, 0]
+        }
+      });
+
+      // Seed requested number of players (use real dbUsers first, pad with dummy users)
+      const allUsers = [];
+      for (let i = 0; i < numPlayers; i++) {
+        if (i < dbUsers.length) {
+          allUsers.push(dbUsers[i]);
+          await prisma.participant.create({ data: { userId: dbUsers[i].id, tournamentId: tour.id, paid: true } });
+        } else {
+          // create dummy user
+          const dummyId = `dummy_${Date.now()}_${i}`;
+          const dummyPuuiid = `puuid_${Date.now()}_${i}`;
+          const dummy = await prisma.user.create({
+            data: {
+              username: `Dummy_${Date.now().toString(36)}_${i}`,
+              email: `${dummyPuuiid}@test.com`,
+              puuid: dummyPuuiid,
+              riotGameName: `DummyPlayer_${i}`,
+              riotGameTag: 'TEST',
+              password: 'dummy_dev_password',
+              region: region,
+            }
+          });
+          allUsers.push(dummy);
+          await prisma.participant.create({ data: { userId: dummy.id, tournamentId: tour.id, paid: true } });
+        }
+      }
+      const participants = await prisma.participant.findMany({ where: { tournamentId: tour.id }, include: { user: true } });
+
+      const phase1 = await prisma.phase.create({
+        data: {
+          tournamentId: tour.id,
+          name: 'Group Stage',
+          phaseNumber: 1,
+          type: 'elimination',
+          status: 'WAITING',
+          lobbySize: 8,
+          matchesPerRound: 1,
+          numberOfRounds: numberOfGroups,
+          advancementCondition: { type: 'placement', value: 4 }
+        }
+      });
+
+      const firstRound = await prisma.round.create({
+        data: { phaseId: phase1.id, roundNumber: 1, status: 'pending', startTime: new Date(Date.now() + 6 * 60 * 1000) }
+      });
+
+      // Automatically seed a Phase 2 (Checkmate Finals)
+      const phase2 = await prisma.phase.create({
+        data: {
+          tournamentId: tour.id,
+          name: 'Finals (Checkmate)',
+          phaseNumber: 2,
+          type: 'checkmate',
+          status: 'pending',
+          lobbySize: 8,
+          matchesPerRound: 1,
+          numberOfRounds: 1, // Will spawn infinitely until Checkmate is reached
+          advancementCondition: 'checkmate',
+          pointsMapping: { "1": 8, "2": 7, "3": 6, "4": 5, "5": 4, "6": 3, "7": 2, "8": 1 }
+        }
+      });
+      // automatically create rounds for the groups
+      for (let g = 2; g <= numberOfGroups; g++) {
+        await prisma.round.create({
+          data: { phaseId: phase1.id, roundNumber: g, status: 'pending', startTime: new Date(Date.now() + 6 * 60 * 1000) }
+        });
+      }
+
+      try {
+        const io = (global as any).__io || (global as any).io;
+        if (io) io.emit('tournaments_refresh');
+      } catch (_) { }
+
+      return res.json({
+        success: true,
+        message: `Realistic Tournament seeded. Ready to Start.`,
+        tournamentId: tour.id,
+        roundId: firstRound.id,
+        registeredCount: participants.length
+      });
+    }
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
   }
@@ -441,31 +646,26 @@ router.post('/automation/ready-toggle', async (req: Request, res: Response) => {
   try {
     const { prisma } = require('../services/prisma');
     const { lobbyId, userId } = req.body;
+    const LobbyStateService = require('../services/LobbyStateService').default;
+
     if (lobbyId && userId) {
       const state = await LobbyStateService.toggleReady(lobbyId, userId);
       return res.json({ success: true, state });
     }
 
-    const latestLobby = await prisma.lobby.findFirst({
+    // Toggle ALL waiting lobbies
+    const waitingLobbies = await prisma.lobby.findMany({
       where: { state: 'WAITING' },
-      orderBy: { phaseStartedAt: 'desc' }
     });
 
-    if (latestLobby) {
-      const parsed = latestLobby.participants as any[];
-      const readyObj: Record<string, boolean> = {};
-      parsed.forEach((p: any) => readyObj[p.userId] = true);
-      
-      const io = (req as any).io;
-      if (io) {
-        io.to(`lobby_${latestLobby.id}`).emit('lobby_state_update', {
-          id: latestLobby.id,
-          state: 'STARTING',
-          readyStatus: readyObj
-        });
+    if (waitingLobbies.length > 0) {
+      for (const lobby of waitingLobbies) {
+        // Force start the lobby using actual service so it's fully synchronized via Redis and BullMQ
+        await LobbyStateService.forceStart(lobby.id);
       }
-      return res.json({ success: true, message: "Forced Ready for latest Tournament Lobby", lobbyId: latestLobby.id });
+      return res.json({ success: true, message: `Forced Ready / Started ${waitingLobbies.length} WAITING lobbies.`, count: waitingLobbies.length });
     }
+
     return res.json({ success: true, message: "No WAITING lobby found to ready" });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
@@ -482,7 +682,7 @@ router.post('/automation/auto-start', async (req: Request, res: Response) => {
     let targetLobbyId = req.body.lobbyId;
 
     if (!targetLobbyId && type === 'minitour') {
-      const minitour = await prisma.miniTourLobby.findFirst({ where: { status: 'WAITING' }, orderBy: { createdAt: 'desc' }});
+      const minitour = await prisma.miniTourLobby.findFirst({ where: { status: 'WAITING' }, orderBy: { createdAt: 'desc' } });
       if (minitour) targetLobbyId = minitour.id;
     } else if (!targetLobbyId) {
       const lobby = await prisma.lobby.findFirst({ where: { state: 'WAITING' } });
@@ -496,17 +696,81 @@ router.post('/automation/auto-start', async (req: Request, res: Response) => {
         where: { id: targetLobbyId },
         data: { status: 'IN_PROGRESS' },
       });
-      const existing = await prisma.miniTourMatch.findFirst({ where: { miniTourLobbyId: targetLobbyId }});
+      const existing = await prisma.miniTourMatch.findFirst({ where: { miniTourLobbyId: targetLobbyId } });
       if (!existing) {
-        await prisma.miniTourMatch.create({ data: { miniTourLobbyId: targetLobbyId, status: 'PENDING' }});
+        await prisma.miniTourMatch.create({ data: { miniTourLobbyId: targetLobbyId, status: 'PENDING' } });
       }
+
+      try {
+        const io = (global as any).__io || (global as any).io;
+        if (io) {
+          io.to(`minitour:${targetLobbyId}`).emit('minitour_lobby_update', {
+            miniTourLobbyId: updated.id,
+            status: updated.status,
+          });
+          io.emit('tournaments_refresh');
+        }
+      } catch (_) { }
+
       return res.json({ success: true, lobby: updated });
     } else {
-      const updated = await prisma.lobby.update({
-        where: { id: targetLobbyId },
-        data: { state: 'IN_PROGRESS' }
+      // Find all waiting or starting lobbies
+      const targetLobbies = await prisma.lobby.findMany({
+        where: { state: { in: ['WAITING', 'STARTING', 'READY_CHECK', 'GRACE_PERIOD'] } },
+        include: { round: { include: { phase: { include: { tournament: true } } } } }
       });
-      return res.json({ success: true, lobby: updated });
+
+      if (targetLobbies.length === 0) {
+        return res.json({ success: false, error: 'No WAITING or active lobbies found to start' });
+      }
+
+      const tournamentIds = new Set<string>();
+
+      for (const lobby of targetLobbies) {
+        await prisma.lobby.update({
+          where: { id: lobby.id },
+          data: { state: 'PLAYING' }
+        });
+
+        await prisma.round.update({
+          where: { id: lobby.roundId },
+          data: { status: 'in_progress' }
+        });
+        await prisma.phase.update({
+          where: { id: lobby.round.phaseId },
+          data: { status: 'in_progress' }
+        });
+        await prisma.tournament.update({
+          where: { id: lobby.round.phase.tournamentId },
+          data: { status: 'in_progress' }
+        });
+        tournamentIds.add(lobby.round.phase.tournamentId);
+
+        try {
+          const LobbyStateService = require('../services/LobbyStateService').default;
+          await LobbyStateService.transitionPhase(lobby.id, lobby.state, 'PLAYING');
+
+          const io = (global as any).__io || (global as any).io;
+          if (io) {
+            io.to(`lobby:${lobby.id}`).emit('lobby:state_update', await LobbyStateService.getLobbyState(lobby.id).catch(() => null));
+          }
+        } catch (_) { }
+      }
+
+      try {
+        const io = (global as any).__io || (global as any).io;
+        if (io) {
+          for (const tId of tournamentIds) {
+            io.to(`tournament:${tId}`).emit('tournament_update');
+          }
+          io.emit('tournaments_refresh');
+        }
+      } catch (_) { }
+
+      return res.json({
+        success: true,
+        message: `Successfully started ${targetLobbies.length} lobbies`
+      });
     }
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
@@ -540,13 +804,13 @@ router.post('/automation/simulate-match', async (req: Request, res: Response) =>
       // Fallback: find a user in DB whose PUUID looks valid (not a dev-mutated one)
       const userWithPuuid = await prisma.user.findFirst({
         where: {
-          puuid: { not: null },
+          puuid: { not: '' },
           AND: [
             { puuid: { not: { contains: '_mt_' } } },
             { puuid: { not: { contains: '_ft_' } } },
             { puuid: { not: { contains: '_tour_' } } },
           ],
-          riotGameName: { not: null },
+          riotGameName: { not: '' },
         },
         select: { puuid: true, riotGameName: true, riotGameTag: true },
       });
@@ -578,7 +842,7 @@ router.post('/automation/simulate-match', async (req: Request, res: Response) =>
         include: { participants: true, matches: { where: { status: 'PENDING' } } }
       });
       if (!lobby) throw new Error("No IN_PROGRESS MiniTour lobby found");
-      
+
       const matchDb = lobby.matches[0];
       if (!matchDb) throw new Error("No pending match in MiniTour to override");
 
@@ -591,54 +855,172 @@ router.post('/automation/simulate-match', async (req: Request, res: Response) =>
       await prisma.miniTourMatchResult.deleteMany({
         where: { miniTourMatchId: matchDb.id },
       });
-      
+
       await prisma.miniTourMatch.update({
         where: { id: matchDb.id },
         data: { matchIdRiotApi: result.match.matchId + '_sim_' + Date.now(), matchData: rawMatch as any, status: 'COMPLETED', fetchedAt: new Date() }
       });
 
-      for (let i = 0; i < lobby.participants.length && i < rawMatch.participants.length; i++) {
-        const p = lobby.participants[i];
-        const realP = rawMatch.participants[i];
+      // Map users properly by PUUID so real Riot history works without overwriting overrides
+      const lobbyParticipantsWithUsers = await prisma.miniTourLobbyParticipant.findMany({
+        where: { miniTourLobbyId: lobby.id },
+        include: { user: true }
+      });
+
+      for (let i = 0; i < lobbyParticipantsWithUsers.length; i++) {
+        const p = lobbyParticipantsWithUsers[i];
+        const realP = rawMatch.participants.find((rp: any) => rp.puuid === p.user.puuid) || rawMatch.participants[i];
+
         await prisma.miniTourMatchResult.create({
           data: {
             miniTourMatchId: matchDb.id,
             userId: p.userId,
-            placement: realP.placement,
-            points: ptsFormat[i] || 0,
-            prize: prizeFormat[i] || 0
+            placement: realP?.placement || i + 1,
+            points: ptsFormat[realP?.placement ? realP.placement - 1 : i] || 0,
+            prize: prizeFormat[realP?.placement ? realP.placement - 1 : i] || 0
           }
         });
       }
-      await prisma.miniTourLobby.update({ where: { id: lobby.id }, data: { status: 'COMPLETED' }});
+      const completedCount = await prisma.miniTourMatch.count({ where: { miniTourLobbyId: lobby.id, status: 'COMPLETED' } });
+      const isInfinite = lobby.totalMatches === -1 || lobby.totalMatches === 0;
+      const nextStatus = isInfinite ? 'WAITING' : (completedCount >= lobby.totalMatches ? 'COMPLETED' : 'WAITING');
+
+      const updatedMiniTourLobby = await prisma.miniTourLobby.update({
+        where: { id: lobby.id },
+        data: { status: nextStatus },
+        include: { matches: { include: { miniTourMatchResults: true } }, participants: { include: { user: true } } }
+      });
+
+      // UPDATE PLAYER PROFILE STATS DIRECTLY FOR DEV TOOLS
+      try {
+        const SummaryManagerService = require('../services/SummaryManagerService').default;
+        for (const p of lobbyParticipantsWithUsers) {
+          await SummaryManagerService.updateMiniTourParticipantSummary(lobby.id, p.userId);
+        }
+      } catch (err) {
+        console.error("Failed to update minitour summary in dev route:", err);
+      }
+
+      try {
+        const io = (global as any).__io || (global as any).io;
+        if (io) {
+          io.to(`minitour:${lobby.id}`).emit('minitour_lobby_update', {
+            miniTourLobbyId: updatedMiniTourLobby.id,
+            status: updatedMiniTourLobby.status,
+            matches: updatedMiniTourLobby.matches,
+            participants: updatedMiniTourLobby.participants,
+            name: updatedMiniTourLobby.name,
+          });
+          // Notify player profile pages of affected users
+          for (const p of lobbyParticipantsWithUsers) {
+            io.emit('player_profile_update', { userId: p.userId });
+          }
+        }
+      } catch (_) { }
 
       return res.json({ success: true, message: "Simulated Riot Match for MiniTour Lobby", lobbyId: lobby.id });
     } else {
-      const lobby = await prisma.lobby.findFirst({
-        where: { state: 'IN_PROGRESS' },
-        orderBy: { roundId: 'desc' },
+      const lobbies = await prisma.lobby.findMany({
+        where: { state: 'PLAYING' },
         include: { round: { include: { phase: true } } }
       });
-      if (!lobby) throw new Error("No IN_PROGRESS Tournament lobby found");
+      if (lobbies.length === 0) throw new Error("No PLAYING Tournament lobbies found");
 
-      const participants = lobby.participants as any[];
-      const rawMatch = JSON.parse(JSON.stringify(result.match));
-      const ptsFormat = [8, 7, 6, 5, 4, 3, 2, 1];
+      for (const lobby of lobbies) {
+        // Delete any existing simulated matches to prevent spawning duplicates when clicking multiple times
+        const existingMatches = await prisma.match.findMany({ where: { lobbyId: lobby.id } });
+        for (const m of existingMatches) {
+          await prisma.matchResult.deleteMany({ where: { matchId: m.id } });
+          await prisma.match.delete({ where: { id: m.id } });
+        }
 
-      const newMatch = await prisma.match.create({
-        data: { lobbyId: lobby.id, matchIdRiotApi: result.match.matchId + '_sim_' + Date.now(), matchData: rawMatch as any }
-      });
+        const rawMatch = JSON.parse(JSON.stringify(result.match));
+        const ptsFormat = [8, 7, 6, 5, 4, 3, 2, 1];
 
-      for (let i = 0; i < participants.length && i < 8; i++) {
-        const p = participants[i];
-        const realP = rawMatch.participants[i];
-        await prisma.matchResult.create({
-          data: { matchId: newMatch.id, userId: p.userId, placement: realP?.placement || i+1, points: ptsFormat[i] || 0 }
+        const newMatch = await prisma.match.create({
+          data: { lobbyId: lobby.id, matchIdRiotApi: result.match.matchId + '_sim_' + Date.now(), matchData: rawMatch as any, fetchedAt: new Date() }
         });
-      }
 
-      await prisma.lobby.update({ where: { id: lobby.id }, data: { state: 'COMPLETED', completedMatchesCount: { increment: 1 } } });
-      return res.json({ success: true, message: "Simulated Riot Match for Tournament Lobby", lobbyId: lobby.id });
+        const participantsWithUsers = await prisma.participant.findMany({
+          where: {
+            userId: { in: lobby.participants as string[] },
+            tournamentId: lobby.round.phase.tournamentId
+          },
+          include: { user: true }
+        });
+
+        for (let i = 0; i < participantsWithUsers.length; i++) {
+          const p = participantsWithUsers[i];
+          const realP = rawMatch.participants.find((rp: any) => rp.puuid === p.user.puuid) || rawMatch.participants[i];
+
+          const pointsToAssign = ptsFormat[realP?.placement ? realP.placement - 1 : i] || 0;
+          await prisma.matchResult.create({
+            data: {
+              matchId: newMatch.id,
+              userId: p.userId,
+              placement: realP?.placement || i + 1,
+              points: pointsToAssign
+            }
+          });
+
+          await prisma.participant.update({
+            where: { id: p.id },
+            data: { scoreTotal: { increment: pointsToAssign } }
+          });
+        }
+
+        await prisma.lobby.update({
+          where: { id: lobby.id },
+          data: { completedMatchesCount: { increment: 1 }, fetchedResult: true }
+        });
+
+        // UPDATE PLAYER PROFILE STATS DIRECTLY FOR DEV TOOLS
+        try {
+          const SummaryManagerService = require('../services/SummaryManagerService').default;
+          const resultsForSummary = participantsWithUsers.map((p: any, i: number) => {
+            const realP = rawMatch.participants.find((rp: any) => rp.puuid === p.user.puuid) || rawMatch.participants[i];
+            return {
+              userId: p.userId,
+              placement: realP?.placement || i + 1,
+              points: ptsFormat[realP?.placement ? realP.placement - 1 : i] || 0
+            };
+          });
+          await SummaryManagerService.createMatchSummaries(newMatch.id, resultsForSummary);
+        } catch (err) {
+          console.error("Failed to update tournament summary in dev route:", err);
+        }
+
+        // Use unified state transition so Redis is synced and Socket.IO emits
+        const LobbyStateService = require('../services/LobbyStateService').default;
+        await LobbyStateService.transitionPhase(lobby.id, 'PLAYING', 'FINISHED');
+
+        try {
+          const io = (global as any).__io || (global as any).io;
+          if (io) {
+            const snapshot = await LobbyStateService.getLobbyState(lobby.id).catch(() => null);
+            if (snapshot) io.to(`lobby:${lobby.id}`).emit('lobby:state_update', snapshot);
+
+            // Explicitly emit tournament_update so UI refetches immediately regardless of state changes
+            // This is crucial because if lobby is already FINISHED, transitionPhase skips emitting
+            io.to(`tournament:${lobby.round.phase.tournamentId}`).emit('tournament_update');
+            // Notify player profile pages of affected users
+            for (const p of participantsWithUsers) {
+              io.emit('player_profile_update', { userId: p.userId });
+            }
+          }
+        } catch (_) { }
+      } // End of lobbies loop
+
+      try {
+        const io = (global as any).__io || (global as any).io;
+        if (io && lobbies.length > 0) io.to(`tournament:${lobbies[0].round.phase.tournamentId}`).emit('tournament_update');
+      } catch (_) { }
+
+      return res.json({
+        success: true,
+        message: `Simulated Riot Match for ${lobbies.length} Lobbies`,
+        tournamentId: lobbies[0]?.round?.phase?.tournamentId,
+      });
     }
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
@@ -661,13 +1043,48 @@ router.post('/automation/assign-lobby', async (req: Request, res: Response) => {
       });
       if (targetRound) targetRoundId = targetRound.id;
     } else {
-      targetRound = await prisma.round.findUnique({ where: { id: targetRoundId }});
+      targetRound = await prisma.round.findUnique({ where: { id: targetRoundId } });
     }
 
     if (!targetRound) throw new Error("No valid Round found to assign lobbies");
-    
+
     await RoundService.autoAdvance(targetRound.id);
     return res.json({ success: true, message: "Lobbies assigned / round advanced for " + targetRound.roundNumber, roundId: targetRound.id });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /dev/automation/pre-assign-groups
+ * Pre-assigns participants into groups (rounds) and lobbies for the given tournament.
+ */
+router.post('/automation/pre-assign-groups', async (req: Request, res: Response) => {
+  try {
+    const { prisma } = require('../services/prisma');
+    let tournamentId = req.body.tournamentId;
+
+    if (!tournamentId) {
+      const tour = await prisma.tournament.findFirst({
+        where: { status: { in: ['pending', 'UPCOMING', 'REGISTRATION'] } },
+        orderBy: { createdAt: 'desc' }
+      });
+      if (tour) tournamentId = tour.id;
+    }
+
+    if (!tournamentId) throw new Error("No valid tournament found to pre-assign groups.");
+
+    const result = await RoundService.preAssignGroups(tournamentId);
+
+    try {
+      const io = (global as any).__io || (global as any).io;
+      if (io) {
+        io.to(`tournament:${tournamentId}`).emit('tournament_update');
+        io.to(`tournament:${tournamentId}`).emit('bracket_update', { tournamentId });
+      }
+    } catch (_) { }
+
+    return res.json({ success: true, ...result, tournamentId });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
   }
@@ -684,7 +1101,7 @@ router.post('/automation/advance-round', async (req: Request, res: Response) => 
 
     if (!targetRoundId) {
       targetRound = await prisma.round.findFirst({
-        where: { lobbies: { some: { state: 'COMPLETED' } } },
+        where: { lobbies: { some: { state: 'FINISHED' } } },
         orderBy: { roundNumber: 'desc' },
         include: { phase: true }
       });

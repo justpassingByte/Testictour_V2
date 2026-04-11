@@ -39,10 +39,35 @@ registerNotificationSocket(io);
 
 // Listener for worker-emitted lobby updates
 io.on('connection', (socket) => {
+  socket.on('join_minitour', ({ lobbyId }) => {
+    if (lobbyId) {
+      socket.join(`minitour:${lobbyId}`);
+      logger.info(`Client joined minitour room: minitour:${lobbyId}`);
+    }
+  });
+
   socket.on('worker_lobby_update', (data) => {
-    const { tournamentId, ...lobbyData } = data;
-    logger.info(`Received worker_lobby_update for tournament ${tournamentId}. Re-emitting to clients.`);
-    io.to(`tournament:${tournamentId}`).emit('lobby_update', lobbyData);
+    const { tournamentId, lobbyId, ...lobbyData } = data;
+    logger.info(`Received worker_lobby_update for tournament ${tournamentId}, lobby ${lobbyId}. Re-emitting to clients.`);
+    io.to(`tournament:${tournamentId}`).emit('tournament_update', lobbyData);
+    if (lobbyId) {
+      io.to(`lobby:${lobbyId}`).emit('lobby:state_update', lobbyData);
+    }
+    // Also notify player profile pages — emit globally (filtered on frontend by userId)
+    io.emit('player_profile_update', {});
+  });
+
+  socket.on('worker_mini_tour_lobby_update', (data) => {
+    const { miniTourLobbyId, ...lobbyData } = data;
+    logger.info(`Received worker_mini_tour_lobby_update for MiniTour ${miniTourLobbyId}. Re-emitting to clients.`);
+    io.to(`minitour:${miniTourLobbyId}`).emit('minitour_lobby_update', lobbyData);
+    // Also notify player profile pages for affected participants
+    if (lobbyData.participants && Array.isArray(lobbyData.participants)) {
+      for (const p of lobbyData.participants) {
+        const userId = p.userId || p.id;
+        if (userId) io.emit('player_profile_update', { userId });
+      }
+    }
   });
 });
 

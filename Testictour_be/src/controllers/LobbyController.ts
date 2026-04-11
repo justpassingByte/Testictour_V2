@@ -5,7 +5,7 @@ export default {
   async list(req: Request, res: Response, next: NextFunction) {
     try {
       const lobbies = await LobbyService.list(req.params.roundId);
-      res.json({ lobbies });
+      res.json({ success: true, data: lobbies });
     } catch (err) {
       next(err);
     }
@@ -13,7 +13,7 @@ export default {
   async create(req: Request, res: Response, next: NextFunction) {
     try {
       const lobby = await LobbyService.create(req.params.roundId, req.body);
-      res.json({ lobby });
+      res.json({ success: true, data: lobby });
     } catch (err) {
       next(err);
     }
@@ -21,8 +21,8 @@ export default {
   async detail(req: Request, res: Response, next: NextFunction) {
     try {
       const lobby = await LobbyService.getById(req.params.id);
-      if (!lobby) return res.status(404).json({ error: 'Lobby not found' });
-      res.json({ data: lobby });
+      if (!lobby) return res.status(404).json({ success: false, error: 'Lobby not found' });
+      res.json({ success: true, data: lobby });
     } catch (err) {
       next(err);
     }

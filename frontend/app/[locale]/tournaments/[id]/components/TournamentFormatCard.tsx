@@ -31,9 +31,7 @@ export function TournamentFormatCard({ tournament }: TournamentFormatCardProps) 
           <div className="text-muted-foreground">Prize Pool:</div>
           <div className="font-medium">
             {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(
-              (tournament.entryFee || 0) *
-              (tournament.registered || 0) *
-              (1 - (tournament.hostFeePercent || 0))
+              tournament.budget || 0
             )}
           </div>
         </div>
@@ -44,18 +42,18 @@ export function TournamentFormatCard({ tournament }: TournamentFormatCardProps) 
               console.log('Debug advancementCondition:', phase.advancementCondition);
               let ruleString = phase.type.charAt(0).toUpperCase() + phase.type.slice(1).replace(/_/g, ' ');
 
-              if (phase.advancementCondition) {
+              if (phase.advancementCondition && typeof phase.advancementCondition === 'object') {
                 // Check if it's IAdvancementConditionTopN or IAdvancementConditionPlacement (both have 'type' and 'value')
-                if ('type' in phase.advancementCondition && typeof phase.advancementCondition.type === 'string') {
-                  if (phase.advancementCondition.type === 'top_n_scores') {
-                    ruleString += ` (Top ${phase.advancementCondition.value} Score)`;
-                  } else if (phase.advancementCondition.type === 'placement') {
-                    ruleString += ` (Top ${phase.advancementCondition.value} Placement)`;
+                if ('type' in phase.advancementCondition && typeof (phase.advancementCondition as any).type === 'string') {
+                  if ((phase.advancementCondition as any).type === 'top_n_scores') {
+                    ruleString += ` (Top ${(phase.advancementCondition as any).value} Score)`;
+                  } else if ((phase.advancementCondition as any).type === 'placement') {
+                    ruleString += ` (Top ${(phase.advancementCondition as any).value} Placement)`;
                   }
                 }
                 // Check if it's IAdvancementConditionCheckmate (has 'winCondition' and 'pointsToActivate')
                 else if ('winCondition' in phase.advancementCondition && 'pointsToActivate' in phase.advancementCondition) {
-                  ruleString += ` (Points to Activate: ${phase.advancementCondition.pointsToActivate})`;
+                  ruleString += ` (Points to Activate: ${(phase.advancementCondition as any).pointsToActivate})`;
                 }
               }
               return ruleString;

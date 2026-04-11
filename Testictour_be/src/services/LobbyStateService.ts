@@ -150,6 +150,29 @@ export default class LobbyStateService {
       // worker can call autoResolveIntervention() (not just transitionPhase)
       await LobbyTimerService.scheduleAutoResolve(lobbyId, 900_000);
     }
+
+    try {
+      const lobbyWithTourn = await prisma.lobby.findUnique({
+        where: { id: lobbyId },
+        include: { round: { include: { phase: true } } }
+      });
+      
+      const io = (global as any).__io || (global as any).io;
+      if (io) {
+        if (lobbyWithTourn?.round?.phase?.tournamentId) {
+          io.to(`tournament:${lobbyWithTourn.round.phase.tournamentId}`).emit('tournament_update');
+        }
+        
+        // Broadcast the new LobbyStateSnapshot to the lobby room
+        try {
+          const snapshot = await LobbyStateService.getLobbyState(lobbyId);
+          io.to(`lobby:${lobbyId}`).emit('lobby:state_update', snapshot);
+          logger.info(`LobbyStateService: emitted lobby:state_update for lobby ${lobbyId} to state ${to}`);
+        } catch (stateErr) {
+          logger.error(`LobbyStateService: failed to fetch state snapshot for lobby ${lobbyId} after transition ${stateErr}`);
+        }
+      }
+    } catch (_) {}
   }
 
   // ── Player Actions ──
@@ -280,9 +303,9 @@ export default class LobbyStateService {
 
     const result: IncomingMatch[] = [];
     for (const lobby of lobbies) {
-      // participants is stored as JSON objects: { participantId, userId, username }
-      const participants = lobby.participants as { userId: string; participantId: string; username: string }[];
-      const isParticipant = Array.isArray(participants) && participants.some(p => p.userId === userId);
+      // participants is stored as an array of userIds (strings)
+      const participants = lobby.participants as string[];
+      const isParticipant = Array.isArray(participants) && participants.includes(userId);
       if (!isParticipant) continue;
 
       const state = lobby.state as LobbyState;

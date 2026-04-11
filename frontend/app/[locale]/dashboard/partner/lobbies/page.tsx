@@ -46,6 +46,7 @@ export default function CreateOrEditLobbyPage() {
     privateMode: false,
     skillLevel: "all",
     partnerRevenueShare: 0.2, // Default to 20%
+    totalMatches: 3, // 3 = BO3, 5 = BO5, -1 = BO1 Infinite
   })
 
   const [selectedTags, setSelectedTags] = useState<string[]>([])
@@ -75,6 +76,7 @@ export default function CreateOrEditLobbyPage() {
               privateMode: existingLobby.settings?.privateMode ?? false,
               skillLevel: existingLobby.skillLevel,
               partnerRevenueShare: existingLobby.partnerRevenueShare ?? 0.2,
+              totalMatches: existingLobby.totalMatches ?? 3,
             })
             setSelectedTags(existingLobby.tags || [])
             if (existingLobby.customLogoUrl) {
@@ -262,6 +264,23 @@ export default function CreateOrEditLobbyPage() {
                         </SelectContent>
                       </Select>
                     </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="totalMatches">Tournament Format</Label>
+                    <Select
+                      value={lobbyData.totalMatches.toString()}
+                      onValueChange={(value) => setLobbyData({ ...lobbyData, totalMatches: Number.parseInt(value) })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select format" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="-1">BO1 (Infinite Loop - Reward Per Match)</SelectItem>
+                        <SelectItem value="3">BO3 Series (Reward at End)</SelectItem>
+                        <SelectItem value="5">BO5 Series (Reward at End)</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="space-y-2">
@@ -616,6 +635,10 @@ export default function CreateOrEditLobbyPage() {
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Game Mode:</span>
                           <span>{lobbyData.gameMode || "Not set"}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Format:</span>
+                          <span>{lobbyData.totalMatches === -1 ? "BO1 (Infinite)" : `BO${lobbyData.totalMatches}`}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Skill Level:</span>

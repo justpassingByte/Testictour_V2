@@ -1,9 +1,18 @@
 import { create } from 'zustand';
 import { PlayerService, PlayerMatchSummary, PlayerStats, PlayerDetails } from '../services/PlayerService';
 import { IUser } from '../types/user';
-import { Player } from './miniTourLobbyStore';
 import { AdminService } from '../services/AdminService';
 import { PartnerService } from '../services/PartnerService';
+
+export interface Player {
+  id: string;
+  username: string;
+  email: string;
+  isActive: boolean;
+  totalMatchesPlayed: number;
+  tournamentsWon: number;
+  balance: number;
+}
 
 
 // Re-export for convenience
@@ -29,18 +38,30 @@ export interface PlayerMatchDisplay {
   matchId: string;
   placement: number;
   points: number;
+  prize?: number;
   date: string;
   userId: string;
+}
+
+export interface PlayerHistoryGroupDisplay {
+  id: string;
+  name: string;
+  matchesCount: number;
+  totalPoints: number;
+  prize: number;
+  playedAt: string;
+  matches: PlayerMatchDisplay[];
 }
 
 interface PlayerState {
   player: PlayerDetails | null;
   playerTournaments: PlayerTournamentDisplay[];
-  playerMatches: PlayerMatchDisplay[];
+  playerMatches: PlayerHistoryGroupDisplay[];
   matchResults: PlayerMatchDisplay[];
   matchDetailsRaw: any; // Raw Match Data from Riot
   stats: PlayerStats; // Directly use the backend's PlayerStats
   isLoading: boolean;
+  isMatchLoading: boolean;
   error: string | null;
   allPlayers: Player[]; // New: To store a list of all players
   fetchPlayer: (playerId: string) => Promise<void>;
@@ -86,18 +107,18 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       set({ isLoading: false });
     }
   },
+  isMatchLoading: false,
+
   fetchPlayerMatchResults: async (matchId: string) => {
     try {
-      set({ isLoading: true, error: null, matchDetailsRaw: null });
+      set({ isMatchLoading: true, error: null, matchDetailsRaw: null });
       const rawDetails = await PlayerService.getMatchFullDetails(matchId);
-      // Wait, is it returning the whole JSON object or `{ results: ... }`?
-      // In MatchController: res.json(details); so it's rawDetails.
       set({ matchDetailsRaw: rawDetails, matchResults: [] }); // Set matchResults empty, as we're switching to raw
     } catch (error) {
       console.error(error);
       set({ error: 'Failed to fetch match details' });
     } finally {
-      set({ isLoading: false });
+      set({ isMatchLoading: false });
     }
   },
   fetchPlayerTournaments: async (playerId: string) => {
@@ -135,16 +156,25 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       const response = await PlayerService.getPlayerMatchSummaries(playerId, 10); // Fetch up to 10 matches
       const summaries = response.data;
 
-      const playerMatches: PlayerMatchDisplay[] = summaries.map(summary => ({
-        id: summary.matchId,
-        tournamentId: summary.tournamentId,
-        tournamentName: summary.tournamentName,
-        roundNumber: summary.roundNumber,
-        matchId: summary.matchId,
-        placement: summary.placement,
-        points: summary.points,
-        date: new Date(summary.playedAt).toLocaleDateString(),
-        userId: summary.userId,
+      const playerMatches: PlayerHistoryGroupDisplay[] = summaries.map((group: any) => ({
+        id: group.id,
+        name: group.name,
+        matchesCount: group.matchesCount,
+        totalPoints: group.totalPoints,
+        prize: group.prize,
+        playedAt: new Date(group.playedAt).toLocaleDateString(),
+        matches: group.matches.map((m: any) => ({
+          id: m.id,
+          tournamentId: m.tournamentId,
+          tournamentName: m.tournamentName,
+          roundNumber: m.roundNumber,
+          matchId: m.matchId,
+          placement: m.placement,
+          points: m.points,
+          prize: m.prize,
+          date: new Date(m.playedAt).toLocaleDateString(),
+          userId: m.userId,
+        }))
       }));
 
       set({ playerMatches });

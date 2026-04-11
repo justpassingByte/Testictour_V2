@@ -94,13 +94,13 @@ export default function RoundResultsPage({ params }: { params: { id: string; rou
     }
 
     return rawPlayers.map((player) => {
-      let status: "advanced" | "eliminated";
+      let status: "advanced" | "eliminated" | "pending";
 
       if (player.roundOutcomeStatus) {
         // Server-authoritative: use roundOutcome from DB
         status = player.roundOutcomeStatus as "advanced" | "eliminated";
-      } else if (advancementN !== null && player.placements.length > 0) {
-        // Derive from score rank within this lobby
+      } else if (player.placements.length > 0 && advancementN !== null) {
+        // Derive from score rank within this lobby (only when we have actual match data)
         const lobbyPlayers = lobbyGroups.get(player.lobbyId ?? 'unknown') ?? [];
         const sorted = [...lobbyPlayers].sort((a, b) => {
           const scoreDiff = b.total - a.total;
@@ -109,8 +109,12 @@ export default function RoundResultsPage({ params }: { params: { id: string; rou
         });
         const rank = sorted.findIndex(p => p.id === player.id) + 1;
         status = rank <= advancementN ? "advanced" : "eliminated";
-      } else {
+      } else if (player.placements.length > 0) {
+        // Has placements but no advancementN configured — use global eliminated flag
         status = player.eliminatedGlobal ? "eliminated" : "advanced";
+      } else {
+        // No match results yet — don't guess
+        status = "pending";
       }
 
       return {

@@ -39,10 +39,45 @@ export function LobbyDetailsClient({ initialLobby }: LobbyDetailsClientProps) {
   }, [initialLobby, setLobby]);
 
   useEffect(() => {
-    if (id && !initialLobby && !lobby) {
+    if (id) {
       fetchLobby(id as string);
     }
-  }, [id, fetchLobby, initialLobby, lobby]);
+  }, [id, fetchLobby]);
+
+  // Use WebSocket to listen for MiniTour state updates instead of heavy polling
+  useEffect(() => {
+    if (!id || !lobby) return;
+    const isTransitional = lobby.status === 'WAITING' || lobby.status === 'IN_PROGRESS';
+    if (!isTransitional) return;
+
+    // Use dynamic import or existing import for io to establish socket connection
+    const { io } = require('socket.io-client');
+    const socket = io(process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000', {
+      transports: ['websocket', 'polling'],
+      withCredentials: true,
+    });
+
+    socket.on('connect', () => {
+      socket.emit('join_minitour', { lobbyId: id });
+    });
+
+    socket.on('minitour_lobby_update', (data?: any) => {
+      // Whenever the backend signals a state change (e.g., from dev route or match worker), pull fresh state
+      fetchLobby(id as string);
+      
+      // Show notification if backend sent one
+      if (data?.notification) {
+        toast({
+          title: "MiniTour Notification",
+          description: data.notification,
+        });
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [id, lobby?.status, fetchLobby]);
 
   const userCoins = 1000;
 
@@ -116,7 +151,6 @@ export function LobbyDetailsClient({ initialLobby }: LobbyDetailsClientProps) {
         </div>
 
         <div className="space-y-4">
-          {/* Join / coin info card */}
           <LobbyActionCard
             lobby={lobby}
             userCoins={userCoins}
@@ -125,6 +159,7 @@ export function LobbyDetailsClient({ initialLobby }: LobbyDetailsClientProps) {
             mainButtonAction={mainButtonAction}
             isProcessingAction={isProcessingAction}
             secondaryActions={secondaryActions}
+            currentUserId={currentUser?.id || ''}
           />
 
           <LobbyQuickStatsCard lobby={lobby} />

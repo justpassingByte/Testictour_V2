@@ -16,6 +16,12 @@ const io = (global as any).io;
 
 // Service for handling tournament round logic
 export default class RoundService {
+
+  /** Convert roundNumber → Group letter: 1→A, 2→B, 3→C... */
+  static groupNameFromNumber(roundNumber: number): string {
+    return String.fromCharCode(64 + roundNumber); // 65='A'
+  }
+
   static async list(phaseId: string) {
     return prisma.round.findMany({ where: { phaseId } });
   }
@@ -40,6 +46,343 @@ export default class RoundService {
       status: data.status || 'pending',
       }
     });
+  }
+
+  /**
+   * Pre-assign all participants into groups (rounds) and lobbies.
+   * Called ~5 minutes before tournament starts.
+   * Each Round in the first Phase is treated as a "Group" (Bảng A, B, C...).
+   */
+  static async preAssignGroups(tournamentId: string) {
+    logger.info(`[PreAssign] Starting pre-assignment for tournament ${tournamentId}`);
+
+    const tournament = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      include: {
+        phases: {
+          orderBy: { phaseNumber: 'asc' },
+          include: {
+            rounds: { orderBy: { roundNumber: 'asc' }, include: { lobbies: true } }
+          }
+        }
+      }
+    });
+
+    if (!tournament) throw new ApiError(404, 'Tournament not found');
+    
+    const firstPhase = tournament.phases.find(p => p.phaseNumber === 1);
+    if (!firstPhase) throw new ApiError(400, 'No first phase configured for tournament');
+
+    // Check if already pre-assigned (lobbies exist)
+    const hasLobbies = firstPhase.rounds.some(r => r.lobbies.length > 0);
+    if (hasLobbies) {
+      logger.info(`[PreAssign] Tournament ${tournamentId} already has lobbies assigned. Skipping.`);
+      return { message: 'Already pre-assigned.' };
+    }
+
+    const participants = await prisma.participant.findMany({
+      where: { tournamentId, eliminated: false },
+    });
+
+    if (participants.length === 0) {
+      logger.warn(`[PreAssign] No participants for tournament ${tournamentId}`);
+      return { message: 'No participants to assign.' };
+    }
+
+    const lobbySize = firstPhase.lobbySize || 8;
+    const maxLobbiesPerGroup = 4;
+    const maxPlayersPerGroup = lobbySize * maxLobbiesPerGroup;
+    
+    let requiredNumberOfGroups = Math.ceil(participants.length / maxPlayersPerGroup);
+    if (requiredNumberOfGroups < 1) requiredNumberOfGroups = 1;
+
+    // Ensure we have exactly requiredNumberOfGroups in firstPhase
+    const existingRoundsCount = firstPhase.rounds.length;
+    
+    if (existingRoundsCount > requiredNumberOfGroups) {
+      // Delete extra rounds
+      const roundsToDelete = firstPhase.rounds.slice(requiredNumberOfGroups);
+      await prisma.round.deleteMany({
+        where: { id: { in: roundsToDelete.map(r => r.id) } }
+      });
+      firstPhase.rounds = firstPhase.rounds.slice(0, requiredNumberOfGroups);
+    } else if (existingRoundsCount < requiredNumberOfGroups) {
+      // Create missing rounds
+      for (let i = existingRoundsCount + 1; i <= requiredNumberOfGroups; i++) {
+        const newRound = await prisma.round.create({
+          data: {
+            phaseId: firstPhase.id,
+            roundNumber: i,
+            startTime: new Date(Date.now() + 6 * 60 * 1000), // Default start
+            status: 'pending'
+          },
+          include: { lobbies: true }
+        });
+        firstPhase.rounds.push(newRound as any);
+      }
+    }
+
+    // Update Phase to reflect actual numberOfRounds
+    await prisma.phase.update({
+      where: { id: firstPhase.id },
+      data: { numberOfRounds: requiredNumberOfGroups }
+    });
+
+    const lobbyAssignment = (firstPhase.lobbyAssignment || 'random') as 'random' | 'seeded' | 'swiss' | 'snake';
+
+    // Shuffle participants first
+    let shuffled = [...participants];
+    if (lobbyAssignment === 'random') {
+      shuffled.sort(() => Math.random() - 0.5);
+    } else {
+      shuffled.sort((a, b) => (b.scoreTotal || 0) - (a.scoreTotal || 0));
+    }
+
+    // Distribute participants sequentially (fill group up to maxPlayersPerGroup, then move to next)
+    const groups: typeof participants[] = Array.from({ length: requiredNumberOfGroups }, () => []);
+    shuffled.forEach((p, i) => {
+      const groupIndex = Math.floor(i / maxPlayersPerGroup);
+      groups[groupIndex].push(p);
+    });
+
+    // Create lobbies in each group (round)
+    for (let groupIndex = 0; groupIndex < requiredNumberOfGroups; groupIndex++) {
+      const round = firstPhase.rounds[groupIndex];
+      if (!round) {
+        logger.warn(`[PreAssign] Round for group ${groupIndex + 1} not found. Skipping.`);
+        continue;
+      }
+
+      const groupParticipants = groups[groupIndex];
+      const groupName = this.groupNameFromNumber(round.roundNumber);
+      logger.info(`[PreAssign] Assigning Group ${groupName}: ${groupParticipants.length} players`);
+
+      // Split group participants into lobbies
+      let lobbyCount = 1;
+      for (let i = 0; i < groupParticipants.length; i += lobbySize) {
+        const lobbyParticipants = groupParticipants.slice(i, i + lobbySize);
+        const participantUserIds = lobbyParticipants.map(p => p.userId);
+
+        await prisma.lobby.create({
+          data: {
+            roundId: round.id,
+            name: `Lobby ${lobbyCount++}`,
+            participants: participantUserIds,
+            state: 'WAITING',
+            phaseStartedAt: new Date(),
+          }
+        });
+      }
+    }
+
+    // Update tournament actualParticipantsCount
+    await prisma.tournament.update({
+      where: { id: tournamentId },
+      data: { actualParticipantsCount: participants.length }
+    });
+
+    // Emit socket event
+    if ((global as any).io) {
+      (global as any).io.to(`tournament:${tournamentId}`).emit('bracket_update', { tournamentId });
+      (global as any).io.to(`tournament:${tournamentId}`).emit('tournament_update', { type: 'bracket_assigned' });
+    }
+
+    logger.info(`[PreAssign] Successfully pre-assigned ${participants.length} players into ${requiredNumberOfGroups} groups for tournament ${tournamentId}`);
+    return { message: `Pre-assigned ${participants.length} players into ${requiredNumberOfGroups} groups.` };
+  }
+
+  /**
+   * Get bracket data for a tournament, organized by Phase → Group (Round) → Lobby → Players.
+   */
+  static async getBracket(tournamentId: string) {
+    const tournament = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      include: {
+        phases: {
+          orderBy: { phaseNumber: 'asc' },
+          include: {
+            rounds: {
+              orderBy: { roundNumber: 'asc' },
+              include: {
+                lobbies: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!tournament) throw new ApiError(404, 'Tournament not found');
+
+    // Collect all user IDs from all lobbies
+    const allUserIds = new Set<string>();
+    for (const phase of tournament.phases) {
+      for (const round of phase.rounds) {
+        for (const lobby of round.lobbies) {
+          const participants = lobby.participants as string[];
+          if (Array.isArray(participants)) {
+            participants.forEach(id => allUserIds.add(id));
+          }
+        }
+      }
+    }
+
+    // Batch fetch user data
+    const users = allUserIds.size > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: Array.from(allUserIds) } },
+          select: { id: true, username: true, riotGameName: true, riotGameTag: true, rank: true }
+        })
+      : [];
+    const userMap = new Map(users.map(u => [u.id, u]));
+
+    // Build bracket response
+    const phases = tournament.phases.map(phase => ({
+      id: phase.id,
+      name: phase.name,
+      phaseNumber: phase.phaseNumber,
+      status: phase.status,
+      type: phase.type,
+      groups: phase.rounds.map(round => ({
+        id: round.id,
+        name: `Group ${this.groupNameFromNumber(round.roundNumber)}`,
+        groupLetter: this.groupNameFromNumber(round.roundNumber),
+        groupNumber: round.roundNumber,
+        status: round.status,
+        startTime: round.startTime,
+        endTime: round.endTime,
+        lobbies: round.lobbies.map(lobby => ({
+          id: lobby.id,
+          name: lobby.name,
+          state: lobby.state,
+          fetchedResult: lobby.fetchedResult,
+          players: (lobby.participants as string[]).map(userId => userMap.get(userId) || { id: userId, username: 'Unknown' })
+        }))
+      }))
+    }));
+
+    return { tournamentId, phases };
+  }
+
+  /**
+   * Reshuffle lobbies after elimination or group completion.
+   * When a group (round) completes, surviving players are redistributed into remaining active groups.
+   */
+  static async reshuffleAfterElimination(tournamentId: string, completedRoundId: string) {
+    logger.info(`[Reshuffle] Starting reshuffle for tournament ${tournamentId} after round ${completedRoundId}`);
+
+    const tournament = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      include: {
+        phases: {
+          orderBy: { phaseNumber: 'asc' },
+          include: {
+            rounds: {
+              orderBy: { roundNumber: 'asc' },
+              include: { lobbies: true }
+            }
+          }
+        }
+      }
+    });
+
+    if (!tournament) throw new ApiError(404, 'Tournament not found');
+
+    // Find the current active phase
+    const activePhase = tournament.phases.find(p => p.status === 'in_progress');
+    if (!activePhase) {
+      logger.info(`[Reshuffle] No active phase found. Skipping reshuffle.`);
+      return;
+    }
+
+    // Find remaining active rounds (groups) that are still in_progress
+    const activeRounds = activePhase.rounds.filter(r => r.status === 'in_progress' && r.id !== completedRoundId);
+    
+    if (activeRounds.length === 0) {
+      logger.info(`[Reshuffle] No remaining active groups. All groups completed.`);
+      return;
+    }
+
+    // Get surviving players from the completed round
+    const completedRound = activePhase.rounds.find(r => r.id === completedRoundId);
+    if (!completedRound) return;
+
+    // Find the surviving players (not eliminated) who were in the completed round
+    const completedRoundUserIds = new Set<string>();
+    for (const lobby of completedRound.lobbies) {
+      const participants = lobby.participants as string[];
+      if (Array.isArray(participants)) {
+        participants.forEach(id => completedRoundUserIds.add(id));
+      }
+    }
+
+    // Check which of these players are still alive (not eliminated)
+    const survivingParticipants = await prisma.participant.findMany({
+      where: {
+        tournamentId,
+        userId: { in: Array.from(completedRoundUserIds) },
+        eliminated: false
+      }
+    });
+
+    if (survivingParticipants.length === 0) {
+      logger.info(`[Reshuffle] No surviving players to redistribute.`);
+      return;
+    }
+
+    logger.info(`[Reshuffle] Redistributing ${survivingParticipants.length} surviving players into ${activeRounds.length} active groups.`);
+
+    const lobbySize = activePhase.lobbySize || 8;
+
+    // For each active round, collect existing players, add redistributed ones, re-create lobbies
+    const playersPerGroup = Math.ceil(survivingParticipants.length / activeRounds.length);
+    let redistributed = [...survivingParticipants].sort(() => Math.random() - 0.5);
+
+    for (const round of activeRounds) {
+      // Get chunk of players to add to this group  
+      const extraPlayers = redistributed.splice(0, playersPerGroup);
+      if (extraPlayers.length === 0) continue;
+
+      // Get existing players in this round's lobbies
+      const existingUserIds: string[] = [];
+      for (const lobby of round.lobbies) {
+        const participants = lobby.participants as string[];
+        if (Array.isArray(participants)) {
+          existingUserIds.push(...participants);
+        }
+      }
+
+      // Combine existing + new players
+      const allPlayers = [...existingUserIds, ...extraPlayers.map(p => p.userId)];
+      
+      // Delete old lobbies for this round
+      await prisma.lobby.deleteMany({ where: { roundId: round.id } });
+
+      // Re-create lobbies with combined player list
+      let lobbyCount = 1;
+      for (let i = 0; i < allPlayers.length; i += lobbySize) {
+        const lobbyParticipants = allPlayers.slice(i, i + lobbySize);
+        await prisma.lobby.create({
+          data: {
+            roundId: round.id,
+            name: `Lobby ${lobbyCount++}`,
+            participants: lobbyParticipants,
+            state: 'WAITING',
+            phaseStartedAt: new Date(),
+          }
+        });
+      }
+
+      logger.info(`[Reshuffle] Group ${this.groupNameFromNumber(round.roundNumber)}: ${existingUserIds.length} existing + ${extraPlayers.length} redistributed = ${allPlayers.length} total players`);
+    }
+
+    // Emit bracket update
+    if ((global as any).io) {
+      (global as any).io.to(`tournament:${tournamentId}`).emit('bracket_update', { tournamentId });
+      (global as any).io.to(`tournament:${tournamentId}`).emit('tournament_update', { type: 'bracket_reshuffled' });
+    }
+
+    logger.info(`[Reshuffle] Completed reshuffle for tournament ${tournamentId}`);
   }
 
   static async autoAdvance(roundId: string) {
@@ -83,39 +426,69 @@ export default class RoundService {
           }
 
           // If this is the first round of the first phase, update tournament status
-          if (currentRound.roundNumber === 1 && currentRound.phase.phaseNumber === 1 && tournament.status === 'pending') {
+          if (currentRound.phase.phaseNumber === 1 && tournament.status === 'pending') {
             await tx.tournament.update({
               where: { id: tournament.id },
               data: { status: 'in_progress' },
             });
+            await tx.phase.update({
+              where: { id: currentRound.phaseId },
+              data: { status: 'in_progress' },
+            });
+
+            // ═══ PARALLEL GROUPS: Start ALL rounds in this phase simultaneously ═══
+            const allRoundsInPhase = await tx.round.findMany({
+              where: { phaseId: currentRound.phaseId },
+              orderBy: { roundNumber: 'asc' },
+              include: { lobbies: true }
+            });
+
+            for (const round of allRoundsInPhase) {
+              if (round.status === 'pending') {
+                await tx.round.update({
+                  where: { id: round.id },
+                  data: { status: 'in_progress' },
+                });
+                logger.info(`[ParallelGroups] Started Group ${this.groupNameFromNumber(round.roundNumber)} (Round ${round.id})`);
+              }
+
+              // If this round has no lobbies yet, assign them now (pre-assign may have failed)
+              if (round.lobbies.length === 0) {
+                const participants = await tx.participant.findMany({
+                  where: { tournamentId: tournament.id, eliminated: false },
+                });
+                const lobbySize = currentRound.phase.lobbySize || 8;
+                const lobbyAssignment = (currentRound.phase.lobbyAssignment || 'random') as 'random' | 'seeded' | 'swiss' | 'snake';
+                const matchesPerRound = currentRound.phase.matchesPerRound || 1;
+                await LobbyService.autoAssignLobbies(round.id, participants, lobbySize, lobbyAssignment, matchesPerRound, tx);
+              }
+            }
+          } else {
+            // Non-first-phase round — just start this single round
+            await tx.round.update({
+              where: { id: roundId },
+              data: { status: 'in_progress' },
+            });
+
+            // If no lobbies, assign them
+            if (currentRound.lobbies.length === 0) {
+              const participants = await tx.participant.findMany({
+                where: { tournamentId: currentRound.phase.tournamentId, eliminated: false },
+              });
+              const lobbySize = currentRound.phase.lobbySize || 8;
+              const lobbyAssignment = (currentRound.phase.lobbyAssignment || 'random') as 'random' | 'seeded' | 'swiss' | 'snake';
+              const matchesPerRound = currentRound.phase.matchesPerRound || 1;
+              await LobbyService.autoAssignLobbies(roundId, participants, lobbySize, lobbyAssignment, matchesPerRound, tx);
+            }
           }
-          
-          // Update round status to in_progress
-          const updatedRound = await tx.round.update({
-            where: { id: roundId },
-            data: { status: 'in_progress' },
-          });
 
-          // Get participants who are not eliminated
-          const participants = await tx.participant.findMany({
-            where: { tournamentId: currentRound.phase.tournamentId, eliminated: false },
-          });
-
-          const lobbySize = currentRound.phase.lobbySize || 8;
-          const lobbyAssignment = (currentRound.phase.lobbyAssignment || 'random') as 'random' | 'seeded' | 'swiss' | 'snake';
-          const matchesPerRound = currentRound.phase.matchesPerRound || 1;
-
-          // Removed verbose log for lobby assignment.
-          // logger.info(`Assigning lobbies for Round ${currentRound.roundNumber} with ${participants.length} participants (Size: ${lobbySize}, Assignment: ${lobbyAssignment}).`);
-          const { lobbies, transitionsToSchedule } = await LobbyService.autoAssignLobbies(updatedRound.id, participants, lobbySize, lobbyAssignment, matchesPerRound, tx);
-          
-          // No jobsToQueue directly from autoAssignLobbies anymore
           jobsToQueue = [];
 
           if ((global as any).io) {
-            (global as any).io.to(`tournament:${currentRound.phase.tournamentId}`).emit('tournament_update', { type: 'round_started', round: updatedRound });
+            (global as any).io.to(`tournament:${currentRound.phase.tournamentId}`).emit('tournament_update', { type: 'round_started', round: { id: roundId } });
+            (global as any).io.to(`tournament:${currentRound.phase.tournamentId}`).emit('bracket_update', { tournamentId: currentRound.phase.tournamentId });
           }
-          return { message: 'Round started successfully', roundId: updatedRound.id };
+          return { message: 'Round(s) started successfully', roundId };
         }
 
         // --- LOGIC TO COMPLETE AN IN_PROGRESS ROUND ---
@@ -992,10 +1365,10 @@ export default class RoundService {
     
     logger.debug(`Calculating prizes for tournament ${tournamentId}. Total pot: ${totalPot}, Prize pool: ${prizePool}`);
 
-    const prizeStructure = tournament.prizeStructure as Record<string, number>;
+    const dynamicPrizeStructure = PrizeCalculationService.getDynamicPrizeDistribution(participantCount);
 
     // Use the PrizeCalculationService to get the optimized distribution
-    const prizeDistribution = PrizeCalculationService.getFinalPrizeDistribution(winners, prizeStructure, prizePool);
+    const prizeDistribution = PrizeCalculationService.getFinalPrizeDistribution(winners, dynamicPrizeStructure, prizePool);
     logger.info(`Prize distribution calculated with ${prizeDistribution.length} winners`);
 
     // Process each winner and create reward records

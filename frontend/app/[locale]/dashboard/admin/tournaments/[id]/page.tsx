@@ -5,7 +5,8 @@ import Link from "next/link"
 import {
   ArrowLeft, Loader2, Save, Trophy, RefreshCw, Users, Play,
   Square, CheckCircle2, XCircle, Clock, AlertTriangle, Settings2,
-  ChevronRight, MoreVertical, UserMinus, Crown, Skull, Image as ImageIcon
+  ChevronRight, MoreVertical, UserMinus, Crown, Skull, Image as ImageIcon,
+  ShieldAlert, Wrench, GitBranch, FastForward, SkipForward
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -53,6 +54,7 @@ export default function TournamentManagePage() {
   const [removeDialog, setRemoveDialog] = useState<{ open: boolean; participant: IParticipant | null }>({ open: false, participant: null })
   const [stats, setStats] = useState<{ topUnits: any[]; topTraits: any[]; avgDuration: string | null } | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
+  const [roundControlLoading, setRoundControlLoading] = useState<Record<string, boolean>>({})
 
   const [editForm, setEditForm] = useState({
     name: "",
@@ -149,6 +151,28 @@ export default function TournamentManagePage() {
     }
   }
 
+  // ── Emergency manual round control (production-safe) ──────────────────────
+  const handleRoundControl = async (roundId: string, action: 'advance') => {
+    setRoundControlLoading(prev => ({ ...prev, [roundId + action]: true }));
+    try {
+      // Uses the production-safe, auth-protected RoundController endpoint
+      await api.post(`/rounds/${roundId}/auto-advance`);
+      toast({
+        title: '✅ Round Advanced',
+        description: 'Round advancement triggered. Lobbies will be assigned automatically.',
+      });
+      await refresh();
+    } catch (error: any) {
+      toast({
+        title: 'Failed',
+        description: error?.response?.data?.message || error.message || 'Could not advance round.',
+        variant: 'destructive',
+      });
+    } finally {
+      setRoundControlLoading(prev => ({ ...prev, [roundId + action]: false }));
+    }
+  };
+
   const handleSync = async () => {
     setSyncing(true)
     try {
@@ -236,9 +260,23 @@ export default function TournamentManagePage() {
             <span className="hidden sm:inline ml-2">{t("sync")}</span>
           </Button>
           {tournament.status !== 'in_progress' && tournament.status !== 'COMPLETED' && (
-            <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleStatusChange('in_progress')} disabled={statusChanging}>
-              {statusChanging ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-              <span className="hidden sm:inline ml-2">{t("status")} In Progress</span>
+            <Button 
+              size="sm" 
+              className="bg-green-600 hover:bg-green-700" 
+              onClick={() => {
+                const firstRoundId = tournament.phases?.[0]?.rounds?.[0]?.id;
+                if (firstRoundId) {
+                  handleRoundControl(firstRoundId, 'advance');
+                } else {
+                  handleStatusChange('in_progress'); // fallback
+                }
+              }} 
+              disabled={statusChanging || (tournament.phases?.[0]?.rounds?.[0]?.id ? roundControlLoading[tournament.phases[0].rounds[0].id + 'advance'] : false)}
+            >
+              {(statusChanging || (tournament.phases?.[0]?.rounds?.[0]?.id && roundControlLoading[tournament.phases?.[0]?.rounds?.[0]?.id + 'advance'])) 
+                ? <Loader2 className="h-4 w-4 animate-spin" /> 
+                : <Play className="h-4 w-4" />}
+              <span className="ml-2">Start Tournament</span>
             </Button>
           )}
           {tournament.status === 'in_progress' && (
@@ -286,8 +324,16 @@ export default function TournamentManagePage() {
       </div>
 
       {/* Management Tabs */}
+      {/* Emergency warning banner when tournament is live */}
+      {tournament.status === 'in_progress' && (
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-sm">
+          <ShieldAlert className="h-4 w-4 shrink-0" />
+          <span>Tournament is <strong>live</strong>. If lobbies fail to auto-assign after a round, use the <strong>Round Control</strong> tab to manually intervene.</span>
+        </div>
+      )}
+
       <Tabs defaultValue="participants" className="space-y-4">
-        <TabsList className="w-full sm:w-auto">
+        <TabsList className="w-full sm:w-auto flex-wrap h-auto gap-1">
           <TabsTrigger value="participants">
             <Users className="mr-1.5 h-4 w-4" />
             {t("players")} ({registeredCount})
@@ -295,6 +341,13 @@ export default function TournamentManagePage() {
           <TabsTrigger value="phases">
             <Trophy className="mr-1.5 h-4 w-4" />
             {t("tournament_format")}
+          </TabsTrigger>
+          <TabsTrigger value="round-control" className="relative">
+            <Wrench className="mr-1.5 h-4 w-4" />
+            Round Control
+            {tournament.status === 'in_progress' && (
+              <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+            )}
           </TabsTrigger>
           <TabsTrigger value="stats">
             <PieChart className="mr-1.5 h-4 w-4" />
@@ -446,6 +499,106 @@ export default function TournamentManagePage() {
                 </CardContent>
               </Card>
             )}
+          </div>
+        </TabsContent>
+
+        {/* ─── ROUND CONTROL TAB (Admin Emergency Fallback) ─── */}
+        <TabsContent value="round-control">
+          <div className="space-y-4">
+            {/* Warning */}
+            <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-400">
+              <ShieldAlert className="w-5 h-5 mt-0.5 shrink-0" />
+              <div className="text-sm">
+                <p className="font-semibold mb-1">Emergency Manual Override</p>
+                <p className="text-amber-400/80 leading-relaxed">
+                  This panel is for <strong>production incidents only</strong> — when the auto-advance system fails to assign lobbies or advance rounds after a match completes.
+                  Each button calls the same production-safe <code className="bg-amber-500/10 px-1 rounded text-[11px]">RoundService.autoAdvance</code> logic.
+                  Only use this if players are stuck and lobbies haven't been reassigned automatically.
+                </p>
+              </div>
+            </div>
+
+            {/* Per-phase round cards */}
+            {!tournament.phases?.length ? (
+              <Card className="bg-card/60 border-white/10">
+                <CardContent className="text-center py-10 text-muted-foreground">
+                  <GitBranch className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                  <p>No phases/rounds found for this tournament.</p>
+                </CardContent>
+              </Card>
+            ) : tournament.phases.map((phase) => (
+              <Card key={phase.id} className="bg-card/60 border-white/10">
+                <CardHeader className="pb-2 pt-4 px-5">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <GitBranch className="h-4 w-4 text-violet-400" />
+                    Phase {phase.phaseNumber}: {phase.name}
+                    <Badge variant="outline" className="ml-auto text-[10px]">{phase.status}</Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-5 pb-4">
+                  {!phase.rounds?.length ? (
+                    <p className="text-xs text-muted-foreground py-4">No rounds in this phase.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {phase.rounds.map((round: any) => {
+                        const lobbyCount = round.lobbies?.length || 0;
+                        const completedLobbies = round.lobbies?.filter((l: any) => l.state === 'COMPLETED').length || 0;
+                        const isStuck = round.status !== 'completed' && round.status !== 'cancelled';
+                        const advancingKey = round.id + 'advance';
+                        return (
+                          <div key={round.id} className={`flex items-center justify-between gap-3 rounded-lg p-3 border ${
+                            round.status === 'completed' ? 'bg-green-500/5 border-green-500/20' :
+                            round.status === 'in_progress' ? 'bg-yellow-500/5 border-yellow-500/20' :
+                            'bg-white/5 border-white/10'
+                          }`}>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium">Round {round.roundNumber}</span>
+                                <Badge variant="outline" className={`text-[10px] px-1.5 ${
+                                  round.status === 'completed' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
+                                  round.status === 'in_progress' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
+                                  'text-slate-400'
+                                }`}>{round.status}</Badge>
+                              </div>
+                              <p className="text-[11px] text-muted-foreground mt-0.5">
+                                {lobbyCount} lobbies · {completedLobbies}/{lobbyCount} completed
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {round.status === 'completed' ? (
+                                <span className="text-xs text-green-400 flex items-center gap-1">
+                                  <CheckCircle2 className="h-3.5 w-3.5" /> Done
+                                </span>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={roundControlLoading[advancingKey]}
+                                  onClick={() => handleRoundControl(round.id, 'advance')}
+                                  className="border-amber-500/30 text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 h-8 text-xs gap-1.5"
+                                >
+                                  {roundControlLoading[advancingKey] ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <SkipForward className="h-3.5 w-3.5" />
+                                  )}
+                                  Force Advance
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+
+            {/* Log note */}
+            <p className="text-[11px] text-muted-foreground text-center">
+              All actions here are logged. Calls <code className="bg-white/5 px-1 rounded">POST /rounds/:id/auto-advance</code> — the same endpoint the auto-advance queue uses.
+            </p>
           </div>
         </TabsContent>
 

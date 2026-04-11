@@ -17,13 +17,16 @@ interface MatchDetailsModalProps {
 }
 
 export function MatchDetailsModal({ matchId, userId, isOpen, onClose }: MatchDetailsModalProps) {
-  const { matchDetailsRaw, fetchPlayerMatchResults, isLoading, error } = usePlayerStore();
+  const { matchDetailsRaw, fetchPlayerMatchResults, isLoading, error, playerMatches } = usePlayerStore();
 
   useEffect(() => {
     if (isOpen && matchId) {
       fetchPlayerMatchResults(matchId);
     }
   }, [isOpen, matchId, fetchPlayerMatchResults]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Find the summary to get prize, points, and placement
+  const summary = playerMatches.find(m => m.matchId === matchId);
 
   // Detect data format
   const isGrimoire = isGrimoireMatchData(matchDetailsRaw);
@@ -34,6 +37,27 @@ export function MatchDetailsModal({ matchId, userId, isOpen, onClose }: MatchDet
   const matchLabel = isGrimoire
     ? `TFT Set ${(matchDetailsRaw as GrimoireMatchData).tftSetNumber ?? '?'}`
     : matchDetailsRaw?.info?.tft_set_core_name || `Set ${matchDetailsRaw?.info?.tft_set_number || '?'}`;
+
+  // Build a resultMap so we can pass points and prize
+  const resultMap: Record<string, { placement: number; points: number, prize?: number }> = {};
+  let highlightPuuid: string | undefined = undefined;
+
+  if (isComplete) {
+     const participants = isGrimoire 
+        ? matchDetailsRaw.participants 
+        : matchDetailsRaw?.info?.participants || [];
+     
+     for (const p of participants) {
+        if (summary && p.placement === summary.placement) {
+           highlightPuuid = p.puuid;
+           resultMap[p.puuid] = { 
+             placement: summary.placement, 
+             points: summary.points,
+             prize: summary.prize
+           };
+        }
+     }
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -77,11 +101,12 @@ export function MatchDetailsModal({ matchId, userId, isOpen, onClose }: MatchDet
             /* ── Rich Grimoire View via shared MatchCompPanel ── */
             <MatchCompPanel
               matchData={matchDetailsRaw as GrimoireMatchData}
-              highlightPuuid={userId}
+              highlightPuuid={highlightPuuid || userId}
+              resultMap={resultMap}
             />
           ) : (
             /* ── Legacy Riot raw data fallback ── */
-            <LegacyMatchView data={matchDetailsRaw} userId={userId} />
+            <LegacyMatchView data={matchDetailsRaw} userId={highlightPuuid || userId} resultMap={resultMap} />
           )}
         </div>
         
@@ -110,7 +135,7 @@ function getPlacementColor(placement: number) {
   return "text-muted-foreground bg-muted border-muted/50";
 }
 
-function LegacyMatchView({ data, userId }: { data: any; userId: string }) {
+function LegacyMatchView({ data, userId, resultMap }: { data: any; userId: string; resultMap?: Record<string, { placement: number; points: number, prize?: number }> }) {
   const participants = data?.info?.participants || [];
   const sorted = [...participants].sort((a: any, b: any) => a.placement - b.placement);
 
@@ -118,6 +143,10 @@ function LegacyMatchView({ data, userId }: { data: any; userId: string }) {
     <div className="space-y-2">
       {sorted.map((p: any) => {
         const isCurrentUser = p.puuid === userId;
+        const mapped = resultMap?.[p.puuid];
+        const points = mapped?.points ?? p.points ?? 0;
+        const prize = mapped?.prize;
+
         return (
           <div
             key={p.puuid || Math.random()}
@@ -132,7 +161,12 @@ function LegacyMatchView({ data, userId }: { data: any; userId: string }) {
               <p className="font-semibold text-sm">{p.riotIdGameName || cleanName(p.character_id || 'Unknown')}</p>
               <p className="text-xs text-muted-foreground">Lvl {p.level} · {p.gold_left ?? 0}g remaining</p>
             </div>
-            <div className="text-xs text-muted-foreground">{p.points ?? 0} pts</div>
+            <div className="flex flex-col items-end gap-1">
+               {points > 0 && <div className="text-xs font-bold text-primary">+{points} pts</div>}
+               {prize && prize > 0 ? (
+                  <div className="text-xs font-bold text-yellow-500">+{prize} Coins</div>
+               ) : null}
+            </div>
           </div>
         );
       })}

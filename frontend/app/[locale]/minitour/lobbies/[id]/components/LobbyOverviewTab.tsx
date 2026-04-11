@@ -32,7 +32,7 @@ export function LobbyOverviewTab({ lobby }: LobbyOverviewTabProps) {
           <CardContent className="space-y-4">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Total Matches:</span>
-              <span className="font-medium">{lobby.totalMatches.toLocaleString()}</span>
+              <span className="font-medium">{lobby.matches?.filter(m => m.fetchedAt)?.length || 0} / {(lobby.totalMatches === -1 || lobby.totalMatches === 0) ? 'INF (BO1)' : lobby.totalMatches}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Average Rating:</span>
@@ -55,7 +55,9 @@ export function LobbyOverviewTab({ lobby }: LobbyOverviewTabProps) {
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Prize Distribution</CardTitle>
+            <CardTitle className="text-lg">
+              Prize Distribution {(lobby.totalMatches === -1 || lobby.totalMatches === 0) && <span className="text-sm font-normal text-muted-foreground ml-2">(Per Match)</span>}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {lobby.prizeDistribution && Object.entries(lobby.prizeDistribution)
@@ -76,23 +78,23 @@ export function LobbyOverviewTab({ lobby }: LobbyOverviewTabProps) {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Lobby Settings</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-3">
-            {lobby.settings?.autoStart !== undefined && (
+      {lobby.settings?.autoStart !== undefined && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">Lobby Settings</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-3">
               <div className="flex items-center space-x-2">
                 <PlayCircle className={`h-4 w-4 ${lobby.settings.autoStart ? "text-green-500" : "text-muted-foreground"}`} />
                 <span className="text-sm">
                   Auto Start: {lobby.settings.autoStart ? "Enabled" : "Disabled"}
                 </span>
               </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 } 

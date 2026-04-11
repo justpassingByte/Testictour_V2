@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Coins, Loader2, Zap, StopCircle } from "lucide-react"
+import { Coins, Loader2, Zap, StopCircle, Trophy } from "lucide-react"
 import { MiniTourLobby, MiniTourMatch, MiniTourLobbyParticipant } from "@/app/stores/miniTourLobbyStore"
 import { useMiniTourLobbyStore } from "@/app/stores/miniTourLobbyStore"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -114,8 +114,40 @@ export function LobbyMatchesTab({ lobby }: LobbyMatchesTabProps) {
   }
 
   return (
-    <Card>
-      <CardHeader>
+    <div className="space-y-4">
+      {lobby.prizeDistribution && Object.keys(lobby.prizeDistribution).length > 0 && (
+        <Card className="bg-yellow-500/5 border-yellow-500/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-yellow-500" />
+              Championship Prize Pool
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-4">
+              {Object.entries(lobby.prizeDistribution)
+                .sort(([placeA], [placeB]) => parseInt(placeA) - parseInt(placeB))
+                .map(([place, amount]: [string, any]) => (
+                  <div key={place} className="flex items-center bg-black/20 rounded-full px-4 py-1.5 border border-white/5">
+                    <span className={`font-bold mr-2 ${parseInt(place) === 1 ? 'text-yellow-500' : parseInt(place) === 2 ? 'text-gray-400' : 'text-amber-700'}`}>
+                      {place === '1' ? '1st' : place === '2' ? '2nd' : `${place}rd`}
+                    </span>
+                    <span className="font-bold flex items-center">
+                      <Coins className="inline h-4 w-4 mr-1 text-yellow-500" />
+                      {amount}
+                    </span>
+                  </div>
+                ))}
+            </div>
+            <p className="text-xs text-muted-foreground mt-4">
+              Prize is awarded at the end of all matches based on cumulative points.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle>Matches</CardTitle>
           {isPolling && (
@@ -189,5 +221,6 @@ export function LobbyMatchesTab({ lobby }: LobbyMatchesTabProps) {
         </div>
       </CardContent>
     </Card>
+    </div>
   );
 }

@@ -41,7 +41,7 @@ export function LobbyQuickStatsCard({ lobby }: LobbyQuickStatsCardProps) {
         </div>
         <div className="flex justify-between">
           <span className="text-sm text-muted-foreground">Total Matches:</span>
-          <span className="text-sm font-medium">{lobby.totalMatches.toLocaleString()}</span>
+          <span className="text-sm font-medium">{(lobby.totalMatches === -1 || lobby.totalMatches === 0) ? 'INF (BO1)' : lobby.totalMatches}</span>
         </div>
       </CardContent>
     </Card>

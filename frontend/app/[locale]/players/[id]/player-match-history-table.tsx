@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import Link from "next/link";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { MatchDetailsModal } from "./match-details-modal";
+import { MatchDetailsInline } from "./match-details-inline";
+import { format } from "date-fns";
+
+import { Coins, ChevronDown, ChevronRight, Trophy } from "lucide-react";
 
 interface PlayerMatchDisplay {
   id: string;
@@ -15,83 +18,175 @@ interface PlayerMatchDisplay {
   matchId: string;
   placement: number;
   points: number;
-  date: string; // Already formatted as string by toLocaleDateString()
+  prize?: number;
+  date: string;
   userId: string;
 }
 
-interface PlayerMatchHistoryTableProps {
+interface PlayerHistoryGroupDisplay {
+  id: string;
+  name: string;
+  matchesCount: number;
+  totalPoints: number;
+  prize: number;
+  playedAt: string;
   matches: PlayerMatchDisplay[];
 }
 
+interface PlayerMatchHistoryTableProps {
+  matches: PlayerHistoryGroupDisplay[];
+}
+
 export function PlayerMatchHistoryTable({ matches }: PlayerMatchHistoryTableProps) {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedMatchId, setSelectedMatchId] = useState("");
+  const [expandedMatchId, setExpandedMatchId] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState("");
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
   const handleViewDetails = (matchId: string, userId: string) => {
-    setSelectedMatchId(matchId);
-    setSelectedUserId(userId);
-    setIsModalOpen(true);
+    if (expandedMatchId === matchId) {
+       setExpandedMatchId(null);
+    } else {
+       setExpandedMatchId(matchId);
+       setSelectedUserId(userId);
+    }
   };
 
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
+  const toggleGroup = (groupId: string) => {
+    setExpandedGroups(prev => ({
+      ...prev,
+      [groupId]: !prev[groupId]
+    }));
   };
 
   return (
     <div className="mt-4">
-      <h2 className="text-xl font-semibold mb-4">Match History</h2>
+      <h2 className="text-xl font-semibold mb-4">Lobby & Match History</h2>
       <Card>
         <CardContent className="pt-6">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Tournament</TableHead>
-                <TableHead className="text-center">Match</TableHead>
-                <TableHead className="text-center">Placement</TableHead>
-                <TableHead className="text-center">Points</TableHead>
-                <TableHead className="text-right">Date</TableHead>
+                <TableHead className="w-8"></TableHead>
+                <TableHead>Tournament / Lobby</TableHead>
+                <TableHead className="text-center">Matches Played</TableHead>
+                <TableHead className="text-center">Total Points</TableHead>
+                <TableHead className="text-center">Prize</TableHead>
+                <TableHead className="text-right">Last Played</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {matches.length > 0 ? (
-                matches.map((match) => (
-                  <TableRow key={match.id}>
-                    <TableCell>
-                      <Link href={`/tournaments/${match.tournamentId}`} className="hover:text-primary">
-                        {match.tournamentName}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleViewDetails(match.matchId, match.userId)}
-                      >
-                        View Details
-                      </Button>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <span
-                        className={`
-                          inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium
-                          ${match.placement === 1 ? "bg-yellow-500/20 text-yellow-500" : ""}
-                          ${match.placement === 2 ? "bg-gray-400/20 text-gray-400" : ""} /* Changed to a visible color for 2nd */
-                          ${match.placement === 3 ? "bg-amber-700/20 text-amber-700" : ""}
-                          ${match.placement > 3 ? "bg-transparent" : ""}
-                        `}
-                      >
-                        {match.placement}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-center font-medium">{match.points}</TableCell>
-                    <TableCell className="text-right">{match.date}</TableCell>
-                  </TableRow>
+                matches.map((group) => (
+                  <Fragment key={group.id}>
+                    {/* Parent Row */}
+                    <TableRow className={`cursor-pointer hover:bg-muted/50 ${expandedGroups[group.id] ? 'bg-muted/30' : ''}`} onClick={() => toggleGroup(group.id)}>
+                      <TableCell>
+                        {expandedGroups[group.id] ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        <span className="hover:text-primary transition-colors">
+                          {group.name}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="inline-flex items-center justify-center px-2 py-1 rounded-full bg-secondary text-secondary-foreground text-xs font-semibold">
+                           {group.matchesCount}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-center font-bold text-primary">{group.totalPoints}</TableCell>
+                      <TableCell className="text-center">
+                        {group.prize > 0 ? (
+                          <span className="flex items-center justify-center font-bold text-yellow-500">
+                            <Coins className="h-4 w-4 mr-1 text-yellow-500" />
+                            {group.prize}
+                          </span>
+                        ) : <span className="text-muted-foreground">-</span>}
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">{group.playedAt}</TableCell>
+                    </TableRow>
+
+                    {/* Expanded Child Rows */}
+                    {expandedGroups[group.id] && (
+                      <TableRow className="bg-muted/10">
+                        <TableCell colSpan={6} className="p-0 border-b-0">
+                           <div className="py-2 px-12 space-y-1">
+                             <Table className="bg-background rounded-md border shadow-sm">
+                               <TableHeader>
+                                  <TableRow className="hover:bg-transparent">
+                                    <TableHead className="h-8 text-xs">Match #</TableHead>
+                                    <TableHead className="h-8 text-xs text-center">Placement</TableHead>
+                                    <TableHead className="h-8 text-xs text-center">Points</TableHead>
+                                    <TableHead className="h-8 text-xs text-center">Prize</TableHead>
+                                    <TableHead className="h-8 text-xs text-center">Action</TableHead>
+                                  </TableRow>
+                               </TableHeader>
+                               <TableBody>
+                                  {group.matches.map((match, idx) => (
+                                    <Fragment key={match.id}>
+                                      <TableRow className="border-0">
+                                      <TableCell className="py-2 text-xs text-muted-foreground">
+                                        Match {group.matches.length - idx}
+                                      </TableCell>
+                                      <TableCell className="py-2 text-center text-xs">
+                                        <span
+                                          className={`
+                                            inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold
+                                            ${match.placement === 1 ? "bg-yellow-500 text-white shadow-sm" : ""}
+                                            ${match.placement === 2 ? "bg-slate-300 text-slate-700 shadow-sm" : ""}
+                                            ${match.placement === 3 ? "bg-amber-600 text-white shadow-sm" : ""}
+                                            ${match.placement > 3 ? "text-muted-foreground" : ""}
+                                          `}
+                                        >
+                                          {match.placement === 1 && <Trophy className="h-2.5 w-2.5 mr-0.5" />}
+                                          {match.placement}
+                                        </span>
+                                      </TableCell>
+                                      <TableCell className="py-2 text-center text-xs font-medium">+{match.points}</TableCell>
+                                      <TableCell className="py-2 text-center text-xs font-medium text-yellow-500">
+                                        {match.prize && match.prize > 0 ? (
+                                          <span className="flex items-center justify-center">
+                                            <Coins className="h-3 w-3 mr-1" />
+                                            {match.prize}
+                                          </span>
+                                        ) : '-'}
+                                      </TableCell>
+                                      <TableCell className="py-2 text-center">
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-6 px-2 text-xs"
+                                          onClick={(e) => {
+                                             e.stopPropagation();
+                                             handleViewDetails(match.matchId, match.userId);
+                                          }}
+                                        >
+                                          {expandedMatchId === match.matchId ? "Hide Detail" : "View Detail"}
+                                        </Button>
+                                      </TableCell>
+                                    </TableRow>
+                                    
+                                    {/* Inline Expanded Match Details */}
+                                    {expandedMatchId === match.matchId && (
+                                       <TableRow className="bg-background">
+                                         <TableCell colSpan={5} className="p-0 border-x border-b border-primary/20">
+                                            <MatchDetailsInline matchId={match.matchId} userId={match.userId} />
+                                         </TableCell>
+                                       </TableRow>
+                                    )}
+                                  </Fragment>
+                                ))}
+                               </TableBody>
+                             </Table>
+                           </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </Fragment>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                    No matches found for this player.
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    No lobbies or tournaments found for this player.
                   </TableCell>
                 </TableRow>
               )}
@@ -99,14 +194,6 @@ export function PlayerMatchHistoryTable({ matches }: PlayerMatchHistoryTableProp
           </Table>
         </CardContent>
       </Card>
-      {isModalOpen && selectedMatchId && selectedUserId && (
-        <MatchDetailsModal
-          matchId={selectedMatchId}
-          userId={selectedUserId}
-          isOpen={isModalOpen}
-          onClose={handleCloseModal}
-        />
-      )}
     </div>
   );
 } 

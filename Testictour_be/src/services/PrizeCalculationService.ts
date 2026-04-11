@@ -93,4 +93,23 @@ export default class PrizeCalculationService {
     logger.info(`Final prize distribution calculated for ${distribution.length} winners`);
     return distribution;
   }
+
+  /**
+   * Dynamically calculates prize distribution percentages based on the number of actual participants.
+   * - 8+ players: Top 4 (40%, 30%, 20%, 10%)
+   * - 6-7 players: Top 3 (50%, 30%, 20%)
+   * - 4-5 players: Top 2 (60%, 40%)
+   * - <4 players: Winner Takes All (100%)
+   */
+  static getDynamicPrizeDistribution(participantCount: number): PrizeStructure {
+    if (participantCount >= 8) {
+      return { "1": 0.4, "2": 0.3, "3": 0.2, "4": 0.1 };
+    } else if (participantCount >= 6) {
+      return { "1": 0.5, "2": 0.3, "3": 0.2 };
+    } else if (participantCount >= 4) {
+      return { "1": 0.6, "2": 0.4 };
+    } else {
+      return { "1": 1.0 };
+    }
+  }
 } 

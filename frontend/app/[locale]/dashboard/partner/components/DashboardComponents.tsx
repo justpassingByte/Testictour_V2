@@ -12,7 +12,7 @@ import {
 } from "lucide-react"
 
 import api from "@/app/lib/apiConfig"
-import { Player, MiniTourLobby } from "@/app/stores/miniTourLobbyStore"
+import { MiniTourLobby } from "@/app/stores/miniTourLobbyStore"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {

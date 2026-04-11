@@ -58,22 +58,11 @@ export function useLobbyActions({
   const secondaryActions: SecondaryAction[] = [];
 
   if (status === 'IN_PROGRESS') {
-    mainButtonText = 'View Current Match';
-    mainButtonDisabled = false;
-    mainButtonAction = undefined; // No main action, just view
-    secondaryActions.push({
-      id: 'sync-all-matches',
-      label: 'Sync All Matches',
-      action: syncAllUnsyncedMatches,
-      disabled: isProcessingAction,
-      isLoading: isProcessingAction,
-    });
+    mainButtonDisabled = true;
+    mainButtonAction = undefined;
   } else if (status === 'COMPLETED') {
-    mainButtonText = 'View Final Result';
-    mainButtonDisabled = false;
-    mainButtonAction = async () => {
-      // TODO: Match result tab
-    };
+    mainButtonDisabled = true;
+    mainButtonAction = undefined;
   } else if (status === 'CANCELLED') {
     mainButtonText = 'Lobby Cancelled';
     mainButtonDisabled = true;

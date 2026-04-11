@@ -16,6 +16,17 @@ export default class ParticipantService {
       });
       if (existingParticipant) throw new ApiError(409, 'User already joined this tournament');
 
+      // Check maxPlayers restriction
+      const currentParticipants = tournament.actualParticipantsCount || 0;
+      if (currentParticipants >= tournament.maxPlayers) {
+        throw new ApiError(400, 'Tournament is full');
+      }
+
+      // Check if tournament is upcoming
+      if (tournament.status !== 'UPCOMING') {
+        throw new ApiError(400, 'Tournament is no longer accepting registrations');
+      }
+
       const entryFee = (tournament as any).entryFee || 0;
 
       // Deduct entry fee AND create Transaction record atomically via TransactionService
@@ -28,17 +39,9 @@ export default class ParticipantService {
 
       // Update tournament's actualParticipantsCount and adjustedPrizeStructure
       const updatedActualCount = (tournament.actualParticipantsCount || 0) + 1;
-      const hostFeePercent = (tournament as any).hostFeePercent || 0.1;
-      const totalDistributablePrizePool = updatedActualCount * entryFee * (1 - hostFeePercent);
-      const originalPrizeStructure = tournament.prizeStructure as Record<string, number>;
-      const { adjusted } = PrizeCalculationService.autoAdjustPrizeStructure(
-        originalPrizeStructure,
-        totalDistributablePrizePool
-      );
-
       await tx.tournament.update({
         where: { id: tournamentId },
-        data: { actualParticipantsCount: updatedActualCount, adjustedPrizeStructure: adjusted },
+        data: { actualParticipantsCount: updatedActualCount },
       });
 
       return participant;
@@ -70,7 +73,17 @@ export default class ParticipantService {
         const entryFee = (tournament as any).entryFee || 0;
         await TransactionService.refund(participant.userId, tournament.id, entryFee);
       }
-      return tx.participant.delete({ where: { id: participantId } });
+      await tx.participant.delete({ where: { id: participantId } });
+
+      // Update tournament's actualParticipantsCount
+      const updatedActualCount = Math.max(0, (tournament.actualParticipantsCount || 1) - 1);
+
+      await tx.tournament.update({
+        where: { id: tournament.id },
+        data: { actualParticipantsCount: updatedActualCount },
+      });
+
+      return;
     });
   }
 

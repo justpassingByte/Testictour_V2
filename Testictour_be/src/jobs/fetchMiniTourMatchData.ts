@@ -81,7 +81,7 @@ export default async function (job: Job<FetchMiniTourMatchDataJobData>, ioClient
     const updatedMatch = await prisma.miniTourMatch.update({
       where: { id: miniTourMatchId },
       data: {
-        matchData: summarizedMatchData as any,
+        matchData: riotMatchData as any,
         fetchedAt: new Date(),
       },
     });

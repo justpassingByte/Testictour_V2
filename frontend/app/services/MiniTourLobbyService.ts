@@ -4,7 +4,7 @@ import { MiniTourLobby } from '../stores/miniTourLobbyStore';
 const MiniTourLobbyService = {
   getLobbyById: async (id: string): Promise<MiniTourLobby> => {
     console.log('[Service] getLobbyById called for ID:', id);
-    const response = await api.get<{ success: boolean; data: MiniTourLobby }>(`/minitour-lobbies/${id}`);
+    const response = await api.get<{ success: boolean; data: MiniTourLobby }>(`/minitour-lobbies/${id}?t=${Date.now()}`);
     console.log('[Service] getLobbyById response:', {
       success: response.data.success,
       lobbyId: response.data.data?.id,

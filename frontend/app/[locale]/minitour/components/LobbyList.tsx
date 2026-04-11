@@ -103,6 +103,12 @@ function LobbyCard({ lobby }: { lobby: MiniTourLobby }) {
             <span className="text-muted-foreground">Game Mode:</span>
             <span className="font-medium">{lobby.gameMode}</span>
           </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Format:</span>
+            <span className="font-medium">
+              {(lobby.totalMatches === -1 || lobby.totalMatches === 0) ? 'BO1 (Infinite)' : `BO${lobby.totalMatches}`}
+            </span>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-1">

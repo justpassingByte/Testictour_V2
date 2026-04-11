@@ -318,7 +318,7 @@ export default function AdminAchievementsPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t("delete_achievement", { defaultValue: "Delete Achievement" })}</DialogTitle>
-            <DialogDescription>{t("delete_achievement_confirm", { name: deleteConfirm?.name, defaultValue: `Delete ${deleteConfirm?.name}? This will remove it from all player profiles.` })}</DialogDescription>
+            <DialogDescription>{t("delete_achievement_confirm", { name: deleteConfirm?.name || "", defaultValue: `Delete ${deleteConfirm?.name}? This will remove it from all player profiles.` })}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteConfirm(null)}>{t("cancel", { defaultValue: "Cancel" })}</Button>

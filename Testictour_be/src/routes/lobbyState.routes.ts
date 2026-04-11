@@ -17,6 +17,6 @@ router.post('/lobbies/:id/ready', auth('user'), LobbyStateController.toggleReady
 router.post('/lobbies/:id/delay', auth('user'), LobbyStateController.requestDelay);
 
 // GET /api/players/:userId/incoming-matches — all upcoming matches for a player
-router.get('/players/:userId/incoming-matches', auth('user'), LobbyStateController.getIncomingMatches);
+router.get('/players/:userId/incoming-matches', LobbyStateController.getIncomingMatches);
 
 export default router;

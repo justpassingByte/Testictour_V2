@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -21,6 +21,7 @@ import { PlayerUpcomingMatchesCard } from "./player-upcoming-matches-card";
 import { PlayerHeader } from "./player-header";
 
 export default function PlayerPage() {
+  const [isPageLoading, setIsPageLoading] = useState(true);
   const { 
     player,
     playerTournaments,
@@ -38,11 +39,13 @@ export default function PlayerPage() {
 
   useEffect(() => {
     const loadPlayerData = async () => {
+      setIsPageLoading(true);
       await Promise.all([
         fetchPlayer(playerId),
         fetchPlayerTournaments(playerId),
         fetchPlayerMatchesSummary(playerId)
       ]);
+      setIsPageLoading(false);
     };
 
     if (playerId) {
@@ -50,12 +53,45 @@ export default function PlayerPage() {
     }
   }, [playerId, fetchPlayer, fetchPlayerTournaments, fetchPlayerMatchesSummary]);
 
+  // Real-time: listen for profile/tournament updates via Socket.IO
+  useEffect(() => {
+    if (!playerId) return;
+
+    const { io } = require('socket.io-client');
+    const socket = io(process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000', {
+      transports: ['websocket', 'polling'],
+      withCredentials: true,
+    });
+
+    const refreshAll = () => {
+      fetchPlayer(playerId);
+      fetchPlayerTournaments(playerId);
+      fetchPlayerMatchesSummary(playerId);
+    };
+
+    socket.on('player_profile_update', (data?: any) => {
+      // If the event targets a specific user, only refresh if it matches
+      if (!data?.userId || data.userId === playerId) {
+        refreshAll();
+      }
+    });
+
+    socket.on('tournaments_refresh', () => {
+      refreshAll();
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerId]);
+
   // Helper for last active date (assuming playerMatches are sorted by date desc)
   const lastActiveDate = playerMatches.length > 0
-    ? new Date(Math.max(...playerMatches.map(m => new Date(m.date).getTime()))).toLocaleDateString()
+    ? new Date(Math.max(...playerMatches.map(m => new Date(m.playedAt).getTime()))).toLocaleDateString()
     : "N/A";
 
-  if (isLoading) {
+  if (isLoading || isPageLoading) {
   return (
     <div className="container py-8">
       <div className="flex items-center space-x-2 text-sm text-muted-foreground mb-6">
@@ -236,7 +272,7 @@ export default function PlayerPage() {
             joinedDate={player.user?.createdAt ? new Date(player.user.createdAt).toLocaleDateString() : "N/A"}
             eliminated={player.eliminated}
           />
-          <PlayerUpcomingMatchesCard playerId={player.user?.id || player.userId || playerId} />
+          <PlayerUpcomingMatchesCard playerId={player.user?.id || player.id || playerId} />
         </div>
       </div>
     </div>

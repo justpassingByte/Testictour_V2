@@ -52,4 +52,26 @@ router.post('/:id/image', auth('admin', 'partner'), upload.single('image'), asyn
 // Sync
 router.post('/:id/sync', auth('admin', 'partner'), TournamentController.syncMatches);
 
+// Bracket (Public) — get group bracket for tournament
+router.get('/:id/bracket', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const RoundService = require('../services/RoundService').default;
+    const bracket = await RoundService.getBracket(req.params.id);
+    res.json({ success: true, ...bracket });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Pre-assign groups (Admin) — assign participants to groups/lobbies before tournament starts
+router.post('/:id/pre-assign', auth('admin'), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const RoundService = require('../services/RoundService').default;
+    const result = await RoundService.preAssignGroups(req.params.id);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

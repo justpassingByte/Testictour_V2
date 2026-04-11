@@ -136,7 +136,7 @@ async function setupTestUsersAndLobby(): Promise<string | null> {
         settings: { autoStart: true, privateMode: true },
         status: "WAITING",
         currentPlayers: riotMatchDataForTest.metadata.participants.length,
-        totalMatches: 0, // Will be incremented by startMiniTourLobby
+        totalMatches: -1, // Set to -1 for BO1 (Infinite loop) mode testing
         creator: { connect: { id: actualLobbyCreatorId } },
         createdAt: lobbyCreationTime, // Set specific creation time
         participants: {

@@ -112,7 +112,7 @@ export default async function TournamentPage({ params }: { params: { id: string 
               <CardContent className="p-6 space-y-4">
                 <ul className="space-y-3">
                   <li className="flex items-center justify-between">
-                    <span className="text-muted-foreground flex items-center"><Users className="mr-2 h-4 w-4" /> {t("players")}:</span>
+                    <span className="text-muted-foreground flex items-center"><Users className="mr-2 h-4 w-4" /> {t("participants") || "Participants"}:</span>
                     <span className="font-medium">{tournament.registered || 0} / {tournament.maxPlayers}</span>
                   </li>
                   <li className="flex items-center justify-between">

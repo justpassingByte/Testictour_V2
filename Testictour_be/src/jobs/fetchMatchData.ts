@@ -127,6 +127,19 @@ export default async function fetchMatchData(job: Job<FetchMatchDataJobData>, io
   // 8. Process results via MatchResultService (awards points, emits events)
   await MatchResultService.processMatchResults(match.id, result.enrichedMatch as any, ioClient);
 
+  // 8.5 Queue Match Summary to update Player Profiles immediately
+  try {
+    const SummaryManagerService = require('../services/SummaryManagerService').default;
+    const { prisma } = require('../services/prisma');
+    const finalResults = await prisma.matchResult.findMany({ where: { matchId: match.id } });
+    if (finalResults.length > 0) {
+      await SummaryManagerService.queueMatchSummary(match.id, finalResults);
+      logger.info(`MatchDataWorker: queued match summary for match ${match.id}`);
+    }
+  } catch (err) {
+    logger.error(`MatchDataWorker: Failed to queue match summary: ${err}`);
+  }
+
   // 9. Transition lobby to FINISHED
   await LobbyStateService.transitionPhase(lobbyId, LOBBY_STATE.PLAYING, LOBBY_STATE.FINISHED);
 

@@ -1,7 +1,7 @@
 import api from '../lib/apiConfig';
 import { IParticipant, IMatchResult, ITournament } from '../types/tournament';
 import { IUser } from '../types/user';
-import { Player } from '../stores/miniTourLobbyStore';
+import { Player } from '../stores/playerStore';
 
 // New PlayerStats interface to match backend
 export interface PlayerStats {
@@ -46,6 +46,7 @@ export interface PlayerMatchSummary {
   roundNumber: number;
   placement: number;
   points: number;
+  prize?: number;
   playedAt: string;
 }
 
@@ -100,7 +101,7 @@ export class PlayerService {
   };
   
   private static isCacheValid(timestamp: number) {
-    return Date.now() - timestamp < 60 * 1000; // Cache valid for 1 minute
+    return Date.now() - timestamp < 60000; // Cache valid for 60 seconds
   }
 
   // Public leaderboard endpoint (no auth required)
@@ -128,7 +129,7 @@ export class PlayerService {
   }
   static async getMatchFullDetails(matchId: string): Promise<any> {
     try {
-      const response = await api.get(`/${matchId}/full-details`);
+      const response = await api.get(`/matches/${matchId}/full-details`);
       return response.data;
     } catch (error) {
       console.error('Failed to fetch full match details:', error);

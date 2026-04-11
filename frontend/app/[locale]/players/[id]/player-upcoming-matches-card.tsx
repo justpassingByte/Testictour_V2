@@ -95,11 +95,26 @@ export function PlayerUpcomingMatchesCard({ playerId }: PlayerUpcomingMatchesCar
 
   useEffect(() => {
     if (!playerId) return;
-    fetch(`${BACKEND_URL}/api/players/${playerId}/incoming-matches`, { credentials: 'include' })
-      .then(r => r.json())
-      .then(d => { if (d.success) setMatches(d.data || []); })
-      .catch((e) => console.error("Error fetching incoming matches", e))
-      .finally(() => setLoading(false));
+
+    let isMounted = true;
+
+    const fetchMatches = () => {
+      fetch(`${BACKEND_URL}/api/players/${playerId}/incoming-matches`, { credentials: 'include' })
+        .then(r => r.json())
+        .then(d => { if (isMounted && d.success) setMatches(d.data || []); })
+        .catch((e) => console.error("Error fetching incoming matches", e))
+        .finally(() => { if (isMounted) setLoading(false); });
+    };
+
+    fetchMatches();
+
+    // Poll every 10s so incoming matches appear automatically when tournament starts
+    const interval = setInterval(fetchMatches, 10000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, [playerId]);
 
   return (

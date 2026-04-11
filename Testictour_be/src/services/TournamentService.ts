@@ -31,8 +31,9 @@ export default class TournamentService {
       const { entryFee, hostFeePercent } = t as any;
       const registeredCount = t._count.participants;
 
-      // The prize pool is always calculated based on participation and fees.
-      const totalCollected = registeredCount * (entryFee || 0);
+      // The prize pool (budget) shows max potential if UPCOMING, adjusts actual when started
+      const multiplier = t.status === 'UPCOMING' ? Math.max(t.maxPlayers || 0, registeredCount) : registeredCount;
+      const totalCollected = multiplier * (entryFee || 0);
       const platformFee = Math.floor(totalCollected * (hostFeePercent || 0.1));
       const finalPrizePool = totalCollected - platformFee;
       
@@ -85,7 +86,9 @@ export default class TournamentService {
       }
       
       const registeredCount = t._count.participants;
-      const totalCollected = registeredCount * t.entryFee;
+      
+      const multiplier = t.status === 'UPCOMING' ? Math.max(t.maxPlayers || 0, registeredCount) : registeredCount;
+      const totalCollected = multiplier * (t.entryFee || 0);
       const platformFee = Math.floor(totalCollected * (t.hostFeePercent || 0.1));
       const finalPrizePool = totalCollected - platformFee;
 
@@ -148,9 +151,19 @@ export default class TournamentService {
     // const participantsMap = new Map(participants.map(p => [p.userId, p]));
 
     // Don't process the tournament object. Return the original + the full participant list.
+    // The prize pool (budget) shows max potential if UPCOMING, adjusts actual when started
+    const maxPlayers = tournament.maxPlayers || tournament.expectedParticipants || 0;
+    const registeredCount = participants.length;
+    const multiplier = tournament.status === 'UPCOMING' ? Math.max(maxPlayers, registeredCount) : registeredCount;
+    const totalCollected = multiplier * (tournament.entryFee || 0);
+    const platformFee = Math.floor(totalCollected * (tournament.hostFeePercent || 0.1));
+    const finalPrizePool = totalCollected - platformFee;
+
     const result = {
       ...tournament,
-      participants: participants
+      participants: participants,
+      registered: registeredCount,
+      budget: finalPrizePool
     };
 
     return result as any;
@@ -299,14 +312,14 @@ export default class TournamentService {
       const actualCount = await db.participant.count({ where: { tournamentId } });
       const entryFee = (tournament as any).entryFee || 0;
       const hostFeePercent = (tournament as any).hostFeePercent || 0.1;
-      const originalPrize = tournament.prizeStructure as any;
+      const dynamicPrizeStructure = PrizeCalculationService.getDynamicPrizeDistribution(actualCount);
       
       const totalCollected = actualCount * entryFee;
       const platformFee = Math.floor(totalCollected * hostFeePercent);
       const totalDistributablePrizePool = totalCollected - platformFee;
 
       const { adjusted } = PrizeCalculationService.autoAdjustPrizeStructure(
-        originalPrize,
+        dynamicPrizeStructure,
         totalDistributablePrizePool
       );
 

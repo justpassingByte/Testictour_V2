@@ -104,6 +104,7 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="advanced">Advanced</SelectItem>
               <SelectItem value="eliminated">Eliminated</SelectItem>
+              <SelectItem value="pending">Awaiting</SelectItem>
             </SelectContent>
           </Select>
           <Button variant="outline" size="icon" aria-label="Download Filtered Results">
@@ -199,9 +200,10 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
                             ${displayStatus === "advanced" ? "bg-green-500/20 text-green-500" : ""}
                             ${displayStatus === "eliminated" ? "bg-red-500/20 text-red-500" : ""}
                             ${displayStatus === "rewarded" ? "bg-purple-500/20 text-purple-500" : ""}
+                            ${displayStatus === "pending" ? "bg-slate-500/20 text-slate-400" : ""}
                           `}
                     >
-                      {displayStatus}
+                      {displayStatus === "pending" ? "Awaiting" : displayStatus}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">

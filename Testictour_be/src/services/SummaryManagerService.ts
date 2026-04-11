@@ -114,7 +114,7 @@ class SummaryManagerService {
       logger.debug(`Match summary queued for match ${matchId}`);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      logger.error(`Failed to queue match summary for match ${matchId}: ${errorMsg}`);
+      logger.debug(`Could not queue match summary for match ${matchId}: ${errorMsg}`);
       // Try direct processing if queueing fails
       try {
         await this.createMatchSummaries(matchId, results);
@@ -141,7 +141,7 @@ class SummaryManagerService {
       logger.debug(`Tournament summary queued for tournament ${tournamentId}`);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      logger.error(`Failed to queue tournament summary for tournament ${tournamentId}: ${errorMsg}`);
+      logger.debug(`Could not queue tournament summary for tournament ${tournamentId}: ${errorMsg}`);
       // Try direct processing if queueing fails
       try {
         await this.updateTournamentSummaries(tournamentId);
@@ -168,7 +168,7 @@ class SummaryManagerService {
       logger.debug(`Player stats queued for user ${userId}`);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      logger.error(`Failed to queue player stats for user ${userId}: ${errorMsg}`);
+      logger.debug(`Could not queue player stats for user ${userId}: ${errorMsg}`);
       // Try direct processing if queueing fails
       try {
         await this.updatePlayerStats(userId);
@@ -195,7 +195,7 @@ class SummaryManagerService {
       logger.debug(`MiniTour summary queued for user ${userId} in lobby ${miniTourLobbyId}`);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      logger.error(`Failed to queue MiniTour summary for user ${userId} in lobby ${miniTourLobbyId}: ${errorMsg}`);
+      logger.debug(`Could not queue MiniTour summary for user ${userId} in lobby ${miniTourLobbyId}: ${errorMsg}`);
     }
   }
 
@@ -367,22 +367,29 @@ class SummaryManagerService {
    */
   static async updatePlayerStats(userId: string) {
     try {
-      // Lấy tất cả kết quả trận đấu của người chơi
+      // Lấy tất cả kết quả trận đấu của người chơi (Tournaments)
       const matchResults = await prisma.matchResult.findMany({
         where: { userId },
-        include: { match: true }
+        select: { placement: true, points: true }
       });
 
-      if (!matchResults.length) {
+      // Lấy kết quả trận đấu MiniTour
+      const miniTourResults = await prisma.miniTourMatchResult.findMany({
+        where: { userId },
+        select: { placement: true, points: true }
+      });
+
+      const allMatches = [...matchResults, ...miniTourResults];
+
+      if (!allMatches.length) {
         logger.debug(`No match results found for user ${userId}, skipping stats update`);
         return;
       }
 
       // Tính toán thống kê
-      const matchesPlayed = matchResults.length;
-      const placements = matchResults.map(r => r.placement);
-      const points = matchResults.map(r => r.points);
-
+      const matchesPlayed = allMatches.length;
+      const placements = allMatches.map(r => r.placement);
+      
       // Tính toán average placement
       const averagePlacement = parseFloat((placements.reduce((a, b) => a + b, 0) / matchesPlayed).toFixed(2));
 
@@ -402,10 +409,16 @@ class SummaryManagerService {
         where: { userId },
         select: { tournamentId: true }
       });
-
       for (const summary of matchSummaries) {
         tournamentIds.add(summary.tournamentId);
       }
+
+      // Đếm số MiniTours đã tham gia
+      const miniTourLobbies = await prisma.miniTourLobbyParticipant.count({
+        where: { userId }
+      });
+
+      const totalTournamentsPlayed = tournamentIds.size + miniTourLobbies;
 
       // Cập nhật thống kê người chơi
       await prisma.user.update({
@@ -415,7 +428,7 @@ class SummaryManagerService {
           averagePlacement,
           topFourRate,
           firstPlaceRate,
-          tournamentsPlayed: tournamentIds.size,
+          tournamentsPlayed: totalTournamentsPlayed,
           lastUpdatedStats: new Date()
         }
       });
@@ -568,6 +581,9 @@ class SummaryManagerService {
           lobbiesPlayed: globalPointsAgg._count || 0,
         }
       });
+
+      // Recalculate global placement rates now that this MiniTour result exists
+      await this.updatePlayerStats(userId);
 
       logger.info(`Updated MiniTour summary for user ${userId} in lobby ${miniTourLobbyId}.`);
     } catch (error) {

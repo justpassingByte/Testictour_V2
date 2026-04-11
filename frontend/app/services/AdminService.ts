@@ -1,5 +1,5 @@
 import api from '../lib/apiConfig';
-import { Player } from '../stores/miniTourLobbyStore'; // Assuming Player type is here
+import { Player } from '../stores/playerStore';
 
 export class AdminService {
   static async getAllUsers(searchTerm?: string): Promise<Player[]> {

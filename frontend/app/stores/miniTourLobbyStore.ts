@@ -48,7 +48,7 @@ export interface MiniTourLobby {
   creatorId?: string;
   name: string;
   description?: string;
-  status: "WAITING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+  status: "WAITING" | "READY_CHECK" | "GRACE_PERIOD" | "STARTING" | "ADMIN_INTERVENTION" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
   currentPlayers: number;
   maxPlayers: number;
   entryFee: number;
@@ -143,6 +143,9 @@ export interface MiniTourLobbyState {
   syncingMatchId: string | null;
   isPolling: boolean;
   pollingMessage: string | null;
+  readyPlayerIds: string[];
+  phaseDurationMs: number;
+  phaseStartedAt: string | null;
 }
 
 interface MiniTourLobbyActions {
@@ -162,6 +165,8 @@ interface MiniTourLobbyActions {
   fetchMatchFromGrimoire: (lobbyId: string) => Promise<void>;
   startPolling: (lobbyId: string) => void;
   stopPolling: () => void;
+  toggleReady: (socket: any, lobbyId: string, userId: string) => void;
+  updateFromRealtimeSnapshot: (snapshot: any) => void;
 }
 
 export const useMiniTourLobbyStore = create<MiniTourLobbyState & MiniTourLobbyActions>((set, get) => ({
@@ -172,6 +177,9 @@ export const useMiniTourLobbyStore = create<MiniTourLobbyState & MiniTourLobbyAc
   syncingMatchId: null,
   isPolling: false,
   pollingMessage: null,
+  readyPlayerIds: [],
+  phaseDurationMs: 0,
+  phaseStartedAt: null,
 
   setLobby: (lobby) => {
     set({ lobby, isLoading: false, error: null });
@@ -298,7 +306,9 @@ export const useMiniTourLobbyStore = create<MiniTourLobbyState & MiniTourLobbyAc
   },
 
   fetchLobby: async (id) => {
-    set({ isLoading: true, error: null });
+    if (get().lobby?.id !== id) {
+      set({ isLoading: true, error: null });
+    }
     try {
       const lobby = await MiniTourLobbyService.getLobbyById(id);
       set({ lobby, isLoading: false });
@@ -511,70 +521,63 @@ export const useMiniTourLobbyStore = create<MiniTourLobbyState & MiniTourLobbyAc
       const currentState = get();
       if (!currentState.isPolling) return;
 
-      // 1. Kiểm tra pending match và thời gian bắt đầu (chờ 20 phút trên production)
       const pendingMatch = currentState.lobby?.matches?.find(m => m.status === 'PENDING');
+      
+      if (currentState.lobby?.status === 'COMPLETED' || !pendingMatch) {
+         set({ isPolling: false, pollingMessage: null });
+         return;
+      }
+
       if (pendingMatch && pendingMatch.createdAt) {
         const timeElapsedMs = Date.now() - new Date(pendingMatch.createdAt).getTime();
         const minutesElapsed = Math.floor(timeElapsedMs / (1000 * 60));
         
-        // Trong môi trường dev/local, KHÔNG CHỜ (bypass 20 phút) để test cho lẹ.
         const isDev = process.env.NODE_ENV === 'development';
         
         if (!isDev && minutesElapsed < 20) {
           const minutesLeft = 20 - minutesElapsed;
-          set({ pollingMessage: `Trận đấu đang diễn ra. Tự động lấy kết quả sau ${minutesLeft} phút...` });
-          
-          // Đợi 1 phút rồi check lại, thay vì gọi Riot API liên tục gây tốn rate limit
-          if (get().isPolling) {
-            setTimeout(poll, 60000); 
-          }
-          return;
+          set({ pollingMessage: `Trận đấu đang diễn ra. Đang chờ hệ thống đồng bộ kết quả (khoảng ${minutesLeft} phút nữa)...` });
+        } else {
+          set({ pollingMessage: 'Trận đấu có thể đã kết thúc. Đang chờ dữ liệu từ Riot API...' });
         }
       }
 
-      // 2. Nếu đã qua 20 phút, bắt đầu gọi API mỗi 15 giây
-      set({ pollingMessage: 'Bắt đầu tìm trận đấu trên Riot API...' });
-
-      try {
-        const result = await MiniTourLobbyService.fetchMatchFromGrimoire(lobbyId);
-
-        if (result.found && result.data) {
-          set({
-            lobby: result.data,
-            isPolling: false,
-            pollingMessage: null,
-          });
-          toast({
-            title: '🎮 Trận đấu đã kết thúc!',
-            description: 'Kết quả đã được cập nhật tự động.',
-          });
-          return; // Stop polling
-        }
-
-        // Not found yet, continue polling
-        set({ pollingMessage: result.message || 'Trận đấu đang diễn ra... Đang chờ kết quả.' });
-
-        // Poll again after 15 seconds
-        if (get().isPolling) {
-          setTimeout(poll, 15000);
-        }
-      } catch (error: any) {
-        console.error('[Polling] Error:', error);
-        set({
-          pollingMessage: 'Lỗi khi tìm trận. Sẽ thử lại sau 15 giây...',
-        });
-        // Retry even on error
-        if (get().isPolling) {
-          setTimeout(poll, 15000);
-        }
+      // We no longer spam the backend API for results here!
+      // The background worker on the server is polling Riot via BullMQ.
+      // When it finds the match, it will emit 'minitour_lobby_update' via WebSockets
+      // which triggers LobbyDetailsClient to update automatically.
+      
+      if (get().isPolling) {
+        setTimeout(poll, 15000); // Just update the visual message every 15s
       }
     };
 
-    // Start first poll immediately
     poll();
   },
 
   stopPolling: () => {
     set({ isPolling: false, pollingMessage: null });
+  },
+
+  toggleReady: (socket: any, lobbyId: string, userId: string) => {
+    if (!socket) {
+      toast({ title: 'Lỗi', description: 'Chưa kết nối máy chủ (socket)', variant: 'destructive' });
+      return;
+    }
+    socket.emit('minitour:ready_toggle', { lobbyId, userId });
+  },
+
+  updateFromRealtimeSnapshot: (snapshot: any) => {
+    set({
+      readyPlayerIds: snapshot.readyPlayerIds || [],
+      phaseDurationMs: snapshot.phaseDuration || 0,
+      phaseStartedAt: snapshot.phaseStartedAt || null,
+    });
+    
+    // Also update partial fields of the lobby if needed
+    const currentLobby = get().lobby;
+    if (currentLobby && snapshot.state && currentLobby.status !== snapshot.state) {
+      set({ lobby: { ...currentLobby, status: snapshot.state } });
+    }
   },
 }));

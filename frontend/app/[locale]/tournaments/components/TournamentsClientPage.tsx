@@ -204,7 +204,6 @@ export default function TournamentsClientPage({ initialTournaments }: Tournament
               </Badge>
             </span>
           </TabsTrigger>
-          <TabsTrigger value="my-tournaments">{t("my_tournaments")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="all" className="mt-4">
@@ -260,21 +259,6 @@ export default function TournamentsClientPage({ initialTournaments }: Tournament
             {sortedTournaments.filter((t) => t.status === "COMPLETED").length === 0 && (
               <div className="col-span-full text-center py-8 text-muted-foreground">
                 {t("no_completed_tournaments")}
-              </div>
-            )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="my-tournaments" className="mt-4">
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {sortedTournaments
-              .filter((t) => t.registered) 
-              .map((tournament, index) => (
-                <TournamentCard key={tournament.id} tournament={tournament} index={index}/>
-              ))}
-            {sortedTournaments.filter((t) => t.registered).length === 0 && (
-              <div className="col-span-full text-center py-8 text-muted-foreground">
-                {t("no_registered_tournaments")}
               </div>
             )}
           </div>
@@ -371,14 +355,14 @@ function TournamentCard({ tournament, index }: { tournament: ITournament; index:
             <ArrowRight className="ml-1 h-4 w-4" />
           </Button>
         </Link>
-        {tournament.status === "UPCOMING" && !tournament.registered && (
+        {tournament.status === "UPCOMING" && (tournament.registered || 0) < tournament.maxPlayers && (
           <Link href={`/tournaments/${tournament.id}/register`}>
             <Button>{t('register_now')}</Button>
           </Link>
         )}
-        {tournament.registered && (
-          <Badge variant="outline" className="bg-transparent">
-            {t('registration')}
+        {tournament.status === "UPCOMING" && (tournament.registered || 0) >= tournament.maxPlayers && (
+          <Badge variant="outline" className="border-red-500/50 text-red-500 bg-red-500/10">
+            Full
           </Badge>
         )}
       </CardFooter>

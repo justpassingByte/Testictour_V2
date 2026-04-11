@@ -144,7 +144,7 @@ export interface PlayerRoundStats {
   lastPlacement: number;
   points: number[];
   total: number;
-  status: "advanced" | "eliminated";
+  status: "advanced" | "eliminated" | "pending";
 }
 
 export interface ILobby {

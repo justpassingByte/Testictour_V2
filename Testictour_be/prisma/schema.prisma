@@ -297,6 +297,9 @@ model UserTournamentSummary {
 // New enum for MiniTourLobby status
 enum MiniTourLobbyStatus {
   WAITING
+  READY_CHECK
+  GRACE_PERIOD
+  STARTING
   IN_PROGRESS
   COMPLETED
   CANCELLED

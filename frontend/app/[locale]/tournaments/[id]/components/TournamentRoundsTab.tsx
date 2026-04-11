@@ -16,7 +16,7 @@ export function TournamentRoundsTab({ tournamentId, phases }: TournamentRoundsTa
       {phases && phases.length > 0 ? (
         phases.map((phase) => (
           <div key={phase.id} className="space-y-4">
-            <h3 className="text-xl font-bold mt-6 mb-4">Phase {phase.phaseNumber}: {phase.name}</h3>
+            <h3 className="text-xl font-bold mt-6 mb-4">Stage {phase.phaseNumber}: {phase.name}</h3>
             {phase.rounds && phase.rounds.length > 0 ? (
               phase.rounds
                 .slice()
@@ -48,7 +48,7 @@ export function TournamentRoundsTab({ tournamentId, phases }: TournamentRoundsTa
                       ${normalizedStatus === "completed" ? "bg-muted/50" : ""}
                     `}
                     >
-                      <CardTitle className="text-lg">Round {round.roundNumber}</CardTitle>
+                      <CardTitle className="text-lg">Group {String.fromCharCode(64 + round.roundNumber)}</CardTitle>
                       <Badge
                         variant="outline"
                         className={`

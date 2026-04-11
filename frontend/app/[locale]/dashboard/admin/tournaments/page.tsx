@@ -246,7 +246,7 @@ export default function AdminTournamentsPage() {
           <DialogHeader>
             <DialogTitle>{t("delete_tournament")}</DialogTitle>
             <DialogDescription>
-              {t("delete_tournament_confirm", { name: deleteDialog.tournament?.name, defaultValue: `Are you sure you want to delete ${deleteDialog.tournament?.name}? This action cannot be undone.` })}
+              {t("delete_tournament_confirm", { name: deleteDialog.tournament?.name || "", defaultValue: `Are you sure you want to delete ${deleteDialog.tournament?.name}? This action cannot be undone.` })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

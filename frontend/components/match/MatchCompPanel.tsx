@@ -282,8 +282,8 @@ function ParticipantRow({ p, points, prize, highlightPuuid }: {
 
 interface MatchCompPanelProps {
   matchData: GrimoireMatchData;
-  /** Optional: map of puuid → { placement, points } from MatchResult records */
-  resultMap?: Record<string, { placement: number; points: number }>;
+  /** Optional: map of puuid → { placement, points, prize? } from MatchResult records */
+  resultMap?: Record<string, { placement: number; points: number; prize?: number }>;
   /** Highlight this PUUID (the current viewer) */
   highlightPuuid?: string;
 }

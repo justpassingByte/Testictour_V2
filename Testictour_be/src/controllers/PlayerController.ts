@@ -73,6 +73,7 @@ const findUserIdFromParticipantOrUser = async (id: string): Promise<string | nul
 };
 
 const calculatePlayerStats = async (userId: string): Promise<PlayerStats> => {
+  // ── Tournament data ──────────────────────────────────────────────────────
   const participations = await prisma.participant.findMany({
     where: { userId },
     include: {
@@ -86,48 +87,50 @@ const calculatePlayerStats = async (userId: string): Promise<PlayerStats> => {
     }
   });
 
-  if (participations.length === 0) {
-    return {
-      tournamentsPlayed: 0,
-      tournamentsWon: 0,
-      completedTournaments: 0,
-      matchesPlayed: 0,
-      averagePlacement: 0,
-      topFourRate: 0,
-      firstPlaceRate: 0,
-      tournamentStats: []
-    };
-  }
-
-  const matchSummaries = await prisma.playerMatchSummary.findMany({
+  const tournamentMatchSummaries = await prisma.playerMatchSummary.findMany({
     where: { userId }
   });
-
-  const matchesPlayed = matchSummaries.length;
-
-  const placements = matchSummaries.map(m => m.placement);
-  const averagePlacement = matchesPlayed > 0 ? parseFloat((placements.reduce((a, b) => a + b, 0) / matchesPlayed).toFixed(2)) : 0;
-  const topFourCount = placements.filter(p => p <= 4).length;
-  const topFourRate = matchesPlayed > 0 ? Math.round((topFourCount / matchesPlayed) * 100) : 0;
-  const firstPlaceCount = placements.filter(p => p === 1).length;
-  const firstPlaceRate = matchesPlayed > 0 ? Math.round((firstPlaceCount / matchesPlayed) * 100) : 0;
 
   const tournamentSummaries = await prisma.userTournamentSummary.findMany({
     where: { userId },
     include: {
       tournament: {
         select: {
-          status: true // Make sure status is selected to filter completed tournaments
+          status: true
         }
       }
     }
   });
 
+  // ── MiniTour data (production + dev) ─────────────────────────────────────
+  const miniTourResults = await prisma.miniTourMatchResult.findMany({
+    where: { userId },
+    select: { placement: true, points: true }
+  });
+
+  const miniTourLobbiesPlayed = await prisma.miniTourLobbyParticipant.count({
+    where: { userId }
+  });
+
+  // ── Merge placements ─────────────────────────────────────────────────────
+  const tournamentPlacements = tournamentMatchSummaries.map(m => m.placement);
+  const miniTourPlacements = miniTourResults.map(m => m.placement);
+  const allPlacements = [...tournamentPlacements, ...miniTourPlacements];
+
+  const matchesPlayed = allPlacements.length;
+  const averagePlacement = matchesPlayed > 0
+    ? parseFloat((allPlacements.reduce((a, b) => a + b, 0) / matchesPlayed).toFixed(2))
+    : 0;
+  const topFourCount = allPlacements.filter(p => p <= 4).length;
+  const topFourRate = matchesPlayed > 0 ? Math.round((topFourCount / matchesPlayed) * 100) : 0;
+  const firstPlaceCount = allPlacements.filter(p => p === 1).length;
+  const firstPlaceRate = matchesPlayed > 0 ? Math.round((firstPlaceCount / matchesPlayed) * 100) : 0;
+
   const completedTournaments = tournamentSummaries.filter(t => t.tournament.status === 'COMPLETED').length;
   const tournamentWins = tournamentSummaries.filter(t => t.placement === 1).length;
 
   const tournamentStats = participations.map(p => {
-    const tournamentMatches = matchSummaries.filter(m => m.tournamentId === p.tournamentId).length;
+    const tournamentMatches = tournamentMatchSummaries.filter(m => m.tournamentId === p.tournamentId).length;
     return {
       tournamentId: p.tournamentId,
       tournamentName: p.tournament.name,
@@ -139,7 +142,7 @@ const calculatePlayerStats = async (userId: string): Promise<PlayerStats> => {
   });
 
   return {
-    tournamentsPlayed: participations.length,
+    tournamentsPlayed: participations.length + miniTourLobbiesPlayed,
     tournamentsWon: tournamentWins,
     completedTournaments,
     matchesPlayed,
@@ -609,34 +612,78 @@ export default {
         }
       });
 
-      // Format them into a common interface
-      const combinedMatches = [
+      const transactions = await prisma.transaction.findMany({
+        where: { userId, type: 'reward' },
+        select: { amount: true, refId: true }
+      });
+
+      // Quick lookup table
+      const refToPrize = new Map();
+      transactions.forEach(t => {
+        if (t.refId) {
+          // In case of multiple rewards for the same refId, we sum or just set
+          refToPrize.set(t.refId, (refToPrize.get(t.refId) || 0) + t.amount);
+        }
+      });
+
+      const combinedMatchesRaw = [
         ...tournamentMatches.map(m => ({
           ...m,
-          playedAt: new Date(m.playedAt)
+          playedAt: new Date(m.playedAt),
+          prize: refToPrize.get(m.tournamentId) || 0
         })),
         ...miniTourMatches.map(m => ({
-          id: `mini-${m.id}`,
+          id: `mini-res-${m.id}`,
           userId: m.userId,
-          matchId: m.miniTourMatchId,
+          matchId: `mini-${m.miniTourMatchId}`,
           tournamentId: m.miniTourMatch?.miniTourLobbyId || '',
           tournamentName: m.miniTourMatch?.miniTourLobby?.name || 'MiniTour',
-          roundNumber: 1, // MiniTours don't have rounds in the same way
+          roundNumber: 1,
           placement: m.placement,
           points: m.points,
+          prize: m.prize || 0,
           playedAt: m.miniTourMatch?.fetchedAt || m.miniTourMatch?.createdAt || new Date(0),
         }))
       ];
 
-      // Sort descending by playedAt
-      combinedMatches.sort((a, b) => b.playedAt.getTime() - a.playedAt.getTime());
+      // Group matches by tournament/lobby
+      const groupedMap = new Map();
+      
+      for (const m of combinedMatchesRaw) {
+        if (!m.tournamentId) continue;
+        
+        if (!groupedMap.has(m.tournamentId)) {
+          groupedMap.set(m.tournamentId, {
+            id: m.tournamentId,
+            name: m.tournamentName,
+            matchesCount: 0,
+            totalPoints: 0,
+            prize: 0,
+            playedAt: m.playedAt, 
+            matches: []
+          });
+        }
+        
+        const group = groupedMap.get(m.tournamentId);
+        group.matchesCount += 1;
+        group.totalPoints += (m.points || 0);
+        group.prize += (m.prize || 0);
+        group.matches.push(m);
+        
+        if (m.playedAt.getTime() > group.playedAt.getTime()) {
+          group.playedAt = m.playedAt;
+        }
+      }
+
+      const groupedMatchesArray = Array.from(groupedMap.values());
+      groupedMatchesArray.sort((a, b) => b.playedAt.getTime() - a.playedAt.getTime());
 
       // Paginate
-      const total = combinedMatches.length;
-      const paginatedMatches = combinedMatches.slice(Number(offset), Number(offset) + Number(limit));
+      const total = groupedMatchesArray.length;
+      const paginatedGroups = groupedMatchesArray.slice(Number(offset), Number(offset) + Number(limit));
       
       res.json({
-        data: paginatedMatches,
+        data: paginatedGroups,
         total,
         limit: Number(limit),
         offset: Number(offset)

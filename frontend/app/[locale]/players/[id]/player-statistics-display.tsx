@@ -33,12 +33,25 @@ interface PlayerMatchDisplay {
   date: string;
 }
 
+interface PlayerHistoryGroupDisplay {
+  id: string;
+  name: string;
+  matchesCount: number;
+  totalPoints: number;
+  prize: number;
+  playedAt: string;
+  matches: PlayerMatchDisplay[];
+}
+
 interface PlayerStatisticsDisplayProps {
   stats: PlayerStats;
-  playerMatches: PlayerMatchDisplay[];
+  playerMatches: PlayerHistoryGroupDisplay[];
 }
 
 export function PlayerStatisticsDisplay({ stats, playerMatches }: PlayerStatisticsDisplayProps) {
+  // Flatten matches for accurate aggregation
+  const flatMatches = playerMatches.flatMap(group => group.matches);
+
   return (
     <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1">
       <CardHeader className="pb-4">
@@ -123,10 +136,10 @@ export function PlayerStatisticsDisplay({ stats, playerMatches }: PlayerStatisti
                   <div className="flex items-center">
                     <Star className="mr-2 h-5 w-5 text-primary" />
                     <span className="font-medium">
-                      {playerMatches.length > 0
+                      {flatMatches.length > 0
                         ? (
-                            playerMatches.reduce((sum, match) => sum + match.points, 0) /
-                            playerMatches.length
+                            flatMatches.reduce((sum, match) => sum + match.points, 0) /
+                            flatMatches.length
                           ).toFixed(1)
                         : "0"} pts
                     </span>
@@ -137,10 +150,10 @@ export function PlayerStatisticsDisplay({ stats, playerMatches }: PlayerStatisti
                   <div className="flex items-center">
                     <Trophy className="mr-2 h-5 w-5 text-yellow-500" />
                     <span className="font-medium">
-                      {playerMatches.some(m => m.placement === 1)
-                        ? `1st Place (${playerMatches.filter(m => m.placement === 1).length} times)`
-                        : playerMatches.length > 0
-                        ? `${Math.min(...playerMatches.map(m => m.placement))}th Place`
+                      {flatMatches.some(m => m.placement === 1)
+                        ? `1st Place (${flatMatches.filter(m => m.placement === 1).length} times)`
+                        : flatMatches.length > 0
+                        ? `${Math.min(...flatMatches.map(m => m.placement))}th Place`
                         : "N/A"}
                     </span>
                   </div>

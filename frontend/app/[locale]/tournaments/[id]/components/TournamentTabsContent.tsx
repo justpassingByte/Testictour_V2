@@ -2,7 +2,8 @@ import React, { useState, memo } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 import { ITournament, IParticipant } from '@/app/types/tournament';
-import { TournamentRoundsTab } from "@/app/[locale]/tournaments/[id]/components/TournamentRoundsTab";
+import { TournamentBracketTab } from "@/app/[locale]/tournaments/[id]/components/TournamentBracketTab";
+import { TournamentPhasesTab } from "@/app/[locale]/tournaments/[id]/components/TournamentPhasesTab";
 import { TournamentPlayersTab } from "@/app/[locale]/tournaments/[id]/components/TournamentPlayersTab";
 import { TournamentRulesTab } from "@/app/[locale]/tournaments/[id]/components/TournamentRulesTab";
 import { TournamentDetailsTab } from "@/app/[locale]/tournaments/[id]/components/TournamentDetailsTab";
@@ -10,7 +11,6 @@ import { TournamentDetailsTab } from "@/app/[locale]/tournaments/[id]/components
 interface TournamentTabsContentProps {
   tournament: ITournament;
   participants: IParticipant[];
-  // rounds: IRound[]; // Change rounds to phases
   fetchMoreParticipants: (tournamentId: string, page?: number, limit?: number) => Promise<void>;
   loading: boolean;
 }
@@ -18,26 +18,28 @@ interface TournamentTabsContentProps {
 export const TournamentTabsContent = memo(({
   tournament,
   participants,
-  // rounds,
   fetchMoreParticipants,
   loading,
 }: TournamentTabsContentProps) => {
-  const [activeTab, setActiveTab] = useState("rounds");
+  const [activeTab, setActiveTab] = useState("phase");
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab}>
-      <TabsList className="grid grid-cols-4 mb-4 bg-muted/30 p-1 rounded-xl">
-        <TabsTrigger value="rounds" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all">Rounds</TabsTrigger>
-        <TabsTrigger value="players" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all">Players</TabsTrigger>
-        <TabsTrigger value="rules" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all">Rules</TabsTrigger>
-        <TabsTrigger value="details" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all">Details</TabsTrigger>
+      <TabsList className="grid grid-cols-5 mb-4 bg-muted/30 p-1 rounded-xl">
+        <TabsTrigger value="phase" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm">Phases</TabsTrigger>
+        <TabsTrigger value="bracket" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm">Bracket</TabsTrigger>
+        <TabsTrigger value="players" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm">Participants</TabsTrigger>
+        <TabsTrigger value="rules" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm">Rules</TabsTrigger>
+        <TabsTrigger value="details" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm">Details</TabsTrigger>
       </TabsList>
-      <TabsContent value="rounds" className="space-y-4">
-        {/* Pass tournament.phases instead of rounds */}
+      <TabsContent value="bracket" className="space-y-4">
+        <TournamentBracketTab tournamentId={tournament.id} />
+      </TabsContent>
+      <TabsContent value="phase" className="space-y-4">
         {tournament.phases && tournament.phases.length > 0 ? (
-          <TournamentRoundsTab tournamentId={tournament.id} phases={tournament.phases} />
+          <TournamentPhasesTab phases={tournament.phases} />
         ) : (
-          <p className="text-muted-foreground text-center">No rounds available for this tournament.</p>
+          <p className="text-muted-foreground text-center">No phases available for this tournament.</p>
         )}
       </TabsContent>
       <TabsContent value="players" className="space-y-4">
@@ -62,4 +64,4 @@ export const TournamentTabsContent = memo(({
   );
 });
 
-TournamentTabsContent.displayName = 'TournamentTabsContent'; 
+TournamentTabsContent.displayName = 'TournamentTabsContent';

@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { IRound, PlayerRoundStats, ITournament } from "@/app/types/tournament"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Trophy, Medal, Star, ChevronDown, ChevronUp, Loader2 } from "lucide-react"
+import { Trophy, Medal, Star, ChevronDown, ChevronUp, Loader2, ChevronLeft, ChevronRight } from "lucide-react"
 import { format } from "date-fns"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Button } from "@/components/ui/button"
@@ -27,21 +27,37 @@ interface RoundTabsProps {
 export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTabsProps) {
   const { matchResults, fetchRoundDetails } = useTournamentStore()
   const [pollingMessage, setPollingMessage] = useState<string | null>(null);
+  const [matchesPage, setMatchesPage] = useState(1);
+  const lobbiesPerPage = 4;
+
+  // Use refs so the polling closure always reads the LATEST values without re-registering the effect
+  const roundRef = React.useRef(round);
+  const matchResultsRef = React.useRef(matchResults);
+  const fetchRef = React.useRef(fetchRoundDetails);
+  roundRef.current = round;
+  matchResultsRef.current = matchResults;
+  fetchRef.current = fetchRoundDetails;
 
   useEffect(() => {
     let timeout: NodeJS.Timeout;
-    
+    let isMounted = true;
+
     const checkAndPoll = () => {
-      // 1. Kiểm tra xem có trận nào cài đặt chưa có kết quả (hoặc chưa fetch xong không)
+      if (!isMounted) return;
+
+      const currentRound = roundRef.current;
+      const currentResults = matchResultsRef.current;
+
+      // Check if any lobby is still missing results
       let earliestStartTime = Number.MAX_SAFE_INTEGER;
       let hasPending = false;
-      
-      round.lobbies?.forEach(l => {
+
+      currentRound.lobbies?.forEach(l => {
         if (!l.fetchedResult) {
           hasPending = true;
         }
         l.matches?.forEach(m => {
-          if (!matchResults[m.id] || matchResults[m.id].length === 0) {
+          if (!currentResults[m.id] || currentResults[m.id].length === 0) {
             hasPending = true;
             const createdMs = new Date(m.createdAt || Date.now()).getTime();
             if (createdMs < earliestStartTime) earliestStartTime = createdMs;
@@ -51,7 +67,7 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
 
       if (!hasPending) {
         setPollingMessage(null);
-        return; // Đã xong hết kết quả
+        return; // All results loaded — stop polling
       }
 
       if (earliestStartTime === Number.MAX_SAFE_INTEGER) {
@@ -68,18 +84,35 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
         timeout = setTimeout(checkAndPoll, 60000);
       } else {
         setPollingMessage("Đang đồng bộ kết quả...");
-        fetchRoundDetails(tournament.id, round.id).then(() => {
-          timeout = setTimeout(checkAndPoll, 15000);
+        fetchRef.current(tournament.id, currentRound.id).then(() => {
+          if (isMounted) timeout = setTimeout(checkAndPoll, isDev ? 5000 : 15000);
         }).catch(() => {
-          timeout = setTimeout(checkAndPoll, 15000);
+          if (isMounted) timeout = setTimeout(checkAndPoll, isDev ? 5000 : 15000);
         });
       }
     };
 
     checkAndPoll();
 
-    return () => clearTimeout(timeout);
-  }, [round.id, tournament.id, fetchRoundDetails, round.lobbies, matchResults]);
+    return () => {
+      isMounted = false;
+      clearTimeout(timeout);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [round.id, tournament.id]);
+
+  const sortedMatchLobbies = round.lobbies
+    ?.slice()
+    .sort((a, b) => {
+      if (a.fetchedResult && !b.fetchedResult) return -1;
+      if (!a.fetchedResult && b.fetchedResult) return 1;
+      const numA = parseInt(a.name.replace(/[^0-9]/g, '')) || 0;
+      const numB = parseInt(b.name.replace(/[^0-9]/g, '')) || 0;
+      return numA - numB;
+    }) || [];
+
+  const totalMatchesPages = Math.ceil(sortedMatchLobbies.length / lobbiesPerPage);
+  const visibleMatchLobbies = sortedMatchLobbies.slice((matchesPage - 1) * lobbiesPerPage, matchesPage * lobbiesPerPage);
 
   return (
     <Tabs defaultValue="results" className="w-full">
@@ -94,19 +127,7 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
       </TabsContent>
       <TabsContent value="matches" className="space-y-6">
         {/* Group matches by lobby for better organization */}
-        {round.lobbies
-          ?.slice() // Tạo một bản sao để không ảnh hưởng đến dữ liệu gốc
-          .sort((a, b) => {
-            // Ưu tiên lobbies có fetchedResult = true
-            if (a.fetchedResult && !b.fetchedResult) return -1;
-            if (!a.fetchedResult && b.fetchedResult) return 1;
-            
-            // Sau đó sắp xếp theo tên lobby (giả sử tên có dạng "Lobby X")
-            const numA = parseInt(a.name.replace(/[^0-9]/g, '')) || 0;
-            const numB = parseInt(b.name.replace(/[^0-9]/g, '')) || 0;
-            return numA - numB;
-          })
-          .map((lobby, lobbyIndex) => (
+        {visibleMatchLobbies.map((lobby, lobbyIndex) => (
           <div key={lobby.id} className="space-y-4">
             <h3 className="text-lg font-medium flex items-center">
               <Badge variant="outline" className="mr-2">{lobby.name}</Badge>
@@ -321,6 +342,34 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
               <p>Match details are not available or are still being processed.</p>
             </CardContent>
           </Card>
+        )}
+
+        {totalMatchesPages > 1 && (
+          <div className="flex justify-center items-center gap-4 py-4 mt-6 border-t border-white/5">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setMatchesPage(p => Math.max(1, p - 1))}
+              disabled={matchesPage === 1}
+              className="flex items-center"
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Prev
+            </Button>
+            <span className="text-sm text-muted-foreground whitespace-nowrap">
+              Page {matchesPage} of {totalMatchesPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setMatchesPage(p => Math.min(totalMatchesPages, p + 1))}
+              disabled={matchesPage === totalMatchesPages}
+              className="flex items-center"
+            >
+              Next
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
         )}
       </TabsContent>
       <TabsContent value="lobbies">
