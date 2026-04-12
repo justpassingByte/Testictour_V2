@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Coins, PlayCircle, Trophy } from "lucide-react"
+import { useTranslations } from "next-intl"
 import type { MiniTourLobby } from "@/app/stores/miniTourLobbyStore"
 
 interface LobbyOverviewTabProps {
@@ -9,6 +10,7 @@ interface LobbyOverviewTabProps {
 }
 
 export function LobbyOverviewTab({ lobby }: LobbyOverviewTabProps) {
+  const t = useTranslations("common");
   const getThemeStyle = (theme: string | undefined) => {
     switch (theme) {
       case "premium":
@@ -27,27 +29,27 @@ export function LobbyOverviewTab({ lobby }: LobbyOverviewTabProps) {
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Lobby Statistics</CardTitle>
+            <CardTitle className="text-lg">{t("lobby_statistics")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Total Matches:</span>
-              <span className="font-medium">{lobby.matches?.filter(m => m.fetchedAt)?.length || 0} / {(lobby.totalMatches === -1 || lobby.totalMatches === 0) ? 'INF (BO1)' : lobby.totalMatches}</span>
+              <span className="text-muted-foreground">{t("total_matches")}:</span>
+              <span className="font-medium">{lobby.matches?.filter(m => m.fetchedAt)?.length || 0} / {(lobby.totalMatches === -1 || lobby.totalMatches === 0) ? t("infinity_bo1") : lobby.totalMatches}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Average Rating:</span>
+              <span className="text-muted-foreground">{t("average_rating")}:</span>
               <span className="font-medium">{lobby.averageRating}/5.0</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Created:</span>
+              <span className="text-muted-foreground">{t("created")}:</span>
               <span className="font-medium">{new Date(lobby.createdAt).toLocaleDateString()}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Game Mode:</span>
+              <span className="text-muted-foreground">{t("game_mode")}:</span>
               <span className="font-medium">{lobby.gameMode}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Skill Level:</span>
+              <span className="text-muted-foreground">{t("skill_level")}:</span>
               <span className="font-medium">{lobby.skillLevel}</span>
             </div>
           </CardContent>
@@ -56,7 +58,7 @@ export function LobbyOverviewTab({ lobby }: LobbyOverviewTabProps) {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg">
-              Prize Distribution {(lobby.totalMatches === -1 || lobby.totalMatches === 0) && <span className="text-sm font-normal text-muted-foreground ml-2">(Per Match)</span>}
+              {t("prize_distribution")} {(lobby.totalMatches === -1 || lobby.totalMatches === 0) && <span className="text-sm font-normal text-muted-foreground ml-2">{t("per_match")}</span>}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -66,7 +68,7 @@ export function LobbyOverviewTab({ lobby }: LobbyOverviewTabProps) {
                 <div key={place} className="flex justify-between items-center">
                   <div className="flex items-center">
                     <Trophy className={`h-4 w-4 mr-2 ${parseInt(place) === 1 ? 'text-yellow-500' : parseInt(place) === 2 ? 'text-gray-400' : 'text-amber-700'}`} />
-                    <span>{place === '1' ? '1st' : place === '2' ? '2nd' : `${place}rd`} Place</span>
+                    <span>{place === '1' ? t("first_place") : place === '2' ? t("second_place") : place === '3' ? t("third_place") : t("nth_place", { place })}</span>
                   </div>
                   <span className="font-bold">
                     <Coins className="inline h-4 w-4 mr-1" />
@@ -81,14 +83,14 @@ export function LobbyOverviewTab({ lobby }: LobbyOverviewTabProps) {
       {lobby.settings?.autoStart !== undefined && (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Lobby Settings</CardTitle>
+            <CardTitle className="text-lg">{t("lobby_settings")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 md:grid-cols-3">
               <div className="flex items-center space-x-2">
                 <PlayCircle className={`h-4 w-4 ${lobby.settings.autoStart ? "text-green-500" : "text-muted-foreground"}`} />
                 <span className="text-sm">
-                  Auto Start: {lobby.settings.autoStart ? "Enabled" : "Disabled"}
+                  {t("auto_start")}: {lobby.settings.autoStart ? t("enabled") : t("disabled")}
                 </span>
               </div>
             </div>

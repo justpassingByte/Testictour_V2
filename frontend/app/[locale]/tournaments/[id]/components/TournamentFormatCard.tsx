@@ -3,24 +3,26 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ITournament } from "@/app/types/tournament"
 import { Table } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 interface TournamentFormatCardProps {
   tournament: ITournament;
 }
 
 export function TournamentFormatCard({ tournament }: TournamentFormatCardProps) {
+  const t = useTranslations("common")
   return (
     <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1">
       <CardHeader className="pb-3">
         <CardTitle className="text-lg flex items-center">
           <Table className="mr-2 h-5 w-5 text-primary" />
-          Tournament Format
+          {t("tournament_format")}
         </CardTitle>
       </CardHeader>
       <CardContent className="grid gap-2 text-sm">
      
         <div className="flex justify-between">
-          <div className="text-muted-foreground">Registration Fee:</div>
+          <div className="text-muted-foreground">{t("registration_fee")}:</div>
           <div className="font-medium">
             {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(
               (tournament.entryFee || 0)
@@ -28,7 +30,7 @@ export function TournamentFormatCard({ tournament }: TournamentFormatCardProps) 
           </div>
         </div>
         <div className="flex justify-between">
-          <div className="text-muted-foreground">Prize Pool:</div>
+          <div className="text-muted-foreground">{t("prize_pool")}:</div>
           <div className="font-medium">
             {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(
               tournament.budget || 0
@@ -36,7 +38,7 @@ export function TournamentFormatCard({ tournament }: TournamentFormatCardProps) 
           </div>
         </div>
         <div className="grid gap-1">
-          <div className="text-muted-foreground">Elimination Rules:</div>
+          <div className="text-muted-foreground">{t("elimination_rule_short")}:</div>
           <div className="font-medium">
             {tournament.phases.map((phase) => {
               console.log('Debug advancementCondition:', phase.advancementCondition);

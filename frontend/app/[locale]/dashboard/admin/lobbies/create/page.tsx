@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import type React from "react"
 import { useState, useRef, useEffect } from "react"
@@ -19,6 +19,7 @@ import { Separator } from "@/components/ui/separator"
 import { useMiniTourLobbyStore, MiniTourLobby } from "@/app/stores/miniTourLobbyStore"
 import { useToast } from "@/components/ui/use-toast"
 import api from "@/app/lib/apiConfig"
+import { RegionSelector } from "@/components/ui/RegionSelector"
 
 export default function CreateOrEditLobbyPage() {
   const router = useRouter()
@@ -45,6 +46,7 @@ export default function CreateOrEditLobbyPage() {
     skillLevel: "all",
     partnerRevenueShare: 0.2, // Default to 20%
     totalMatches: 3, // 3 = BO3, 5 = BO5, -1 = BO1 Infinite
+    region: "APAC", // Major region
   })
 
   const [selectedTags, setSelectedTags] = useState<string[]>([])
@@ -75,6 +77,7 @@ export default function CreateOrEditLobbyPage() {
               skillLevel: existingLobby.skillLevel,
               partnerRevenueShare: existingLobby.partnerRevenueShare ?? 0.2,
               totalMatches: existingLobby.totalMatches ?? 3,
+              region: (existingLobby as any).region || "APAC",
             })
             setSelectedTags(existingLobby.tags || [])
             if (existingLobby.customLogoUrl) {
@@ -262,6 +265,15 @@ export default function CreateOrEditLobbyPage() {
                         </SelectContent>
                       </Select>
                     </div>
+                  </div>
+
+                  {/* Region Selector */}
+                  <div className="space-y-2">
+                    <RegionSelector
+                      label="Region"
+                      value={lobbyData.region}
+                      onChange={(v) => setLobbyData({ ...lobbyData, region: v })}
+                    />
                   </div>
 
                   <div className="space-y-2">

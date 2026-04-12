@@ -63,12 +63,13 @@ const MatchController = {
     }
 
     try {
-      const localMatch = await MatchService.getMatchById(id);
+      const localMatch = await MatchService.getMatchWithLobbyAndRound(id);
       if (!localMatch) {
         throw new ApiError(404, 'Local match not found.');
       }
 
-      const searchStartTime = Math.floor((localMatch.createdAt.getTime() / 1000) - (5 * 60));
+      const matchStart = localMatch.lobby?.matchStartedAt || localMatch.lobby?.round?.startTime || localMatch.createdAt;
+      const searchStartTime = Math.floor((new Date(matchStart).getTime() / 1000) - (5 * 60));
       const searchEndTime = Math.floor((new Date().getTime() / 1000) + (60 * 60));
 
       const riotMatchId = await MatchService.findMatchByCriteria(

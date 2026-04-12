@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useUserStore } from "@/app/stores/userStore";
 import { Play } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
@@ -15,6 +16,7 @@ interface IncomingMatch {
 }
 
 export function TournamentLobbyButton({ tournamentId }: { tournamentId: string }) {
+  const t = useTranslations("common");
   const { currentUser } = useUserStore();
   const [activeLobbyId, setActiveLobbyId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -43,7 +45,7 @@ export function TournamentLobbyButton({ tournamentId }: { tournamentId: string }
   if (loading) {
     return (
       <Button variant="secondary" className="w-full opacity-50" disabled>
-        Checking lobby...
+        {t("checking_lobby")}
       </Button>
     );
   }
@@ -52,7 +54,7 @@ export function TournamentLobbyButton({ tournamentId }: { tournamentId: string }
     return (
       <Button asChild className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 border border-indigo-400/30 text-white shadow-lg shadow-indigo-500/20">
         <Link href={`/tournaments/${tournamentId}/lobbies/${activeLobbyId}`}>
-          <Play className="mr-2 h-4 w-4" /> Enter My Lobby
+          <Play className="mr-2 h-4 w-4" /> {t("enter_my_lobby")}
         </Link>
       </Button>
     );
@@ -61,7 +63,7 @@ export function TournamentLobbyButton({ tournamentId }: { tournamentId: string }
   // Fallback for spectators or eliminated players
   return (
     <Button asChild variant="secondary" className="w-full">
-      <Link href="#tournament-tabs">View Current Lobbies</Link>
+      <Link href="#tournament-tabs">{t("view_current_lobbies")}</Link>
     </Button>
   );
 }

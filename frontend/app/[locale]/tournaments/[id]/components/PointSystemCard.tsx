@@ -2,12 +2,14 @@
 
 import { ITournament } from "@/app/types/tournament"
 import { Medal } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 interface PointSystemCardProps {
   tournament: ITournament;
 }
 
 export function PointSystemCard({ tournament }: PointSystemCardProps) {
+  const t = useTranslations("common")
   let targetPhase: ITournament['phases'][0] | undefined;
   let showPhaseTitle = false;
 
@@ -44,7 +46,7 @@ export function PointSystemCard({ tournament }: PointSystemCardProps) {
       <div className="pb-4">
         <h2 className="text-sm font-semibold uppercase tracking-wider flex items-center text-muted-foreground">
           <Medal className="mr-2 h-4 w-4" />
-          Point System
+          {t("point_system")}
         </h2>
       </div>
       <div>

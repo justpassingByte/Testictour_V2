@@ -1,5 +1,6 @@
 import React, { useState, memo } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useTranslations } from "next-intl"
 
 import { ITournament, IParticipant } from '@/app/types/tournament';
 import { TournamentBracketTab } from "@/app/[locale]/tournaments/[id]/components/TournamentBracketTab";
@@ -22,15 +23,16 @@ export const TournamentTabsContent = memo(({
   loading,
 }: TournamentTabsContentProps) => {
   const [activeTab, setActiveTab] = useState("phase");
+  const t = useTranslations("common");
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab}>
       <TabsList className="grid grid-cols-5 mb-4 bg-muted/30 p-1 rounded-xl">
-        <TabsTrigger value="phase" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm">Phases</TabsTrigger>
-        <TabsTrigger value="bracket" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm">Bracket</TabsTrigger>
-        <TabsTrigger value="players" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm">Participants</TabsTrigger>
-        <TabsTrigger value="rules" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm">Rules</TabsTrigger>
-        <TabsTrigger value="details" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm">Details</TabsTrigger>
+        <TabsTrigger value="phase" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm">{t("phases")}</TabsTrigger>
+        <TabsTrigger value="bracket" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm">{t("bracket")}</TabsTrigger>
+        <TabsTrigger value="players" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm">{t("participants")}</TabsTrigger>
+        <TabsTrigger value="rules" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm">{t("rules")}</TabsTrigger>
+        <TabsTrigger value="details" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm">{t("details")}</TabsTrigger>
       </TabsList>
       <TabsContent value="bracket" className="space-y-4">
         <TournamentBracketTab tournamentId={tournament.id} />
@@ -39,7 +41,7 @@ export const TournamentTabsContent = memo(({
         {tournament.phases && tournament.phases.length > 0 ? (
           <TournamentPhasesTab phases={tournament.phases} />
         ) : (
-          <p className="text-muted-foreground text-center">No phases available for this tournament.</p>
+          <p className="text-muted-foreground text-center">{t("no_phases_available")}</p>
         )}
       </TabsContent>
       <TabsContent value="players" className="space-y-4">
@@ -51,7 +53,7 @@ export const TournamentTabsContent = memo(({
             loading={loading}
           />
         ) : (
-          <p className="text-muted-foreground text-center">No players registered yet.</p>
+          <p className="text-muted-foreground text-center">{t("no_players_registered")}</p>
         )}
       </TabsContent>
       <TabsContent value="rules" className="space-y-4">

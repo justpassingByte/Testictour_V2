@@ -5,6 +5,7 @@ import Link from "next/link"
 import { PlayerRoundStats, IRound, LobbyState } from "@/app/types/tournament"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { useTranslations } from "next-intl"
 import { useUserStore } from "@/app/stores/userStore"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -18,18 +19,18 @@ interface LobbiesTabProps {
 }
 
 // State badge colors — handles both LobbyState machine values and DB state strings
-function LobbyStateBadge({ state }: { state?: string }) {
-  if (!state) return <Badge variant="outline">Pending</Badge>
+function LobbyStateBadge({ state, t }: { state?: string, t: any }) {
+  if (!state) return <Badge variant="outline">{t("pending")}</Badge>
 
   const config: Record<string, { label: string; class: string; pulse?: boolean }> = {
-    WAITING:            { label: 'Waiting',       class: 'text-muted-foreground border-muted' },
-    READY_CHECK:        { label: 'Ready Check',   class: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40', pulse: true },
-    GRACE_PERIOD:       { label: 'Grace Period',  class: 'bg-orange-500/20 text-orange-400 border-orange-500/40', pulse: true },
-    STARTING:           { label: 'Starting!',     class: 'bg-green-500/20 text-green-400 border-green-500/40', pulse: true },
-    PLAYING:            { label: 'In Progress',   class: 'bg-primary/20 text-primary border-primary/40', pulse: true },
-    FINISHED:           { label: 'Finished',      class: 'bg-green-700/20 text-green-600 border-green-700/30' },
-    PAUSED:             { label: 'Paused',        class: 'bg-orange-500/20 text-orange-400 border-orange-500/40' },
-    ADMIN_INTERVENTION: { label: 'Admin Review',  class: 'bg-red-500/20 text-red-400 border-red-500/40', pulse: true },
+    WAITING:            { label: t('waiting'),       class: 'text-muted-foreground border-muted' },
+    READY_CHECK:        { label: t('ready_check'),   class: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40', pulse: true },
+    GRACE_PERIOD:       { label: t('grace_period'),  class: 'bg-orange-500/20 text-orange-400 border-orange-500/40', pulse: true },
+    STARTING:           { label: t('starting'),     class: 'bg-green-500/20 text-green-400 border-green-500/40', pulse: true },
+    PLAYING:            { label: t('in_progress'),   class: 'bg-primary/20 text-primary border-primary/40', pulse: true },
+    FINISHED:           { label: t('finished'),      class: 'bg-green-700/20 text-green-600 border-green-700/30' },
+    PAUSED:             { label: t('paused'),        class: 'bg-orange-500/20 text-orange-400 border-orange-500/40' },
+    ADMIN_INTERVENTION: { label: t('admin_review'),  class: 'bg-red-500/20 text-red-400 border-red-500/40', pulse: true },
   }
 
   const entry = config[state] ?? { label: state, class: 'text-muted-foreground border-muted' }
@@ -41,6 +42,7 @@ function LobbyStateBadge({ state }: { state?: string }) {
 }
 
 export function LobbiesTab({ round, allPlayers, tournamentId }: LobbiesTabProps) {
+  const t = useTranslations("common");
   const { currentUser } = useUserStore()
   const [currentPage, setCurrentPage] = useState(1);
   const lobbiesPerPage = 4;
@@ -84,37 +86,37 @@ export function LobbiesTab({ round, allPlayers, tournamentId }: LobbiesTabProps)
                     <CardTitle className={isMyLobby ? "text-primary" : ""}>{lobby.name}</CardTitle>
                     {isMyLobby && (
                       <Badge variant="default" className="bg-primary animate-pulse-subtle flex items-center gap-1">
-                        <Trophy className="w-3 h-3" /> My Lobby
+                        <Trophy className="w-3 h-3" /> {t("my_lobby")}
                       </Badge>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
                     {/* Live state badge — shows real-time status */}
-                    <LobbyStateBadge state={lobby.state} />
+                    <LobbyStateBadge state={lobby.state} t={t} />
                     {/* Results badge (legacy) */}
                     {lobby.fetchedResult && (
-                      <Badge variant="default">Results Available</Badge>
+                      <Badge variant="default">{t("results_available")}</Badge>
                     )}
                   </div>
                 </div>
                 <CardDescription>
-                  {lobbyPlayers.filter((p) => p.status === "advanced").length} advanced •{" "}
-                  {lobbyPlayers.filter((p) => p.status === "eliminated").length} eliminated •{" "}
+                  {lobbyPlayers.filter((p) => p.status === "advanced").length} {t("advanced")} •{" "}
+                  {lobbyPlayers.filter((p) => p.status === "eliminated").length} {t("eliminated")} •{" "}
                   {lobbyPlayers.filter((p) => p.status === "pending").length > 0
-                    ? `${lobbyPlayers.filter((p) => p.status === "pending").length} pending • `
+                    ? `${lobbyPlayers.filter((p) => p.status === "pending").length} ${t("pending")} • `
                     : ''}
-                  {matchesInLobby} {matchesInLobby === 1 ? "match" : "matches"}
+                  {matchesInLobby} {matchesInLobby === 1 ? t("match") : t("matches")}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Player</TableHead>
-                      <TableHead className="text-center">Region</TableHead>
-                      <TableHead className="text-center">Total Points</TableHead>
-                      <TableHead className="text-center">Avg. Placement</TableHead>
-                      <TableHead className="text-center">Status</TableHead>
+                      <TableHead>{t("player")}</TableHead>
+                      <TableHead className="text-center">{t("region")}</TableHead>
+                      <TableHead className="text-center">{t("total_points")}</TableHead>
+                      <TableHead className="text-center">{t("avg_placement")}</TableHead>
+                      <TableHead className="text-center">{t("status")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -147,7 +149,7 @@ export function LobbiesTab({ round, allPlayers, tournamentId }: LobbiesTabProps)
                                   }
                                 `}
                             >
-                              {player.status === "pending" ? "Awaiting" : player.status}
+                              {player.status === "pending" ? t("awaiting") : t(player.status as any)}
                             </Badge>
                           </TableCell>
                         </TableRow>
@@ -161,7 +163,7 @@ export function LobbiesTab({ round, allPlayers, tournamentId }: LobbiesTabProps)
                     <Button asChild variant={isLive ? "default" : "outline"} size="sm" className={`gap-1.5 ${isLive ? 'btn-zodiac px-6' : ''}`}>
                       <Link href={`/tournaments/${tournamentId}/lobbies/${lobby.id}`}>
                         <ExternalLink className="h-3.5 w-3.5" />
-                        {isLive ? 'Join Lobby Live' : (lobby.state === 'WAITING' ? 'Enter Lobby Area' : 'View Results')}
+                        {isLive ? t("join_lobby_live") : (lobby.state === 'WAITING' ? t("enter_lobby_area") : t("view_all_results"))}
                       </Link>
                     </Button>
                   </div>
@@ -181,10 +183,10 @@ export function LobbiesTab({ round, allPlayers, tournamentId }: LobbiesTabProps)
             className="flex items-center"
           >
             <ChevronLeft className="h-4 w-4 mr-1" />
-            Prev
+            {t("prev")}
           </Button>
           <span className="text-sm text-muted-foreground whitespace-nowrap">
-            Page {currentPage} of {totalPages}
+            {t("page_x_of_y", { x: currentPage, y: totalPages })}
           </span>
           <Button
             variant="outline"
@@ -193,7 +195,7 @@ export function LobbiesTab({ round, allPlayers, tournamentId }: LobbiesTabProps)
             disabled={currentPage === totalPages}
             className="flex items-center"
           >
-            Next
+            {t("next")}
             <ChevronRight className="h-4 w-4 ml-1" />
           </Button>
         </div>

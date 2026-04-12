@@ -4,8 +4,8 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { SubRegionSelector } from "@/components/ui/SubRegionSelector"
 
 interface AddPlayerModalProps {
   open: boolean
@@ -113,18 +113,15 @@ export default function AddPlayerModal({ open, onClose, onCreate }: AddPlayerMod
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="region" className="text-right">
-                Region
+                Server
               </Label>
-              <Select value={formData.region} onValueChange={(value) => handleChange('region', value)}>
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Select region" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="AMER">Americas</SelectItem>
-                  <SelectItem value="EMEA">Europe, Middle East, Africa</SelectItem>
-                  <SelectItem value="APAC">Asia Pacific</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="col-span-3">
+                <SubRegionSelector
+                  id="region"
+                  value={formData.region || 'VN2'}
+                  onChange={(value) => handleChange('region', value)}
+                />
+              </div>
             </div>
           </div>
           <DialogFooter>

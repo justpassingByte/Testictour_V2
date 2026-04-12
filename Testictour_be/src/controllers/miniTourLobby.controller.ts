@@ -8,6 +8,7 @@ import logger from '../utils/logger';
 import ApiError from '../utils/ApiError';
 import MatchService from '../services/MatchService';
 import GrimoireService from '../services/GrimoireService';
+import { getMajorRegion } from '../utils/RegionMapper';
 
 const prisma = new PrismaClient();
 
@@ -59,6 +60,7 @@ export const createMiniTourLobby = asyncHandler(async (req: Request, res: Respon
     autoStart,
     privateMode,
     totalMatches,
+    region = 'APAC', // Major region: AMER | EMEA | APAC
   } = req.body;
 
   // Parse stringified values from FormData
@@ -160,6 +162,7 @@ export const createMiniTourLobby = asyncHandler(async (req: Request, res: Respon
       gameMode,
       skillLevel,
       theme,
+      region: String(region).toUpperCase(), // Store the major region
       customLogoUrl, // Store the custom logo URL
       tags: parsedTags, // Use the parsed tags array
       rules: parsedRules, // Use the parsed rules array
@@ -382,7 +385,7 @@ export const joinMiniTourLobby = asyncHandler(async (req: Request, res: Response
 
   // Use a transaction to ensure atomicity for balance, lobby, and participant updates
   const result = await prisma.$transaction(async (prisma) => {
-    const lobby = await prisma.miniTourLobby.findUnique({ where: { id } });
+    const lobby = await prisma.miniTourLobby.findUnique({ where: { id }, include: { creator: true } });
 
     if (!lobby) {
       throw new Error('Lobby not found');
@@ -394,6 +397,15 @@ export const joinMiniTourLobby = asyncHandler(async (req: Request, res: Response
 
     if (lobby.currentPlayers >= lobby.maxPlayers) {
       throw new Error('Lobby is full.');
+    }
+
+    // Validate user's region matches lobby's major region
+    const joiningUser = await prisma.user.findUnique({ where: { id: userId } });
+    if (joiningUser?.region) {
+      const userMajorRegion = getMajorRegion(joiningUser.region);
+      if (userMajorRegion !== lobby.region) {
+        throw new ApiError(403, `Region mismatch: Your account is in ${userMajorRegion}, but this lobby is for ${lobby.region}.`);
+      }
     }
 
     // Check if user is already a participant
@@ -690,8 +702,9 @@ export const fetchMiniTourLobbyResult = asyncHandler(async (req: Request, res: R
 
     // If riotMatchId is not yet found for the pending match, try to find it
     if (!riotMatchId) {
-      const searchStartTime = 1751122848;
-      const searchEndTime = 1751133648;
+      const matchStart = pendingMatch.startTime || pendingMatch.createdAt;
+      const searchStartTime = Math.floor((new Date(matchStart).getTime() / 1000) - (5 * 60));
+      const searchEndTime = Math.floor((new Date().getTime() / 1000) + (60 * 60));
 
       logger.info(`fetchMiniTourLobbyResult: Attempting to find Riot match with:`
         + ` lobbyId=${lobbyId}, pendingMatchId=${pendingMatch.id}, `

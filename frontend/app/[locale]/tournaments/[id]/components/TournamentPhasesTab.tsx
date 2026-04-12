@@ -2,14 +2,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { IPhase } from "@/app/types/tournament"
 import { Trophy, Users, ShieldAlert, ArrowUpCircle } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 interface TournamentPhasesTabProps {
   phases: IPhase[];
 }
 
 export function TournamentPhasesTab({ phases }: TournamentPhasesTabProps) {
+  const t = useTranslations("common")
+
   if (!phases || phases.length === 0) {
-    return <p className="text-muted-foreground text-center">No structural phases configured for this tournament yet.</p>
+    return <p className="text-muted-foreground text-center">{t("no_structural_phases")}</p>
   }
 
   return (
@@ -18,21 +21,21 @@ export function TournamentPhasesTab({ phases }: TournamentPhasesTabProps) {
         // Human readable phase format
         let formatType: string = phase.type;
         switch(phase.type?.toLowerCase()) {
-          case 'group_stage': formatType = 'Group Stage'; break;
-          case 'knockout': formatType = 'Knockout'; break;
-          case 'points': formatType = 'Points Accumulation'; break;
-          case 'swiss': formatType = 'Swiss System'; break;
-          case 'checkmate': formatType = 'Checkmate Format'; break;
-          case 'elimination': formatType = 'Elimination'; break;
+          case 'group_stage': formatType = t('phase_group_stage'); break;
+          case 'knockout': formatType = t('phase_knockout'); break;
+          case 'points': formatType = t('phase_points'); break;
+          case 'swiss': formatType = t('phase_swiss'); break;
+          case 'checkmate': formatType = t('phase_checkmate'); break;
+          case 'elimination': formatType = t('phase_elimination'); break;
         }
 
         // Parse advancement format
-        let advancementText = "Based on standard ruleset";
+        let advancementText = t("based_on_standard_ruleset");
         const advCondition = phase.advancementCondition as any;
         if (advCondition) {
-           if (advCondition.type === 'top_n_scores') advancementText = `Top ${advCondition.value} scorers advance`;
-           else if (advCondition.type === 'placement') advancementText = `Top ${advCondition.value} placements advance`;
-           else if (advCondition.winCondition === 'checkmate_win') advancementText = `Requires ${advCondition.pointsToActivate} points to activate checkmate`;
+           if (advCondition.type === 'top_n_scores') advancementText = t("top_n_scorers_advance", { value: advCondition.value });
+           else if (advCondition.type === 'placement') advancementText = t("top_n_placements_advance", { value: advCondition.value });
+           else if (advCondition.winCondition === 'checkmate_win') advancementText = t("requires_points_for_checkmate", { points: advCondition.pointsToActivate });
         }
 
         return (
@@ -44,7 +47,7 @@ export function TournamentPhasesTab({ phases }: TournamentPhasesTabProps) {
             <CardHeader className="p-4 bg-muted/20 border-b border-white/5 flex flex-row items-center justify-between">
               <CardTitle className="text-xl flex items-center gap-2">
                 <div className="h-8 w-1 rounded-full bg-primary/70" />
-                Stage {phase.phaseNumber}: {phase.name}
+                {t("stage_n", { number: phase.phaseNumber })}: {phase.name}
               </CardTitle>
               <Badge variant="outline" className="uppercase text-xs font-semibold px-2 py-1 bg-primary/10 text-primary">
                 {formatType}
@@ -58,8 +61,8 @@ export function TournamentPhasesTab({ phases }: TournamentPhasesTabProps) {
                       <Trophy className="h-4 w-4" />
                     </div>
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Matches Per Player</p>
-                      <p className="font-medium text-foreground">{phase.matchesPerRound || 'Continuous'} Matches</p>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("matches_per_player")}</p>
+                      <p className="font-medium text-foreground">{phase.matchesPerRound || t('continuous')} {t("matches")}</p>
                     </div>
                   </div>
 
@@ -68,7 +71,7 @@ export function TournamentPhasesTab({ phases }: TournamentPhasesTabProps) {
                       <ArrowUpCircle className="h-4 w-4" />
                     </div>
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Advancement</p>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("advancement")}</p>
                       <p className="font-medium text-foreground">{advancementText}</p>
                     </div>
                   </div>
@@ -81,8 +84,8 @@ export function TournamentPhasesTab({ phases }: TournamentPhasesTabProps) {
                         <Users className="h-4 w-4" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Structure</p>
-                        <p className="font-medium text-foreground">{phase.numberOfGroups} Groups</p>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("structure")}</p>
+                        <p className="font-medium text-foreground">{phase.numberOfGroups} {t("groups")}</p>
                       </div>
                     </div>
                   )}
@@ -93,7 +96,7 @@ export function TournamentPhasesTab({ phases }: TournamentPhasesTabProps) {
                         <ShieldAlert className="h-4 w-4" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-rose-500/70">Elimination Rule</p>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-rose-500/70">{t("elimination_rule")}</p>
                         <p className="font-medium text-foreground">{phase.eliminationRule}</p>
                       </div>
                     </div>

@@ -19,8 +19,10 @@ import { PlayerStatisticsDisplay } from "./player-statistics-display";
 import { PlayerSummaryCard } from "./player-summary-card";
 import { PlayerUpcomingMatchesCard } from "./player-upcoming-matches-card";
 import { PlayerHeader } from "./player-header";
+import { useTranslations } from "next-intl";
 
 export default function PlayerPage() {
+  const t = useTranslations("common");
   const [isPageLoading, setIsPageLoading] = useState(true);
   const { 
     player,
@@ -95,9 +97,9 @@ export default function PlayerPage() {
   return (
     <div className="container py-8">
       <div className="flex items-center space-x-2 text-sm text-muted-foreground mb-6">
-        <Link href="/">Home</Link>
+        <Link href="/">{t("home")}</Link>
         <ChevronRight className="h-4 w-4" />
-        <Link href="/players">Players</Link>
+        <Link href="/players">{t("players")}</Link>
         <ChevronRight className="h-4 w-4" />
           <Skeleton className="h-4 w-24" />
       </div>
@@ -157,9 +159,9 @@ export default function PlayerPage() {
     return (
       <div className="container py-8">
         <div className="flex items-center space-x-2 text-sm text-muted-foreground mb-6">
-          <Link href="/">Home</Link>
+          <Link href="/">{t("home")}</Link>
           <ChevronRight className="h-4 w-4" />
-          <Link href="/players">Players</Link>
+          <Link href="/players">{t("players")}</Link>
           <ChevronRight className="h-4 w-4" />
           <span className="font-medium text-foreground">Error</span>
           </div>
@@ -167,10 +169,10 @@ export default function PlayerPage() {
         <Card>
           <CardContent className="py-10">
             <div className="text-center">
-              <h2 className="text-xl font-bold mb-2">Error Loading Player</h2>
+              <h2 className="text-xl font-bold mb-2">{t("error_loading_player")}</h2>
               <p className="text-muted-foreground">{error}</p>
               <Link href="/players" className="mt-6 block">
-                <Button>Back to Players</Button>
+                <Button>{t("back_to_players")}</Button>
               </Link>
             </div>
           </CardContent>
@@ -183,20 +185,20 @@ export default function PlayerPage() {
     return (
       <div className="container py-8">
         <div className="flex items-center space-x-2 text-sm text-muted-foreground mb-6">
-          <Link href="/">Home</Link>
+          <Link href="/">{t("home")}</Link>
           <ChevronRight className="h-4 w-4" />
-          <Link href="/players">Players</Link>
+          <Link href="/players">{t("players")}</Link>
           <ChevronRight className="h-4 w-4" />
-          <span className="font-medium text-foreground">Player Not Found</span>
+          <span className="font-medium text-foreground">{t("player_not_found")}</span>
           </div>
 
         <Card>
           <CardContent className="py-10">
             <div className="text-center">
-              <h2 className="text-xl font-bold mb-2">Player Not Found</h2>
-              <p className="text-muted-foreground">Could not find player with the provided ID</p>
+              <h2 className="text-xl font-bold mb-2">{t("player_not_found")}</h2>
+              <p className="text-muted-foreground">{t("player_not_found_desc")}</p>
               <Link href="/players" className="mt-6 block">
-                <Button>Back to Players</Button>
+                <Button>{t("back_to_players")}</Button>
               </Link>
             </div>
           </CardContent>
@@ -208,9 +210,9 @@ export default function PlayerPage() {
   return (
     <div className="container py-8">
       <div className="flex items-center space-x-2 text-sm text-muted-foreground mb-6">
-        <Link href="/">Home</Link>
+        <Link href="/">{t("home")}</Link>
         <ChevronRight className="h-4 w-4" />
-        <Link href="/players">Players</Link>
+        <Link href="/players">{t("players")}</Link>
         <ChevronRight className="h-4 w-4" />
         <span className="font-medium text-foreground">{player.user?.username}</span>
       </div>
@@ -232,14 +234,14 @@ export default function PlayerPage() {
             <CardContent className="p-6">
               <Tabs defaultValue="tournaments" className="w-full">
                 <TabsList className="w-full grid grid-cols-4">
-                  <TabsTrigger value="tournaments">Tournaments</TabsTrigger>
-                  <TabsTrigger value="matches">Match History</TabsTrigger>
-                  <TabsTrigger value="stats">Statistics</TabsTrigger>
-                  <TabsTrigger value="achievements">Achievements</TabsTrigger>
+                  <TabsTrigger value="tournaments">{t("tournaments")}</TabsTrigger>
+                  <TabsTrigger value="matches">{t("match_history")}</TabsTrigger>
+                  <TabsTrigger value="stats">{t("statistics")}</TabsTrigger>
+                  <TabsTrigger value="achievements">{t("achievements")}</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="tournaments" className="mt-6">
-                  <h2 className="text-2xl font-bold mb-4">Tournament Participation</h2>
+                  <h2 className="text-2xl font-bold mb-4">{t("tournament_participation")}</h2>
                   <PlayerTournamentList tournaments={playerTournaments} />
                 </TabsContent>
 
@@ -252,11 +254,11 @@ export default function PlayerPage() {
                 </TabsContent>
 
                 <TabsContent value="achievements" className="mt-6">
-                  <h2 className="text-2xl font-bold mb-4">Achievements</h2>
+                  <h2 className="text-2xl font-bold mb-4">{t("achievements")}</h2>
                   <div className="text-center py-12 text-muted-foreground bg-card/30 rounded-lg border border-white/5">
                     <span className="text-4xl mb-4 block">🏆</span>
-                    <p>Achievements system is currently under development.</p>
-                    <p className="text-sm">Check back later for exciting challenges and rewards!</p>
+                    <p>{t("achievements_dev_desc")}</p>
+                    <p className="text-sm">{t("achievements_dev_subdesc")}</p>
                   </div>
                 </TabsContent>
               </Tabs>

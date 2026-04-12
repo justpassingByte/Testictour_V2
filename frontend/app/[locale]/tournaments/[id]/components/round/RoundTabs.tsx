@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { ResultsTab } from "./tabs/ResultsTab"
 import { LobbiesTab } from "./tabs/LobbiesTab"
 import { StatisticsTab } from "./tabs/StatisticsTab"
+import { useTranslations } from "next-intl"
 import { MatchCompPanel, isGrimoireMatchData } from "@/components/match/MatchCompPanel"
 import { GrimoireMatchData } from "@/app/types/riot"
 
@@ -25,6 +26,7 @@ interface RoundTabsProps {
 }
 
 export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTabsProps) {
+  const t = useTranslations("common")
   const { matchResults, fetchRoundDetails } = useTournamentStore()
   const [pollingMessage, setPollingMessage] = useState<string | null>(null);
   const [matchesPage, setMatchesPage] = useState(1);
@@ -80,10 +82,10 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
 
       if (!isDev && minutesElapsed < 20) {
         const minLeft = 20 - minutesElapsed;
-        setPollingMessage(`Chờ kết quả sau ${minLeft} phút...`);
+        setPollingMessage(t("waiting_for_results", { minutes: minLeft }));
         timeout = setTimeout(checkAndPoll, 60000);
       } else {
-        setPollingMessage("Đang đồng bộ kết quả...");
+        setPollingMessage(t("syncing_results"));
         fetchRef.current(tournament.id, currentRound.id).then(() => {
           if (isMounted) timeout = setTimeout(checkAndPoll, isDev ? 5000 : 15000);
         }).catch(() => {
@@ -117,10 +119,10 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
   return (
     <Tabs defaultValue="results" className="w-full">
       <TabsList>
-        <TabsTrigger value="results">Round Results</TabsTrigger>
-        <TabsTrigger value="matches">Match Details</TabsTrigger>
-        <TabsTrigger value="lobbies">Lobby Breakdown</TabsTrigger>
-        <TabsTrigger value="statistics">Statistics</TabsTrigger>
+        <TabsTrigger value="results">{t("round_results")}</TabsTrigger>
+        <TabsTrigger value="matches">{t("match_details")}</TabsTrigger>
+        <TabsTrigger value="lobbies">{t("lobby_breakdown")}</TabsTrigger>
+        <TabsTrigger value="statistics">{t("statistics")}</TabsTrigger>
       </TabsList>
       <TabsContent value="results">
         <ResultsTab round={round} tournament={tournament} allPlayers={allPlayers} numMatches={numMatches} />
@@ -132,7 +134,7 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
             <h3 className="text-lg font-medium flex items-center">
               <Badge variant="outline" className="mr-2">{lobby.name}</Badge>
               <span className="text-muted-foreground text-sm">
-                {lobby.matches?.length || 0} {(lobby.matches?.length || 0) === 1 ? 'match' : 'matches'}
+                {lobby.matches?.length || 0} {(lobby.matches?.length || 0) === 1 ? t("match") : t("matches")}
               </span>
               <span className="ml-auto flex items-center gap-2">
                 {pollingMessage && !lobby.fetchedResult && (
@@ -142,7 +144,7 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
                   </div>
                 )}
                 <Badge variant={lobby.fetchedResult ? "default" : "outline"}>
-                  {lobby.fetchedResult ? "Results Available" : "Pending Results"}
+                  {lobby.fetchedResult ? t("results_available") : t("pending_results")}
                 </Badge>
               </span>
             </h3>
@@ -156,8 +158,8 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
               if (!hasAnyData) return (
                 <Card key={match.id} className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20">
                   <CardHeader>
-                    <CardTitle>Match {matchIndex + 1}</CardTitle>
-                    <CardDescription>Match data is still loading...</CardDescription>
+                    <CardTitle>{t("match")} {matchIndex + 1}</CardTitle>
+                    <CardDescription>{t("match_data_loading")}</CardDescription>
                   </CardHeader>
                 </Card>
               );
@@ -204,41 +206,41 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
                 >
                   <CardHeader>
                     <div className="flex justify-between items-center">
-                      <CardTitle>Match {matchIndex + 1}</CardTitle>
+                      <CardTitle>{t("match")} {matchIndex + 1}</CardTitle>
                       <Badge variant={winnerData?.puuid ? "default" : "outline"}>
                         {match.status || 'Completed'}
                       </Badge>
                     </div>
                     <CardDescription className="flex flex-col space-y-1">
                       <div className="flex items-center text-xs">
-                        <span className="font-medium mr-1">Start:</span> {format(startTime, "MMM d, yyyy h:mm a")}
+                        <span className="font-medium mr-1">{t("start")}:</span> {format(startTime, "MMM d, yyyy h:mm a")}
                       </div>
                       <div className="flex items-center text-xs">
-                        <span className="font-medium mr-1">End:</span> {format(endTime, "MMM d, yyyy h:mm a")}
+                        <span className="font-medium mr-1">{t("end")}:</span> {format(endTime, "MMM d, yyyy h:mm a")}
                       </div>
                       <div className="flex items-center text-xs">
-                        <span className="font-medium mr-1">Duration:</span> {formatDuration(gameDurationSec)}
+                        <span className="font-medium mr-1">{t("duration")}:</span> {formatDuration(gameDurationSec)}
                       </div>
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="grid gap-4 md:grid-cols-3 mb-4">
                       <div className="space-y-2">
-                        <div className="text-sm text-muted-foreground">Winner</div>
+                        <div className="text-sm text-muted-foreground">{t("winner")}</div>
                         <div className="flex items-center">
                           <Trophy className="mr-2 h-5 w-5 text-yellow-500" />
                           <span className="font-medium">{winnerName}</span>
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <div className="text-sm text-muted-foreground">Players</div>
+                        <div className="text-sm text-muted-foreground">{t("players")}</div>
                         <div className="flex items-center">
                           <Medal className="mr-2 h-5 w-5 text-primary" />
                           <span className="font-medium">{riotParticipants.length}</span>
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <div className="text-sm text-muted-foreground">Total Points</div>
+                        <div className="text-sm text-muted-foreground">{t("total_points")}</div>
                         <div className="flex items-center">
                           <Star className="mr-2 h-5 w-5 text-primary" />
                           <span className="font-medium">{totalPoints} pts</span>
@@ -251,7 +253,7 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
                       <div className="flex justify-center mb-4">
                         <CollapsibleTrigger asChild>
                           <Button variant="outline" size="sm" className="w-full text-muted-foreground hover:text-primary transition-colors hover:bg-primary/5">
-                            Show Details <ChevronDown className="h-4 w-4 ml-2" />
+                            {t("show_details")} <ChevronDown className="h-4 w-4 ml-2" />
                           </Button>
                         </CollapsibleTrigger>
                       </div>
@@ -278,9 +280,9 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
                             <table className="w-full text-sm">
                               <thead>
                                 <tr className="border-b bg-muted/50">
-                                  <th className="py-2 px-4 text-left">Player</th>
-                                  <th className="py-2 px-4 text-center">Placement</th>
-                                  <th className="py-2 px-4 text-center">Points</th>
+                                  <th className="py-2 px-4 text-left">{t("participants")}</th>
+                                  <th className="py-2 px-4 text-center">{t("placement")}</th>
+                                  <th className="py-2 px-4 text-center">{t("points")}</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -325,7 +327,7 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
             {(!lobby.matches || lobby.matches.length === 0) && (
               <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20">
                 <CardContent className="py-4">
-                  <p className="text-center text-muted-foreground">No matches found for this lobby</p>
+                  <p className="text-center text-muted-foreground">{t("no_matches_lobby")}</p>
                 </CardContent>
               </Card>
             )}
@@ -335,11 +337,11 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
         {(!round.lobbies || round.lobbies.length === 0) && (
           <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20">
             <CardHeader>
-              <CardTitle>Match Details</CardTitle>
-              <CardDescription>Detailed breakdown of each match in the round.</CardDescription>
+              <CardTitle>{t("match_details")}</CardTitle>
+              <CardDescription>{t("detailed_breakdown_matches")}</CardDescription>
             </CardHeader>
             <CardContent>
-              <p>Match details are not available or are still being processed.</p>
+              <p>{t("match_details_unavailable")}</p>
             </CardContent>
           </Card>
         )}
@@ -354,10 +356,10 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
               className="flex items-center"
             >
               <ChevronLeft className="h-4 w-4 mr-1" />
-              Prev
+              {t("prev")}
             </Button>
             <span className="text-sm text-muted-foreground whitespace-nowrap">
-              Page {matchesPage} of {totalMatchesPages}
+              {t("page_x_of_y", { x: matchesPage, y: totalMatchesPages })}
             </span>
             <Button
               variant="outline"
@@ -366,7 +368,7 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
               disabled={matchesPage === totalMatchesPages}
               className="flex items-center"
             >
-              Next
+              {t("next")}
               <ChevronRight className="h-4 w-4 ml-1" />
             </Button>
           </div>

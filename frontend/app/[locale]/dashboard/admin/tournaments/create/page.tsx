@@ -14,6 +14,7 @@ import { toast } from "@/components/ui/use-toast"
 import { TournamentService } from "@/app/services/TournamentService"
 import { useUserStore } from "@/app/stores/userStore"
 import { useTranslations } from "next-intl"
+import { RegionSelector } from "@/components/ui/RegionSelector"
 
 interface PhaseFormData {
   name: string
@@ -33,7 +34,7 @@ export default function CreateTournamentPage() {
   const [form, setForm] = useState({
     name: "",
     description: "",
-    region: "ASIA",
+    region: "APAC",
     maxPlayers: 32,
     entryFee: 0,
     hostFeePercent: 0.1,
@@ -152,16 +153,12 @@ export default function CreateTournamentPage() {
                 <Label htmlFor="name">{t("tournament_name")} *</Label>
                 <Input id="name" placeholder="e.g. TFT Weekly Championship" value={form.name} onChange={(e) => updateForm("name", e.target.value)} required />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="region">{t("region")}</Label>
-                <Select value={form.region} onValueChange={(v) => updateForm("region", v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ASIA">Asia</SelectItem>
-                    <SelectItem value="AMERICAS">Americas</SelectItem>
-                    <SelectItem value="EUROPE">Europe</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="space-y-2 md:col-span-2">
+                <RegionSelector
+                  label={t("region")}
+                  value={form.region}
+                  onChange={(v) => updateForm("region", v)}
+                />
               </div>
             </div>
             <div className="space-y-2">

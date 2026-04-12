@@ -133,7 +133,7 @@ export default async function TournamentPage({ params }: { params: { id: string 
                             </span>
                           </TooltipTrigger>
                           <TooltipContent className="max-w-[200px] text-center border-white/10 bg-black/80 backdrop-blur-md">
-                            <p className="font-semibold text-xs mb-1">Included sub-regions:</p>
+                            <p className="font-semibold text-xs mb-1">{t("included_sub_regions")}</p>
                             <p className="text-xs text-muted-foreground leading-relaxed">
                               {regionSubRegions[tournament.region]}
                             </p>
@@ -141,7 +141,7 @@ export default async function TournamentPage({ params }: { params: { id: string 
                         </Tooltip>
                       </TooltipProvider>
                     ) : (
-                      <span className="font-medium">{tournament.region || 'N/A'}</span>
+                      <span className="font-medium">{tournament.region || t("n_a")}</span>
                     )}
                   </li>
                   <li className="flex items-center justify-between">
@@ -149,7 +149,7 @@ export default async function TournamentPage({ params }: { params: { id: string 
                     <span className="font-medium">
                       {tournament.endTime && !isNaN(new Date(tournament.endTime).getTime())
                         ? format(new Date(tournament.endTime), "yyyy-MM-dd")
-                        : "N/A"}
+                        : t("n_a")}
                     </span>
                   </li>
                   <li className="flex items-center justify-between">

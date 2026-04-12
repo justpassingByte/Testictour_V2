@@ -156,7 +156,7 @@ export function TournamentBracketTab({ tournamentId }: TournamentBracketTabProps
             </h3>
             {phase.status === 'in_progress' || phase.status === 'PLAYING' ? (
               <Badge className="ml-2 bg-red-500/10 text-red-500 hover:bg-red-500/20 text-xs font-bold animate-pulse border-red-500/50 flex gap-1 items-center">
-                <Activity className="h-3 w-3" /> LIVE
+                <Activity className="h-3 w-3" /> {t("live")}
               </Badge>
             ) : (
               <Badge variant="outline" className={`ml-2 ${getStateColor(phase.status)} text-xs capitalize`}>
@@ -226,11 +226,11 @@ export function TournamentBracketTab({ tournamentId }: TournamentBracketTabProps
                       <Users className="h-3.5 w-3.5" />
                       <span>{t('players_count_in_group', { count: group.lobbies.reduce((s, l) => s + l.players.length, 0) })}</span>
                       <span className="opacity-50">•</span>
-                      <span>Lobbies: {group.lobbies.length}</span>
+                      <span>{t("lobbies")}: {group.lobbies.length}</span>
                       {group.startTime && (
                         <>
                           <span className="opacity-50">•</span>
-                          <span>Start: {new Date(group.startTime).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                          <span>{t("start")}: {new Date(group.startTime).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                         </>
                       )}
                     </div>
@@ -244,9 +244,9 @@ export function TournamentBracketTab({ tournamentId }: TournamentBracketTabProps
                       onClick={() => toggleGroup(group.id)}
                     >
                       {expandedGroups[group.id] ? (
-                        <><ChevronUp className="h-4 w-4 mr-1" /> Collapse</>
+                        <><ChevronUp className="h-4 w-4 mr-1" /> {t("collapse")}</>
                       ) : (
-                        <><ChevronDown className="h-4 w-4 mr-1" /> Expand Lobbies</>
+                        <><ChevronDown className="h-4 w-4 mr-1" /> {t("expand_lobbies")}</>
                       )}
                     </Button>
                     <NextLink href={`/tournaments/${tournamentId}/rounds/${group.id}`}>
@@ -255,9 +255,9 @@ export function TournamentBracketTab({ tournamentId }: TournamentBracketTabProps
                         variant={group.status === "pending" || group.status === "WAITING" ? "secondary" : "default"}
                         className="btn-zodiac text-white font-semibold text-xs h-8 shadow-md"
                       >
-                        {group.status === "completed" || group.status === "FINISHED" ? "View Results"
-                          : group.status === "in_progress" || group.status === "PLAYING" ? "Live Scoreboard"
-                            : "View Details"}
+                        {group.status === "completed" || group.status === "FINISHED" ? t("view_all_results")
+                          : group.status === "in_progress" || group.status === "PLAYING" ? t("live_scoreboard")
+                            : t("view_all_details")}
                       </Button>
                     </NextLink>
                   </div>

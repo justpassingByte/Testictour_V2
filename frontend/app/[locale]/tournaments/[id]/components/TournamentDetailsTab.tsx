@@ -1,5 +1,6 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useTranslations } from "next-intl";
 import { Info, DollarSign, Wallet, Globe, Users, ScrollText } from "lucide-react"
 import { ITournament } from '@/app/types/tournament';
 
@@ -8,6 +9,8 @@ interface TournamentDetailsTabProps {
 }
 
 export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tournament }) => {
+  const t = useTranslations("common");  
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -34,36 +37,36 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
         <CardHeader>
           <CardTitle className="text-lg flex items-center">
             <Info className="mr-2 h-5 w-5 text-primary" />
-            Tournament Details
+            {t("tournament_details")}
           </CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
           {/* Financial Information */}
           <div className="space-y-2">
-            <h4 className="font-bold">Financial Information</h4>
+            <h4 className="font-bold">{t("financial_information")}</h4>
             <div className="flex items-center">
               <DollarSign className="mr-2 h-4 w-4 text-muted-foreground" />
-              <span className="text-muted-foreground">Registration Fee:</span>
+              <span className="text-muted-foreground">{t("registration_fee")}:</span>
               <span className="ml-auto font-medium">{formatCurrency(tournament.entryFee)}</span>
             </div>
             <div className="flex items-center">
               <Wallet className="mr-2 h-4 w-4 text-muted-foreground" />
-              <span className="text-muted-foreground">Budget:</span>
+              <span className="text-muted-foreground">{t("budget")}:</span>
               <span className="ml-auto font-medium">{formatCurrency(tournament.entryFee * (tournament.registered || 0)*(1-(tournament.hostFeePercent || 0)))}</span>
             </div>
           </div>
 
           {/* Tournament Organization */}
           <div className="space-y-2">
-            <h4 className="font-bold">Tournament Organization</h4>
+            <h4 className="font-bold">{t("tournament_organization")}</h4>
             <div className="flex items-center">
               <Globe className="mr-2 h-4 w-4 text-muted-foreground" />
-              <span className="text-muted-foreground">Region:</span>
+              <span className="text-muted-foreground">{t("region")}:</span>
               <span className="ml-auto font-medium">{tournament.region || 'N/A'}</span>
             </div>
             <div className="flex items-center">
               <Users className="mr-2 h-4 w-4 text-muted-foreground" />
-              <span className="text-muted-foreground">Max Players:</span>
+              <span className="text-muted-foreground">{t("max_players")}:</span>
               <span className="ml-auto font-medium">{tournament.maxPlayers}</span>
             </div>
           </div>
@@ -75,7 +78,7 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
         <CardHeader>
           <CardTitle className="text-lg flex items-center">
             <Wallet className="mr-2 h-5 w-5 text-primary" />
-            Prize Distribution
+            {t("prize_distribution")}
           </CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -101,17 +104,17 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
         <CardHeader>
           <CardTitle className="text-lg flex items-center">
             <ScrollText className="mr-2 h-5 w-5 text-primary" />
-            Additional Information
+            {t("additional_information")}
           </CardTitle>
         </CardHeader>
         <CardContent className="text-sm">
-          <p className="mb-2">This tournament is part of the official TFT Championship Series. The top 4 players will qualify for the Global Finals taking place next month.</p>
-          <h4 className="font-bold mt-4 mb-2">General Tournament Rules:</h4>
+          <p className="mb-2">{t("tournament_description")}</p>
+          <h4 className="font-bold mt-4 mb-2">{t("general_tournament_rules")}:</h4>
           <ol className="list-decimal list-inside ml-4 space-y-1">
-            <li>All participants must register before the registration deadline.</li>
-            <li>Players must use the same Riot account throughout the tournament.</li>
-            <li>In case of a tie, the player with the highest number of first-place finishes wins.</li>
-            <li>Any form of cheating or unsportsmanlike conduct will result in disqualification.</li>
+            <li>{t("rule_1")}</li>
+            <li>{t("rule_2")}</li>
+            <li>{t("rule_3")}</li>
+            <li>{t("rule_4")}</li>
           </ol>
         </CardContent>
       </Card>

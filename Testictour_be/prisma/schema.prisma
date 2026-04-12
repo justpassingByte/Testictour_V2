@@ -328,6 +328,7 @@ model MiniTourLobby {
   partnerRevenueShare Float             @default(0)
   averageRating     Float               @default(0)
   totalMatches      Int                 @default(0)
+  region            String              @default("APAC")
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
   tags              String[]            @default([])
@@ -350,7 +351,7 @@ model MiniTourMatch {
   miniTourLobby        MiniTourLobby         @relation(fields: [miniTourLobbyId], references: [id])
   miniTourLobbyId      String
   status               String                @default("PENDING") // PENDING, COMPLETED, FAILED
-  startTime            DateTime?             // Thời điểm trận đấu được bấm nút "Start"
+  startTime            DateTime?             // Th?i di?m tr?n d?u du?c b?m n�t "Start"
   fetchedAt            DateTime?
   matchData            Json?
   miniTourMatchResults MiniTourMatchResult[]
@@ -407,7 +408,7 @@ model PartnerSubscription {
   updatedAt    DateTime  @updatedAt
 }
 
-// ─── Admin Settings Models ───────────────────────────────────────────
+// --- Admin Settings Models -------------------------------------------
 
 model Notification {
   id          String   @id @default(cuid())

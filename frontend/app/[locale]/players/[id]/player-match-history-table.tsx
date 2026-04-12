@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MatchDetailsInline } from "./match-details-inline";
 import { format } from "date-fns";
+import { useTranslations } from "next-intl";
 
 import { Coins, ChevronDown, ChevronRight, Trophy } from "lucide-react";
 
@@ -38,6 +39,7 @@ interface PlayerMatchHistoryTableProps {
 }
 
 export function PlayerMatchHistoryTable({ matches }: PlayerMatchHistoryTableProps) {
+  const t = useTranslations("common");
   const [expandedMatchId, setExpandedMatchId] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState("");
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
@@ -60,18 +62,18 @@ export function PlayerMatchHistoryTable({ matches }: PlayerMatchHistoryTableProp
 
   return (
     <div className="mt-4">
-      <h2 className="text-xl font-semibold mb-4">Lobby & Match History</h2>
+      <h2 className="text-xl font-semibold mb-4">{t("lobby_match_history")}</h2>
       <Card>
         <CardContent className="pt-6">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-8"></TableHead>
-                <TableHead>Tournament / Lobby</TableHead>
-                <TableHead className="text-center">Matches Played</TableHead>
-                <TableHead className="text-center">Total Points</TableHead>
-                <TableHead className="text-center">Prize</TableHead>
-                <TableHead className="text-right">Last Played</TableHead>
+                <TableHead>{t("tournament_lobby")}</TableHead>
+                <TableHead className="text-center">{t("matches_played")}</TableHead>
+                <TableHead className="text-center">{t("total_points")}</TableHead>
+                <TableHead className="text-center">{t("prize")}</TableHead>
+                <TableHead className="text-right">{t("last_played")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -113,11 +115,11 @@ export function PlayerMatchHistoryTable({ matches }: PlayerMatchHistoryTableProp
                              <Table className="bg-background rounded-md border shadow-sm">
                                <TableHeader>
                                   <TableRow className="hover:bg-transparent">
-                                    <TableHead className="h-8 text-xs">Match #</TableHead>
-                                    <TableHead className="h-8 text-xs text-center">Placement</TableHead>
-                                    <TableHead className="h-8 text-xs text-center">Points</TableHead>
-                                    <TableHead className="h-8 text-xs text-center">Prize</TableHead>
-                                    <TableHead className="h-8 text-xs text-center">Action</TableHead>
+                                    <TableHead className="h-8 text-xs">{t("match_number")}</TableHead>
+                                    <TableHead className="h-8 text-xs text-center">{t("placement")}</TableHead>
+                                    <TableHead className="h-8 text-xs text-center">{t("points")}</TableHead>
+                                    <TableHead className="h-8 text-xs text-center">{t("prize")}</TableHead>
+                                    <TableHead className="h-8 text-xs text-center">{t("action")}</TableHead>
                                   </TableRow>
                                </TableHeader>
                                <TableBody>
@@ -125,7 +127,7 @@ export function PlayerMatchHistoryTable({ matches }: PlayerMatchHistoryTableProp
                                     <Fragment key={match.id}>
                                       <TableRow className="border-0">
                                       <TableCell className="py-2 text-xs text-muted-foreground">
-                                        Match {group.matches.length - idx}
+                                        {t("match")} {group.matches.length - idx}
                                       </TableCell>
                                       <TableCell className="py-2 text-center text-xs">
                                         <span
@@ -160,7 +162,7 @@ export function PlayerMatchHistoryTable({ matches }: PlayerMatchHistoryTableProp
                                              handleViewDetails(match.matchId, match.userId);
                                           }}
                                         >
-                                          {expandedMatchId === match.matchId ? "Hide Detail" : "View Detail"}
+                                          {expandedMatchId === match.matchId ? t("hide_detail") : t("view_detail")}
                                         </Button>
                                       </TableCell>
                                     </TableRow>
@@ -186,7 +188,7 @@ export function PlayerMatchHistoryTable({ matches }: PlayerMatchHistoryTableProp
               ) : (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                    No lobbies or tournaments found for this player.
+                    {t("no_lobbies_tournaments_found")}
                   </TableCell>
                 </TableRow>
               )}

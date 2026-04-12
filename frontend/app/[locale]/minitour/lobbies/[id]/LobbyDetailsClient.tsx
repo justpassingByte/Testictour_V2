@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { useTranslations } from "next-intl"
 
 import { useMiniTourLobbyStore } from '@/app/stores/miniTourLobbyStore';
 import type { MiniTourLobby } from '@/app/stores/miniTourLobbyStore';
@@ -20,7 +21,7 @@ import { LobbyQuickStatsCard } from "./components/LobbyQuickStatsCard";
 import { useLobbyActions } from "./hooks/useLobbyActions";
 import { getThemeStyle } from "./utils";
 import { useUserStore } from "@/app/stores/userStore";
-
+import { io as socketClient } from 'socket.io-client';
 
 const LazyLobbyPlayersTab = lazy(() => import('./components/LobbyPlayersTab').then(mod => ({ default: mod.LobbyPlayersTab })));
 const LazyLobbyMatchesTab = lazy(() => import('./components/LobbyMatchesTab').then(mod => ({ default: mod.LobbyMatchesTab })));
@@ -31,6 +32,7 @@ interface LobbyDetailsClientProps {
 }
 
 export function LobbyDetailsClient({ initialLobby }: LobbyDetailsClientProps) {
+  const t = useTranslations("common");
   const { lobby, isLoading, error: storeError, isProcessingAction, fetchLobby, joinLobby, startLobby, setLobby, syncAllUnsyncedMatches } = useMiniTourLobbyStore();
   const { currentUser, isLoading: userLoading } = useUserStore();
   const { id } = useParams();
@@ -53,8 +55,7 @@ export function LobbyDetailsClient({ initialLobby }: LobbyDetailsClientProps) {
     if (!isTransitional) return;
 
     // Use dynamic import or existing import for io to establish socket connection
-    const { io } = require('socket.io-client');
-    const socket = io(process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000', {
+    const socket = socketClient(process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000', {
       transports: ['websocket', 'polling'],
       withCredentials: true,
     });
@@ -79,7 +80,7 @@ export function LobbyDetailsClient({ initialLobby }: LobbyDetailsClientProps) {
     return () => {
       socket.disconnect();
     };
-  }, [id, lobby?.status, fetchLobby]);
+  }, [id, lobby, fetchLobby, toast]);
 
   const isCoinEntry = lobby?.entryType === 'coins';
   const userCoins = currentUser?.balance ? (isCoinEntry ? currentUser.balance.coins : currentUser.balance.amount) : 0;
@@ -110,9 +111,9 @@ export function LobbyDetailsClient({ initialLobby }: LobbyDetailsClientProps) {
   return (
     <div className="container py-8">
       <div className="flex items-center space-x-2 text-sm text-muted-foreground mb-6">
-        <Link href="/">Home</Link>
+        <Link href="/">{t("home")}</Link>
         <ChevronRight className="h-4 w-4" />
-        <Link href="/minitour">MiniTour</Link>
+        <Link href="/minitour">{t("minitour")}</Link>
         <ChevronRight className="h-4 w-4" />
         <span className="font-medium text-foreground">{lobby.name}</span>
       </div>
@@ -123,10 +124,10 @@ export function LobbyDetailsClient({ initialLobby }: LobbyDetailsClientProps) {
 
           <Tabs defaultValue="overview" className="w-full">
             <TabsList>
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="players">Players</TabsTrigger>
-              <TabsTrigger value="matches">Matches</TabsTrigger>
-              <TabsTrigger value="rules">Rules</TabsTrigger>
+              <TabsTrigger value="overview">{t("overview")}</TabsTrigger>
+              <TabsTrigger value="players">{t("players")}</TabsTrigger>
+              <TabsTrigger value="matches">{t("matches")}</TabsTrigger>
+              <TabsTrigger value="rules">{t("rules")}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview" className="space-y-4">

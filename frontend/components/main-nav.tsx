@@ -93,7 +93,8 @@ export function MainNav({
     <header className="sticky top-0 z-50 w-full border-b bg-transparent backdrop-blur supports-[backdrop-filter]:bg-transparent">
       <div className="container flex h-16 items-center justify-between">
         <div className="flex items-center">
-          <Link href="/" className="flex items-center mr-6">
+          <Link href="/" className="flex items-center mr-6 gap-2">
+            <img src="/logo.png" alt="TesTicTour Logo" className="h-8 w-8 object-contain rounded-md" />
             <span className="text-2xl font-bold tracking-tighter gradient-text">TesTicTour</span>
           </Link>
 

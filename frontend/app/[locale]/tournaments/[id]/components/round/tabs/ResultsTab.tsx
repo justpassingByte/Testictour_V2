@@ -4,6 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { Search, ArrowUpDown, Download, Trophy } from "lucide-react"
 import { PlayerRoundStats, IRound, ITournament } from "@/app/types/tournament"
+import { useTranslations } from "next-intl"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -20,6 +21,7 @@ interface ResultsTabProps {
 }
 
 export function ResultsTab({ round, tournament, allPlayers, numMatches }: ResultsTabProps) {
+  const t = useTranslations("common");
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedLobby, setSelectedLobby] = useState<string>("all")
   const [selectedStatus, setSelectedStatus] = useState<string>("all")
@@ -76,7 +78,7 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search players..."
+            placeholder={t("search_players")}
             className="pl-9"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -85,10 +87,10 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
         <div className="flex gap-2">
           <Select value={selectedLobby} onValueChange={setSelectedLobby}>
             <SelectTrigger className="w-[120px]" aria-label="Filter by Lobby">
-              <SelectValue placeholder="Lobby" />
+              <SelectValue placeholder={t("lobby")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Lobbies</SelectItem>
+              <SelectItem value="all">{t("all_lobbies")}</SelectItem>
               {round.lobbies?.map((lobby) => (
                 <SelectItem key={lobby.id} value={lobby.name}>
                   {lobby.name}
@@ -98,13 +100,13 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
           </Select>
           <Select value={selectedStatus} onValueChange={setSelectedStatus}>
             <SelectTrigger className="w-[120px]" aria-label="Filter by Status">
-              <SelectValue placeholder="Status" />
+              <SelectValue placeholder={t("status")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="advanced">Advanced</SelectItem>
-              <SelectItem value="eliminated">Eliminated</SelectItem>
-              <SelectItem value="pending">Awaiting</SelectItem>
+              <SelectItem value="all">{t("all_status")}</SelectItem>
+              <SelectItem value="advanced">{t("advanced")}</SelectItem>
+              <SelectItem value="eliminated">{t("eliminated")}</SelectItem>
+              <SelectItem value="pending">{t("awaiting")}</SelectItem>
             </SelectContent>
           </Select>
           <Button variant="outline" size="icon" aria-label="Download Filtered Results">
@@ -119,12 +121,12 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Player</TableHead>
-                <TableHead className="text-center">Lobby</TableHead>
-                <TableHead className="text-center">Region</TableHead>
+                <TableHead>{t("player")}</TableHead>
+                <TableHead className="text-center">{t("lobby")}</TableHead>
+                <TableHead className="text-center">{t("region")}</TableHead>
                 <TableHead className="text-center">
                   <Button variant="ghost" onClick={() => handleSort("total")} className="h-auto p-0">
-                    Total Points
+                    {t("total_points")}
                     <ArrowUpDown className="ml-1 h-3 w-3" />
                   </Button>
                 </TableHead>
@@ -133,16 +135,16 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
                   <TableHead key={i} className="text-center">
                     {isCheckmate && i === 0 ? (
                       <div className="flex items-center justify-center">
-                        Match {i + 1}
+                        {t("match")} {i + 1}
                         {isCheckmate && <Trophy className="ml-1 h-3 w-3 text-yellow-500" />}
                       </div>
                     ) : (
-                      <span>Match {i + 1}</span>
+                      <span>{t("match")} {i + 1}</span>
                     )}
                   </TableHead>
                 ))}
-                <TableHead className="text-center">Status</TableHead>
-                <TableHead className="text-right">Action</TableHead>
+                <TableHead className="text-center">{t("status")}</TableHead>
+                <TableHead className="text-right">{t("action")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -184,7 +186,7 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
                           <span className="text-xs font-medium">{player.points[i]} pts</span>
                           {isCheckmate && player.placements[i] === 1 && i === player.placements.length - 1 && (
                             <Badge variant="outline" className="mt-1 bg-yellow-500/20 text-yellow-500 text-xs">
-                              Winner
+                              {t("winner")}
                             </Badge>
                           )}
                         </div>
@@ -203,13 +205,13 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
                             ${displayStatus === "pending" ? "bg-slate-500/20 text-slate-400" : ""}
                           `}
                     >
-                      {displayStatus === "pending" ? "Awaiting" : displayStatus}
+                      {displayStatus === "pending" ? t("awaiting") : t(displayStatus as any)}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
                     <Link href={`/players/${player.id}`}>
                       <Button variant="ghost" size="sm">
-                        View Profile
+                        {t("view_profile")}
                       </Button>
                     </Link>
                   </TableCell>

@@ -12,8 +12,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { useTranslations } from "next-intl"
 
 function LobbyCard({ lobby }: { lobby: MiniTourLobby }) {
+  const t = useTranslations("common");
   const getStatusColor = (status: string) => {
     switch (status) {
       case "WAITING":
@@ -41,7 +43,7 @@ function LobbyCard({ lobby }: { lobby: MiniTourLobby }) {
     }
   }
 
-  const bannerSrc = lobby.customLogoUrl 
+  const bannerSrc = lobby.customLogoUrl
     ? `${(process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000').replace(/\/$/, '')}${lobby.customLogoUrl}`
     : "/hero-bg.png";
 
@@ -78,13 +80,13 @@ function LobbyCard({ lobby }: { lobby: MiniTourLobby }) {
 
         <div className="space-y-2">
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Players:</span>
+            <span className="text-muted-foreground">{t('players')}:</span>
             <span className="font-medium">
               {lobby.currentPlayers}/{lobby.maxPlayers}
             </span>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Entry Fee:</span>
+            <span className="text-muted-foreground">{t('entry_fee')}:</span>
             <span className="font-medium">
               {lobby.entryType === "coins" ? (
                 <span className="flex items-center">
@@ -100,7 +102,7 @@ function LobbyCard({ lobby }: { lobby: MiniTourLobby }) {
             </span>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Prize Pool:</span>
+            <span className="text-muted-foreground">{t('prize_pool')}:</span>
             <span className="font-medium">
               <span className="flex items-center">
                 <Coins className="mr-1 h-3 w-3" />
@@ -109,13 +111,13 @@ function LobbyCard({ lobby }: { lobby: MiniTourLobby }) {
             </span>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Game Mode:</span>
+            <span className="text-muted-foreground">{t('game_mode')}:</span>
             <span className="font-medium">{lobby.gameMode}</span>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Format:</span>
+            <span className="text-muted-foreground">{t('format')}:</span>
             <span className="font-medium">
-              {(lobby.totalMatches === -1 || lobby.totalMatches === 0) ? 'BO1 (Infinite)' : `BO${lobby.totalMatches}`}
+              {(lobby.totalMatches === -1 || lobby.totalMatches === 0) ? `BO1 (${t('infinite')})` : `BO${lobby.totalMatches}`}
             </span>
           </div>
         </div>
@@ -137,12 +139,12 @@ function LobbyCard({ lobby }: { lobby: MiniTourLobby }) {
           >
             <Link href={`/minitour/lobbies/${lobby.id}`}>
               {lobby.status === "IN_PROGRESS"
-                ? "In Progress"
+                ? t('in_progress_status')
                 : lobby.status === "COMPLETED"
-                  ? "Completed"
+                  ? t('completed_status')
                   : lobby.status === "CANCELLED"
-                    ? "Cancelled"
-                    : "View Lobby"}
+                    ? t('cancelled_status')
+                    : t('view_lobby')}
             </Link>
           </Button>
         </div>
@@ -152,6 +154,7 @@ function LobbyCard({ lobby }: { lobby: MiniTourLobby }) {
 }
 
 export function LobbyList({ initialLobbies }: { initialLobbies: MiniTourLobby[] }) {
+  const t = useTranslations("common");
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedGameMode, setSelectedGameMode] = useState<string>("all")
   const [selectedEntryType, setSelectedEntryType] = useState<string>("all")
@@ -185,15 +188,15 @@ export function LobbyList({ initialLobbies }: { initialLobbies: MiniTourLobby[] 
   return (
     <section className="space-y-6">
       <div>
-        <h2 className="mb-2 text-2xl font-bold">Available Lobbies</h2>
-        <p className="text-muted-foreground">Browse and join custom lobbies from our community partners</p>
+        <h2 className="mb-2 text-2xl font-bold">{t('available_lobbies')}</h2>
+        <p className="text-muted-foreground">{t('browse_lobbies_desc')}</p>
       </div>
 
       <div className="flex flex-col space-y-4 md:flex-row md:items-center md:space-y-0 md:space-x-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search lobbies..."
+            placeholder={t('search_lobbies')}
             className="pl-9"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -202,13 +205,13 @@ export function LobbyList({ initialLobbies }: { initialLobbies: MiniTourLobby[] 
         <div className="flex gap-2">
           <Select value={selectedGameMode} onValueChange={setSelectedGameMode}>
             <SelectTrigger className="w-[140px]" aria-label="Filter by Game Mode">
-              <SelectValue placeholder="Game Mode" />
+              <SelectValue placeholder={t('game_mode')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Modes</SelectItem>
-              <SelectItem value="normal">Normal</SelectItem>
-              <SelectItem value="ranked">Ranked</SelectItem>
-              <SelectItem value="custom">Custom</SelectItem>
+              <SelectItem value="all">{t('all_modes')}</SelectItem>
+              <SelectItem value="normal">{t('normal')}</SelectItem>
+              <SelectItem value="ranked">{t('ranked')}</SelectItem>
+              <SelectItem value="custom">{t('custom')}</SelectItem>
             </SelectContent>
           </Select>
           <Select value={selectedEntryType} onValueChange={setSelectedEntryType}>
@@ -216,9 +219,9 @@ export function LobbyList({ initialLobbies }: { initialLobbies: MiniTourLobby[] 
               <SelectValue placeholder="Entry Type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="coins">Coins</SelectItem>
-              <SelectItem value="usd">USD</SelectItem>
+              <SelectItem value="all">{t('all_types')}</SelectItem>
+              <SelectItem value="coins">{t('coins')}</SelectItem>
+              <SelectItem value="usd">{t('usd')}</SelectItem>
             </SelectContent>
           </Select>
           <Select value={sortBy} onValueChange={setSortBy}>
@@ -226,9 +229,9 @@ export function LobbyList({ initialLobbies }: { initialLobbies: MiniTourLobby[] 
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="rating">Rating</SelectItem>
-              <SelectItem value="players">Players</SelectItem>
-              <SelectItem value="entryFee">Entry Fee</SelectItem>
+              <SelectItem value="rating">{t('rating')}</SelectItem>
+              <SelectItem value="players">{t('players')}</SelectItem>
+              <SelectItem value="entryFee">{t('entry_fee')}</SelectItem>
             </SelectContent>
           </Select>
           <Button variant="outline" size="icon" aria-label="Filter options">
@@ -244,8 +247,8 @@ export function LobbyList({ initialLobbies }: { initialLobbies: MiniTourLobby[] 
           <Card>
             <CardContent className="py-8 text-center text-muted-foreground">
               <Trophy className="mx-auto mb-4 h-12 w-12 text-muted-foreground/50" />
-              <p>No lobbies match your filters.</p>
-              <p className="text-sm">Try adjusting your search criteria.</p>
+              <p>{t('no_lobbies_match')}</p>
+              <p className="text-sm">{t('try_adjusting_search')}</p>
             </CardContent>
           </Card>
         )}

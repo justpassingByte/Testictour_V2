@@ -5,18 +5,20 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Timer, Play } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { io as socketClient } from "socket.io-client";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
-const STATE_LABELS: Record<string, { label: string; color: string }> = {
-  WAITING:            { label: 'Waiting',       color: 'text-muted-foreground' },
-  READY_CHECK:        { label: 'Ready Check',   color: 'text-yellow-400' },
-  GRACE_PERIOD:       { label: 'Grace Period',  color: 'text-orange-400' },
-  STARTING:           { label: 'Starting!',     color: 'text-green-400' },
-  PLAYING:            { label: 'In Progress',   color: 'text-primary' },
-  FINISHED:           { label: 'Finished',      color: 'text-green-600' },
-  PAUSED:             { label: 'Paused',        color: 'text-orange-400' },
-  ADMIN_INTERVENTION: { label: 'Admin Review',  color: 'text-red-400' },
+const STATE_COLORS: Record<string, string> = {
+  WAITING:            'text-muted-foreground',
+  READY_CHECK:        'text-yellow-400',
+  GRACE_PERIOD:       'text-orange-400',
+  STARTING:           'text-green-400',
+  PLAYING:            'text-primary',
+  FINISHED:           'text-green-600',
+  PAUSED:             'text-orange-400',
+  ADMIN_INTERVENTION: 'text-red-400',
 };
 
 function useCountdown(phaseStartedAt: string | undefined, durationSeconds: number, status: string) {
@@ -71,8 +73,10 @@ interface IncomingMatch {
 }
 
 function IncomingMatchItem({ match }: { match: IncomingMatch }) {
+  const t = useTranslations("common");
   const { display } = useCountdown(match.phaseStartedAt, match.phaseDuration, match.state);
-  const sc = STATE_LABELS[match.state] || { label: match.state, color: 'text-muted-foreground' };
+  const color = STATE_COLORS[match.state] || 'text-muted-foreground';
+  const label = t(`state_${match.state.toLowerCase()}`) || match.state;
   const isActive = !['WAITING', 'FINISHED'].includes(match.state);
   const isPlaying = match.state === 'PLAYING' || match.state === 'IN_PROGRESS';
 
@@ -81,17 +85,17 @@ function IncomingMatchItem({ match }: { match: IncomingMatch }) {
       <CardContent className="p-3">
         <div className="font-medium truncate" title={match.lobbyName}>{match.lobbyName}</div>
         <div className="text-sm text-muted-foreground">
-          Round {match.roundNumber} - {match.phaseName}
+          {t("round")} {match.roundNumber} - {match.phaseName}
         </div>
         <div className="mt-3 text-sm space-y-1.5">
           <div className="flex justify-between items-center">
-            <span className="text-muted-foreground">Status:</span>
-            <span className={`font-medium ${sc.color} ${isActive ? 'animate-pulse' : ''}`}>{sc.label}</span>
+            <span className="text-muted-foreground">{t("status")}:</span>
+            <span className={`font-medium ${color} ${isActive ? 'animate-pulse' : ''}`}>{label}</span>
           </div>
           {isActive && (match.phaseDuration > 0 || isPlaying) && (
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground flex items-center gap-1">
-                <Timer className="h-3 w-3" /> {isPlaying ? 'Elapsed:' : 'Time left:'}
+                <Timer className="h-3 w-3" /> {isPlaying ? t("elapsed") : t("time_left")}
               </span>
               <span className="font-mono font-bold tabular-nums">{display}</span>
             </div>
@@ -102,7 +106,7 @@ function IncomingMatchItem({ match }: { match: IncomingMatch }) {
             ? `/tournaments/${match.tournamentId}/lobbies/${match.lobbyId}`
             : `/minitour/lobbies/${match.lobbyId}`}>
             <Button variant={isActive ? 'default' : 'outline'} className="w-full">
-              {match.state === 'PLAYING' ? <><Play className="h-4 w-4 mr-1" />Playing</> : 'View Lobby'}
+              {match.state === 'PLAYING' ? <><Play className="h-4 w-4 mr-1" />{t("playing")}</> : t("view_lobby")}
             </Button>
           </Link>
         </div>
@@ -116,9 +120,9 @@ interface PlayerUpcomingMatchesCardProps {
 }
 
 export function PlayerUpcomingMatchesCard({ playerId }: PlayerUpcomingMatchesCardProps) {
+  const t = useTranslations("common");
   const [matches, setMatches] = useState<IncomingMatch[]>([]);
   const [loading, setLoading] = useState(true);
-  const { io: socketClient } = require("socket.io-client");
   const [socket, setSocket] = useState<any>(null);
 
   useEffect(() => {
@@ -163,12 +167,12 @@ export function PlayerUpcomingMatchesCard({ playerId }: PlayerUpcomingMatchesCar
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2">
           <Timer className="h-5 w-5 text-primary" />
-          Incoming Matches
+          {t("incoming_matches")}
         </CardTitle>
       </CardHeader>
       <CardContent>
         {loading ? (
-          <div className="text-center py-6 text-muted-foreground text-sm">Loading matches...</div>
+          <div className="text-center py-6 text-muted-foreground text-sm">{t("loading_matches")}</div>
         ) : matches.length > 0 ? (
           <div className="space-y-4">
             {matches.map(m => (
@@ -177,7 +181,7 @@ export function PlayerUpcomingMatchesCard({ playerId }: PlayerUpcomingMatchesCar
           </div>
         ) : (
           <div className="text-center py-6 text-muted-foreground text-sm">
-            No upcoming matches scheduled
+            {t("no_upcoming_matches")}
           </div>
         )}
       </CardContent>

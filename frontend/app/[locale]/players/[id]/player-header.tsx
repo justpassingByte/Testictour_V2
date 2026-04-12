@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Shield, Camera, Image as ImageIcon } from "lucide-react";
 import { useState } from "react";
 import { useUserStore } from "@/app/stores/userStore";
+import { useTranslations } from "next-intl";
 
 interface PlayerHeaderProps {
   inGameName: string;
@@ -40,6 +41,7 @@ export function PlayerHeader({
   backgroundUrl,
   userId,
 }: PlayerHeaderProps) {
+  const t = useTranslations("common");
   const { currentUser } = useUserStore();
   const isOwner = !!(currentUser?.id && userId && currentUser.id === userId);
 
@@ -64,7 +66,7 @@ export function PlayerHeader({
           <div className="absolute inset-0 bg-black/0 group-hover/banner:bg-black/40 transition-colors duration-300 flex items-center justify-center z-20">
             <label className="cursor-pointer opacity-0 group-hover/banner:opacity-100 transition-opacity duration-300 flex items-center gap-2 text-white bg-black/60 px-4 py-2 rounded-full text-sm font-medium backdrop-blur-sm border border-white/20 hover:bg-black/80">
               <ImageIcon className="w-4 h-4" />
-              <span>Change Cover</span>
+              <span>{t("change_cover")}</span>
               <input type="file" accept="image/*" className="hidden" onChange={() => {}} />
             </label>
           </div>

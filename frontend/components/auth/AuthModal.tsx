@@ -9,6 +9,7 @@ import { useTranslations } from 'next-intl';
 import { AuthClientService } from '@/app/services/AuthClientService';
 import { useUserStore } from '@/app/stores/userStore';
 import { Coins, Loader2, Sparkles } from "lucide-react"
+import { SubRegionSelector } from "@/components/ui/SubRegionSelector"
 
 export function AuthModal() {
   const { isOpen, view, closeModal, setView } = useAuthModalStore();
@@ -25,7 +26,7 @@ export function AuthModal() {
   const [gameName, setGameName] = useState('');
   const [tagName, setTagName] = useState('');
   const [referrer, setReferrer] = useState('');
-  const [region, setRegion] = useState('sea');
+  const [region, setRegion] = useState('VN2');
   
   const [loginError, setLoginError] = useState('');
   const [registerError, setRegisterError] = useState('');
@@ -209,18 +210,13 @@ export function AuthModal() {
                     </div>
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="region-register" className="text-zinc-400 text-xs font-medium">Region</Label>
-                    <select
+                    <Label htmlFor="region-register" className="text-zinc-400 text-xs font-medium">Region (Server)</Label>
+                    <SubRegionSelector
                       id="region-register"
-                      className="flex h-9 w-full rounded-md border border-zinc-800 bg-black/40 px-3 py-1 text-sm text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500"
                       value={region}
-                      onChange={(e) => setRegion(e.target.value)}
-                    >
-                      <option value="sea">SEA (Southeast Asia)</option>
-                      <option value="na">NA (North America)</option>
-                      <option value="eu">EU (Europe)</option>
-                      <option value="kr">KR (Korea)</option>
-                    </select>
+                      onChange={setRegion}
+                    />
+                    <p className="text-[10px] text-zinc-600">Select your Riot server region</p>
                   </div>
                 </div>
 

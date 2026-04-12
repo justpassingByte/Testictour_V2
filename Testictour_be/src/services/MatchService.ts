@@ -252,6 +252,18 @@ export default class MatchService {
     });
   }
 
+  static async getMatchWithLobbyAndRound(matchId: string) {
+    return prisma.match.findUnique({
+      where: { id: matchId },
+      include: {
+        lobby: {
+          include: { round: true }
+        }
+      }
+    });
+  }
+
+
   static async updateMatchRiotId(matchId: string, riotMatchId: string) {
     return prisma.match.update({
       where: { id: matchId },

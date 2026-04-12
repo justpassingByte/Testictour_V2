@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
   Trophy, Star, Coins, Target, Flame, Zap, Crown, Medal, Gift,
   CheckCircle2, Clock, Lock, Sword, Users, Gamepad2, ChevronRight,
@@ -157,7 +157,7 @@ export default function LoyaltyClient() {
   const unlockedCount = achievements.filter(a => a.unlocked).length
 
   // Fetch real stats
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     if (!currentUser?.id) return
     setLoading(true)
     setError(false)
@@ -169,11 +169,11 @@ export default function LoyaltyClient() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [currentUser?.id]);
 
   useEffect(() => {
     fetchStats()
-  }, [currentUser?.id])
+  }, [fetchStats])
 
   return (
     <div className="container py-10 space-y-8">

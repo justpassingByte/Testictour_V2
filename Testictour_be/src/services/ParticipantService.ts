@@ -3,12 +3,24 @@ import ApiError from '../utils/ApiError';
 import TransactionService from './TransactionService';
 import { Prisma } from '@prisma/client';
 import PrizeCalculationService from './PrizeCalculationService';
+import { getMajorRegion } from '../utils/RegionMapper';
 
 export default class ParticipantService {
   static async join(tournamentId: string, userId: string) {
     return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const tournament = await tx.tournament.findUnique({ where: { id: tournamentId } });
       if (!tournament) throw new ApiError(404, 'Tournament not found');
+
+      // Validate region if tournament has one
+      if (tournament.region) {
+        const user = await tx.user.findUnique({ where: { id: userId } });
+        if (user?.region) {
+          const userMajorRegion = getMajorRegion(user.region);
+          if (userMajorRegion !== tournament.region) {
+            throw new ApiError(403, `Region mismatch: Your account is in ${userMajorRegion}, but this tournament is for ${tournament.region}.`);
+          }
+        }
+      }
 
       // Check if user is already a participant
       const existingParticipant = await tx.participant.findFirst({

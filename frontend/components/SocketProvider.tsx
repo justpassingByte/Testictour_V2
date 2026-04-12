@@ -31,7 +31,7 @@ export function SocketProvider({ children, role, tier, userId }: {
         });
 
         return () => { s.disconnect(); };
-    }, [role, tier]);
+    }, [role, tier, userId]);
 
     return (
         <SocketContext.Provider value={socket}>

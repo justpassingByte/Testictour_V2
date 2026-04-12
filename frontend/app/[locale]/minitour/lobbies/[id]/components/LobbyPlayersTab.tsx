@@ -4,6 +4,8 @@ import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
+import { useTranslations } from "next-intl"
 import type { MiniTourLobby } from "@/app/stores/miniTourLobbyStore"
 
 interface LobbyPlayersTabProps {
@@ -11,19 +13,21 @@ interface LobbyPlayersTabProps {
 }
 
 export function LobbyPlayersTab({ lobby }: LobbyPlayersTabProps) {
+  const t = useTranslations("common");
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-lg">
-          Current Players ({lobby.currentPlayers}/{lobby.maxPlayers})
+          {t("current_players")} ({lobby.currentPlayers}/{lobby.maxPlayers})
         </CardTitle>
       </CardHeader>
       <CardContent>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Player</TableHead>
-              <TableHead className="text-center">Joined At</TableHead>
+              <TableHead>{t("player")}</TableHead>
+              <TableHead className="text-center">{t("rank")}</TableHead>
+              <TableHead className="text-center">{t("joined_at")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -40,6 +44,11 @@ export function LobbyPlayersTab({ lobby }: LobbyPlayersTabProps) {
                     </Link>
                   </div>
                 </TableCell>
+                <TableCell className="text-center">
+                  <Badge variant="outline" className="font-semibold text-xs">
+                    {(p.user as any).rank || "Unranked"}
+                  </Badge>
+                </TableCell>
                 <TableCell className="text-center text-sm text-muted-foreground">
                   {new Date(p.joinedAt).toLocaleTimeString()} - {new Date(p.joinedAt).toLocaleDateString()}
                 </TableCell>
@@ -47,8 +56,8 @@ export function LobbyPlayersTab({ lobby }: LobbyPlayersTabProps) {
             ))}
             {(lobby.participants || []).length === 0 && (
               <TableRow>
-                <TableCell colSpan={2} className="text-center text-muted-foreground py-8">
-                  No players have joined this lobby yet.
+                <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+                  {t("no_players_joined")}
                 </TableCell>
               </TableRow>
             )}

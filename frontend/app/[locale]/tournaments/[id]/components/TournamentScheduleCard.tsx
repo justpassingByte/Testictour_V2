@@ -5,12 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ITournament } from "@/app/types/tournament"
 import { CalendarClock, Timer } from "lucide-react"
 import { format, differenceInDays, differenceInSeconds } from "date-fns"
+import { useTranslations } from "next-intl"
 
 interface TournamentScheduleCardProps {
   tournament: ITournament;
 }
 
 export function TournamentScheduleCard({ tournament }: TournamentScheduleCardProps) {
+  const t = useTranslations("common")
   const startDate = new Date(tournament.startTime)
   const endDate = tournament.endTime ? new Date(tournament.endTime) : null
   const registrationDeadlineDate = tournament.endTime && !isNaN(new Date(tournament.endTime).getTime()) 
@@ -31,24 +33,24 @@ export function TournamentScheduleCard({ tournament }: TournamentScheduleCardPro
 
   // Smart Countdown Logic
   const getSmartCountdown = () => {
-    if (tournament.status === 'in_progress') return "Started";
-    if (tournament.status === 'COMPLETED') return "Finished";
-    if (tournament.status === 'CANCELLED') return "Cancelled";
+    if (tournament.status === 'in_progress') return t("started");
+    if (tournament.status === 'COMPLETED') return t("finished");
+    if (tournament.status === 'CANCELLED') return t("cancelled");
 
     const diffInSeconds = differenceInSeconds(startDate, now);
     
-    if (diffInSeconds <= 0) return "Starting now...";
+    if (diffInSeconds <= 0) return t("starting_now");
 
     const days = Math.floor(diffInSeconds / (3600 * 24));
     const hours = Math.floor((diffInSeconds % (3600 * 24)) / 3600);
     const minutes = Math.floor((diffInSeconds % 3600) / 60);
     const seconds = Math.floor(diffInSeconds % 60);
 
-    if (days > 0) return `Starts in ${days}d ${hours}h`;
-    if (hours > 0) return `Starts in ${hours}h ${minutes}m`;
-    if (minutes > 15) return `Starts in ${minutes}m`;
-    if (minutes > 0) return `Starts in ${minutes}m ${seconds}s`;
-    return `Starts in ${seconds}s`;
+    if (days > 0) return t("starts_in_d_h", { days, hours });
+    if (hours > 0) return t("starts_in_h_m", { hours, minutes });
+    if (minutes > 15) return t("starts_in_m", { minutes });
+    if (minutes > 0) return t("starts_in_m_s", { minutes, seconds });
+    return t("starts_in_s", { seconds });
   };
 
   const getCountdownColor = () => {
@@ -70,7 +72,7 @@ export function TournamentScheduleCard({ tournament }: TournamentScheduleCardPro
         <CardTitle className="text-lg flex justify-between items-center">
           <div className="flex items-center">
             <CalendarClock className="mr-2 h-5 w-5 text-primary" />
-            Tournament Schedule
+            {t("tournament_schedule")}
           </div>
           <div className={`flex items-center gap-1.5 text-sm bg-black/20 px-2.5 py-1 rounded-full ${countdownColorClass}`}>
             <Timer className="w-4 h-4" />
@@ -80,14 +82,14 @@ export function TournamentScheduleCard({ tournament }: TournamentScheduleCardPro
       </CardHeader>
       <CardContent className="grid gap-3 text-sm">
         <div className="flex justify-between items-center p-2 rounded-lg bg-black/10">
-          <div className="text-muted-foreground">Start Date</div>
+          <div className="text-muted-foreground">{t("start_date")}</div>
           <div className="font-medium text-right">
             {format(startDate, "MMM d, yyyy")} <br/> {format(startDate, "h:mm a")}
           </div>
         </div>
         
         <div className="flex justify-between items-center p-2 rounded-lg bg-black/10">
-          <div className="text-muted-foreground">Registration Deadline</div>
+          <div className="text-muted-foreground">{t("registration_deadline")}</div>
           <div className="font-medium text-right">
             {registrationDeadlineDate ? (
               <>
@@ -106,7 +108,7 @@ export function TournamentScheduleCard({ tournament }: TournamentScheduleCardPro
         
         {endDate && (
           <div className="flex justify-between items-center p-2 rounded-lg bg-black/10">
-            <div className="text-muted-foreground">End Date</div>
+            <div className="text-muted-foreground">{t("end_date")}</div>
             <div className="font-medium text-right">
               {format(endDate, "MMM d, yyyy")} <br/> {format(endDate, "h:mm a")}
             </div>

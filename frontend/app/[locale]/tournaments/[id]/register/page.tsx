@@ -9,12 +9,13 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { TournamentService } from '@/app/services/TournamentService'
 import { RiotApiService } from '@/app/services/RiotApiService'
 import { ParticipantService } from '@/app/services/ParticipantService'
 import { ITournament } from '@/app/types/tournament'
+import { GLOBAL_REGIONS, getMajorRegion } from "@/app/config/regions"
+import { SubRegionSelector } from "@/components/ui/SubRegionSelector"
 
 
 // Mock regions
@@ -61,35 +62,10 @@ export default function TournamentRegistration({ params }: { params: { id: strin
     fetchTournament()
   }, [params.id])
 
-  const regionOptions = (() => {
-    if (!tournament) return [];
-    if (tournament.region === "AMERICAS") {
-      return [
-        { id: "NA1", name: "North America (NA1)" },
-        { id: "BR1", name: "Brazil (BR1)" },
-        { id: "LA1", name: "LAN (LA1)" },
-        { id: "LA2", name: "LAS (LA2)" },
-      ];
-    }
-    if (tournament.region === "EUROPE") {
-      return [
-        { id: "EUW1", name: "Europe West (EUW1)" },
-        { id: "EUN1", name: "Europe Nordic/East (EUN1)" },
-        { id: "TR1", name: "Turkey (TR1)" },
-        { id: "RU", name: "Russia (RU)" },
-      ];
-    }
-    // Default or ASIA
-    return [
-      { id: "VN2", name: "Vietnam (VN2)" },
-      { id: "TW2", name: "Taiwan (TW2)" },
-      { id: "SG2", name: "Singapore/Malaysia (SG2)" },
-      { id: "TH2", name: "Thailand (TH2)" },
-      { id: "PH2", name: "Philippines (PH2)" },
-      { id: "KR", name: "Korea (KR)" },
-      { id: "JP1", name: "Japan (JP1)" },
-    ];
-  })();
+
+  // Get sub-regions for the tournament's major region
+  const majorRegion = tournament ? getMajorRegion(tournament.region ?? "APAC") : undefined
+  const regionOptions = majorRegion ? majorRegion.subRegions : GLOBAL_REGIONS[2].subRegions // default APAC
 
   const [region, setRegion] = useState(regionOptions[0]?.id || "VN2")
 
@@ -234,23 +210,27 @@ export default function TournamentRegistration({ params }: { params: { id: strin
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="region">{t("region")}</Label>
-              <RadioGroup
-                defaultValue={region}
+              <Label htmlFor="region-select">{t("region")}</Label>
+              {majorRegion && (
+                <div
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs mb-2"
+                  style={{
+                    background: `${majorRegion.color}12`,
+                    border: `1px solid ${majorRegion.color}30`,
+                  }}
+                >
+                  <span>{majorRegion.icon}</span>
+                  <span className="font-bold" style={{ color: majorRegion.color }}>
+                    {majorRegion.name}
+                  </span>
+                  <span className="text-zinc-400">— Select your server</span>
+                </div>
+              )}
+              <SubRegionSelector
+                id="region-select"
                 value={region}
-                onValueChange={setRegion}
-                className="grid grid-cols-1 gap-2 sm:grid-cols-2"
-                disabled={status === "loading" || status === "success"}
-              >
-                {regionOptions.map((regionOption) => (
-                  <div key={regionOption.id} className="flex items-center space-x-2">
-                    <RadioGroupItem value={regionOption.id} id={regionOption.id} />
-                    <Label htmlFor={regionOption.id} className="cursor-pointer">
-                      {regionOption.name}
-                    </Label>
-                  </div>
-                ))}
-              </RadioGroup>
+                onChange={setRegion}
+              />
             </div>
 
             {status === "error" && (

@@ -7,6 +7,7 @@ import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianG
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { useTranslations } from "next-intl";
 
 interface PlayerStats {
   tournamentsPlayed: number;
@@ -53,6 +54,7 @@ interface PlayerStatisticsDisplayProps {
 }
 
 export function PlayerStatisticsDisplay({ stats, playerMatches }: PlayerStatisticsDisplayProps) {
+  const t = useTranslations("common");
   const [filter, setFilter] = useState("20");
 
   const allMatches = useMemo(() => {
@@ -79,17 +81,17 @@ export function PlayerStatisticsDisplay({ stats, playerMatches }: PlayerStatisti
     <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1">
       <CardHeader className="pb-4 flex flex-row items-center justify-between">
         <div>
-          <CardTitle className="text-2xl font-bold">Player Statistics</CardTitle>
+          <CardTitle className="text-2xl font-bold">{t("player_statistics")}</CardTitle>
         </div>
         <Select value={filter} onValueChange={setFilter}>
           <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Select timeframe" />
+            <SelectValue placeholder={t("select_timeframe")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="10">Last 10 Matches</SelectItem>
-            <SelectItem value="20">Last 20 Matches</SelectItem>
-            <SelectItem value="50">Last 50 Matches</SelectItem>
-            <SelectItem value="all">All Time</SelectItem>
+            <SelectItem value="10">{t("last_10_matches")}</SelectItem>
+            <SelectItem value="20">{t("last_20_matches")}</SelectItem>
+            <SelectItem value="50">{t("last_50_matches")}</SelectItem>
+            <SelectItem value="all">{t("all_time")}</SelectItem>
           </SelectContent>
         </Select>
       </CardHeader>
@@ -99,36 +101,36 @@ export function PlayerStatisticsDisplay({ stats, playerMatches }: PlayerStatisti
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex items-center text-muted-foreground">
                 <Trophy className="mr-2 h-4 w-4 text-primary" />
-                Tournaments
+                {t("tournaments")}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-black">{stats.tournamentsPlayed}</div>
-              <p className="text-xs text-muted-foreground mt-1 font-medium">{stats.tournamentsWon} Won</p>
+              <p className="text-xs text-muted-foreground mt-1 font-medium">{stats.tournamentsWon} {t("won")}</p>
             </CardContent>
           </Card>
           <Card className="border-border/50">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex items-center text-muted-foreground">
                 <Users className="mr-2 h-4 w-4 text-primary" />
-                Matches
+                {t("matches")}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-black">{filter === "all" ? stats.matchesPlayed : flatMatches.length}</div>
-              <p className="text-xs text-muted-foreground mt-1 font-medium">Selected timeframe</p>
+              <p className="text-xs text-muted-foreground mt-1 font-medium">{t("selected_timeframe")}</p>
             </CardContent>
           </Card>
           <Card className="border-border/50">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex items-center text-muted-foreground">
                 <Medal className="mr-2 h-4 w-4 text-primary" />
-                Avg. Placement
+                {t("avg_placement")}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-black">{stats.averagePlacement}</div>
-              <p className="text-xs text-muted-foreground mt-1 font-medium">{stats.topFourRate}% top 4 rate</p>
+              <p className="text-xs text-muted-foreground mt-1 font-medium">{stats.topFourRate}% {t("top_4_rate_label")}</p>
             </CardContent>
           </Card>
         </div>
@@ -138,9 +140,9 @@ export function PlayerStatisticsDisplay({ stats, playerMatches }: PlayerStatisti
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-primary" />
-              Placement Trend
+              {t("placement_trend")}
             </CardTitle>
-            <CardDescription>Match placement history over time</CardDescription>
+            <CardDescription>{t("match_placement_history")}</CardDescription>
           </CardHeader>
           <CardContent>
             {chartData.length > 0 ? (
@@ -169,7 +171,7 @@ export function PlayerStatisticsDisplay({ stats, playerMatches }: PlayerStatisti
                       contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", borderRadius: "8px" }}
                       itemStyle={{ color: "hsl(var(--foreground))" }}
                       labelStyle={{ color: "hsl(var(--muted-foreground))", marginBottom: "4px" }}
-                      formatter={(value: number) => [<Badge key="placement-badge" variant="outline" className="font-bold">#{value}</Badge>, "Placement"]}
+                      formatter={(value: number) => [<Badge key="placement-badge" variant="outline" className="font-bold">#{value}</Badge>, t("placement")]}
                       labelFormatter={(label, payload) => {
                         if (payload && payload.length > 0) {
                            return `${payload[0].payload.tournament} - ${payload[0].payload.date}`;
@@ -189,7 +191,7 @@ export function PlayerStatisticsDisplay({ stats, playerMatches }: PlayerStatisti
               </div>
             ) : (
               <div className="h-[250px] w-full flex items-center justify-center text-muted-foreground">
-                No match data available
+                {t("no_match_data")}
               </div>
             )}
           </CardContent>
@@ -198,14 +200,14 @@ export function PlayerStatisticsDisplay({ stats, playerMatches }: PlayerStatisti
         {/* Detailed Metrics */}
         <Card className="border-border/50">
           <CardHeader>
-            <CardTitle>Performance Metrics</CardTitle>
-            <CardDescription>Detailed statistics based on selected matches</CardDescription>
+            <CardTitle>{t("performance_metrics")}</CardTitle>
+            <CardDescription>{t("detailed_statistics")}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-8">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <div className="text-sm font-medium">Top 4 Rate</div>
+                  <div className="text-sm font-medium">{t("top_4_rate")}</div>
                   <div className="text-sm text-primary font-bold">{stats.topFourRate}%</div>
                 </div>
                 <div className="h-3 w-full rounded-full bg-muted overflow-hidden">
@@ -218,7 +220,7 @@ export function PlayerStatisticsDisplay({ stats, playerMatches }: PlayerStatisti
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <div className="text-sm font-medium">1st Place Rate</div>
+                  <div className="text-sm font-medium">{t("first_place_rate")}</div>
                   <div className="text-sm text-yellow-500 font-bold">{stats.firstPlaceRate}%</div>
                 </div>
                 <div className="h-3 w-full rounded-full bg-muted overflow-hidden">
@@ -231,7 +233,7 @@ export function PlayerStatisticsDisplay({ stats, playerMatches }: PlayerStatisti
 
               <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border/50">
                 <div className="space-y-1">
-                  <div className="text-sm text-muted-foreground">Avg Points / Match</div>
+                  <div className="text-sm text-muted-foreground">{t("avg_points_match")}</div>
                   <div className="flex items-center">
                     <Star className="mr-2 h-5 w-5 text-primary" />
                     <span className="text-xl font-bold">
@@ -245,12 +247,12 @@ export function PlayerStatisticsDisplay({ stats, playerMatches }: PlayerStatisti
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <div className="text-sm text-muted-foreground">Best Placement</div>
+                  <div className="text-sm text-muted-foreground">{t("best_placement")}</div>
                   <div className="flex items-center">
                     <Trophy className="mr-2 h-5 w-5 text-yellow-500" />
                     <span className="text-xl font-bold">
                       {flatMatches.some(m => m.placement === 1)
-                        ? `1st Place (${flatMatches.filter(m => m.placement === 1).length}x)`
+                        ? `${t("first_place")} (${flatMatches.filter(m => m.placement === 1).length}x)`
                         : flatMatches.length > 0
                         ? `${Math.min(...flatMatches.map(m => m.placement))}th`
                         : "N/A"}
