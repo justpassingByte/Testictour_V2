@@ -9,6 +9,10 @@ export interface IUser {
   region: string;
   createdAt: Date;
   level?: number;
+  balance?: {
+    amount: number;
+    coins: number;
+  };
 }
 
 export interface IPlayerProfile extends IUser {

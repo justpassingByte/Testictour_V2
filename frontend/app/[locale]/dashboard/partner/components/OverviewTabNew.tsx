@@ -28,7 +28,7 @@ export function OverviewTabNew({ partnerData, lobbies }: { partnerData: PartnerD
   return (
     <div className="space-y-6">
       {/* Performance Overview */}
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Card className="border-primary/50 bg-primary/5">
           <CardHeader>
             <CardTitle className="flex items-center">
@@ -48,6 +48,27 @@ export function OverviewTabNew({ partnerData, lobbies }: { partnerData: PartnerD
           </CardContent>
         </Card>
 
+        <Card className="border-violet-500/50 bg-violet-500/5">
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Coins className="mr-2 h-5 w-5 text-violet-500" />
+              Partner Balance
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <div className="flex items-baseline justify-between">
+                <span className="text-3xl font-bold">${partnerData?.balance?.toLocaleString() || 0}</span>
+                <span className="text-sm text-muted-foreground">current</span>
+              </div>
+              <div className="flex items-center text-sm text-violet-500">
+                <TrendingUp className="mr-1 h-4 w-4" />
+                <span>Available to use</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
@@ -61,7 +82,7 @@ export function OverviewTabNew({ partnerData, lobbies }: { partnerData: PartnerD
                 <span className="text-3xl font-bold">{partnerData?.totalLobbies || 0}</span>
               </div>
               {partnerData?.lobbyStatuses ? (
-                <div className="flex items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5 mt-2">
                   <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-yellow-500/10 text-yellow-500 border-yellow-500/20">
                     {partnerData.lobbyStatuses.WAITING} Waiting
                   </Badge>

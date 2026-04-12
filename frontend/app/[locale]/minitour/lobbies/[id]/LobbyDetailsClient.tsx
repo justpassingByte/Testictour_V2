@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button"
 
 import { useMiniTourLobbyStore } from '@/app/stores/miniTourLobbyStore';
 import type { MiniTourLobby } from '@/app/stores/miniTourLobbyStore';
+import { useToast } from "@/components/ui/use-toast";
 import { LobbyHeader } from "./components/LobbyHeader";
 import { LobbyOverviewTab } from "./components/LobbyOverviewTab";
 import { LobbyActionCard } from "./components/LobbyActionCard";
@@ -33,6 +34,7 @@ export function LobbyDetailsClient({ initialLobby }: LobbyDetailsClientProps) {
   const { lobby, isLoading, error: storeError, isProcessingAction, fetchLobby, joinLobby, startLobby, setLobby, syncAllUnsyncedMatches } = useMiniTourLobbyStore();
   const { currentUser, isLoading: userLoading } = useUserStore();
   const { id } = useParams();
+  const { toast } = useToast();
 
   useEffect(() => {
     if (initialLobby) setLobby(initialLobby);
@@ -79,7 +81,8 @@ export function LobbyDetailsClient({ initialLobby }: LobbyDetailsClientProps) {
     };
   }, [id, lobby?.status, fetchLobby]);
 
-  const userCoins = 1000;
+  const isCoinEntry = lobby?.entryType === 'coins';
+  const userCoins = currentUser?.balance ? (isCoinEntry ? currentUser.balance.coins : currentUser.balance.amount) : 0;
 
   const { mainButtonText, mainButtonDisabled, mainButtonAction, secondaryActions } = useLobbyActions({
     lobby,

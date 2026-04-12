@@ -148,7 +148,7 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
             <TableBody>
               {sortedPlayers.map((player, index) => {
                 const rank = index + 1
-                const isRewarded = isCheckmate && rank <= 4
+                const isRewarded = isCheckmate && rank <= 4 && tournament.status === 'COMPLETED'
                 const displayStatus = isRewarded ? "rewarded" : player.status
 
                 return (

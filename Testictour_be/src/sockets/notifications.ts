@@ -10,6 +10,12 @@ export default function registerNotificationSocket(io: Server) {
             }
         });
 
+        socket.on('join_user_room', (userId: string) => {
+            if (userId) {
+                socket.join(`user:${userId}`);
+            }
+        });
+
         // Partner clients also join their tier room for targeted notifications
         socket.on('join_tier_room', (tier: string) => {
             if (['FREE', 'PRO', 'ENTERPRISE'].includes(tier)) {

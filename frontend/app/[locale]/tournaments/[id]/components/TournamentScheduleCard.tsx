@@ -1,9 +1,10 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ITournament } from "@/app/types/tournament"
-import { CalendarClock } from "lucide-react"
-import { format, differenceInDays } from "date-fns"
+import { CalendarClock, Timer } from "lucide-react"
+import { format, differenceInDays, differenceInSeconds } from "date-fns"
 
 interface TournamentScheduleCardProps {
   tournament: ITournament;
@@ -16,29 +17,85 @@ export function TournamentScheduleCard({ tournament }: TournamentScheduleCardPro
     ? new Date(tournament.endTime) 
     : null
   
-  const today = new Date()
-  const daysUntilStart = differenceInDays(startDate, today)
-  const daysUntilRegistrationDeadline = registrationDeadlineDate ? differenceInDays(registrationDeadlineDate, today) : 0
-  
+  const [now, setNow] = useState(new Date())
+
+  useEffect(() => {
+    // Update the current time every second for the smart countdown
+    const interval = setInterval(() => {
+      setNow(new Date())
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const daysUntilRegistrationDeadline = registrationDeadlineDate ? differenceInDays(registrationDeadlineDate, now) : 0
+
+  // Smart Countdown Logic
+  const getSmartCountdown = () => {
+    if (tournament.status === 'in_progress') return "Started";
+    if (tournament.status === 'COMPLETED') return "Finished";
+    if (tournament.status === 'CANCELLED') return "Cancelled";
+
+    const diffInSeconds = differenceInSeconds(startDate, now);
+    
+    if (diffInSeconds <= 0) return "Starting now...";
+
+    const days = Math.floor(diffInSeconds / (3600 * 24));
+    const hours = Math.floor((diffInSeconds % (3600 * 24)) / 3600);
+    const minutes = Math.floor((diffInSeconds % 3600) / 60);
+    const seconds = Math.floor(diffInSeconds % 60);
+
+    if (days > 0) return `Starts in ${days}d ${hours}h`;
+    if (hours > 0) return `Starts in ${hours}h ${minutes}m`;
+    if (minutes > 15) return `Starts in ${minutes}m`;
+    if (minutes > 0) return `Starts in ${minutes}m ${seconds}s`;
+    return `Starts in ${seconds}s`;
+  };
+
+  const getCountdownColor = () => {
+    if (tournament.status !== 'UPCOMING' && tournament.status !== 'REGISTRATION' && tournament.status !== 'DRAFT') return "text-muted-foreground";
+    const diffInSeconds = differenceInSeconds(startDate, now);
+    if (diffInSeconds <= 0) return "text-emerald-500 font-bold animate-pulse";
+    if (diffInSeconds < 900) return "text-red-500 font-bold animate-pulse"; // Under 15 mins
+    if (diffInSeconds < 3600) return "text-amber-500 font-bold"; // Under 1 hour
+    return "text-primary font-medium";
+  }
+
+  const smartCountdownText = getSmartCountdown();
+  const countdownColorClass = getCountdownColor();
+
   return (
-    <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1">
+    <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1 overflow-hidden relative">
+      <div className="absolute top-0 w-full h-1 bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
       <CardHeader className="pb-2">
-        <CardTitle className="text-lg flex items-center">
-          <CalendarClock className="mr-2 h-5 w-5 text-primary" />
-          Tournament Schedule
+        <CardTitle className="text-lg flex justify-between items-center">
+          <div className="flex items-center">
+            <CalendarClock className="mr-2 h-5 w-5 text-primary" />
+            Tournament Schedule
+          </div>
+          <div className={`flex items-center gap-1.5 text-sm bg-black/20 px-2.5 py-1 rounded-full ${countdownColorClass}`}>
+            <Timer className="w-4 h-4" />
+            {smartCountdownText}
+          </div>
         </CardTitle>
       </CardHeader>
-      <CardContent className="grid gap-2 text-sm">
-        <div className="flex justify-between">
-          <div className="text-muted-foreground">Registration Deadline:</div>
-          <div className="font-medium">
+      <CardContent className="grid gap-3 text-sm">
+        <div className="flex justify-between items-center p-2 rounded-lg bg-black/10">
+          <div className="text-muted-foreground">Start Date</div>
+          <div className="font-medium text-right">
+            {format(startDate, "MMM d, yyyy")} <br/> {format(startDate, "h:mm a")}
+          </div>
+        </div>
+        
+        <div className="flex justify-between items-center p-2 rounded-lg bg-black/10">
+          <div className="text-muted-foreground">Registration Deadline</div>
+          <div className="font-medium text-right">
             {registrationDeadlineDate ? (
               <>
-                {format(registrationDeadlineDate, "MMM d, yyyy 'at' h:mm a")}
+                {format(registrationDeadlineDate, "MMM d, yyyy")} <br/> {format(registrationDeadlineDate, "h:mm a")}
                 {daysUntilRegistrationDeadline > 0 && (
-                  <span className="text-xs ml-1 text-muted-foreground">
-                    (in {daysUntilRegistrationDeadline} {daysUntilRegistrationDeadline === 1 ? 'day' : 'days'})
-                  </span>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    ({daysUntilRegistrationDeadline} {daysUntilRegistrationDeadline === 1 ? 'day' : 'days'} left)
+                  </div>
                 )}
               </>
             ) : (
@@ -47,23 +104,11 @@ export function TournamentScheduleCard({ tournament }: TournamentScheduleCardPro
           </div>
         </div>
         
-        <div className="flex justify-between">
-          <div className="text-muted-foreground">Start Date:</div>
-          <div className="font-medium">
-            {format(startDate, "MMM d, yyyy 'at' h:mm a")}
-            {daysUntilStart > 0 && (
-              <span className="text-xs ml-1 text-muted-foreground">
-                (in {daysUntilStart} {daysUntilStart === 1 ? 'day' : 'days'})
-              </span>
-            )}
-          </div>
-        </div>
-        
         {endDate && (
-          <div className="flex justify-between">
-            <div className="text-muted-foreground">End Date:</div>
-            <div className="font-medium">
-              {format(endDate, "MMM d, yyyy 'at' h:mm a")}
+          <div className="flex justify-between items-center p-2 rounded-lg bg-black/10">
+            <div className="text-muted-foreground">End Date</div>
+            <div className="font-medium text-right">
+              {format(endDate, "MMM d, yyyy")} <br/> {format(endDate, "h:mm a")}
             </div>
           </div>
         )}

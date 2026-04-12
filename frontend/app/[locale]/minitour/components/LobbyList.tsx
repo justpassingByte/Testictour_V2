@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { Search, Filter, DollarSign, Trophy, Star, Coins } from "lucide-react"
 
 import { MiniTourLobby } from "@/app/stores/miniTourLobbyStore"
@@ -40,21 +41,29 @@ function LobbyCard({ lobby }: { lobby: MiniTourLobby }) {
     }
   }
 
+  const bannerSrc = lobby.customLogoUrl 
+    ? `${(process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000').replace(/\/$/, '')}${lobby.customLogoUrl}`
+    : "/hero-bg.png";
+
   return (
-    <Card className={`card-hover-effect ${getThemeStyle(lobby.theme)}`}>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Avatar className="h-8 w-8">
-              <AvatarImage src={lobby.customLogoUrl ? `${(process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000').replace(/\/$/, '')}${lobby.customLogoUrl}` : "/placeholder.svg"} alt={lobby.name} />
+    <Card className={`card-hover-effect overflow-hidden flex flex-col ${getThemeStyle(lobby.theme)}`}>
+      <div className="relative w-full h-32 bg-muted">
+        <Image src={bannerSrc} alt={lobby.name} fill className="object-cover" />
+        <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
+      </div>
+      <CardHeader className="pb-3 relative -mt-8 pt-0">
+        <div className="flex items-end justify-between mb-2">
+          <div className="flex items-center space-x-3">
+            <Avatar className="h-12 w-12 border-2 border-background shadow-sm">
+              <AvatarImage src={bannerSrc} alt={lobby.name} className="object-cover" />
               <AvatarFallback className="text-xs">{lobby.name.charAt(0)}</AvatarFallback>
             </Avatar>
-            <div>
-              <CardTitle className="text-lg">{lobby.name}</CardTitle>
+            <div className="pt-8">
+              <CardTitle className="text-lg leading-tight">{lobby.name}</CardTitle>
             </div>
           </div>
         </div>
-        <p className="line-clamp-2 text-sm text-muted-foreground">{lobby.description}</p>
+        <p className="line-clamp-2 text-sm text-muted-foreground mt-2">{lobby.description}</p>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between">

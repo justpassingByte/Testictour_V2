@@ -78,7 +78,12 @@ function NotificationItem({
                 'flex gap-3 px-6 py-4 cursor-pointer hover:bg-white/5 transition-colors',
                 !n.read && 'bg-blue-500/5 border-l-2 border-l-blue-500'
             )}
-            onClick={() => onRead(n.id)}
+            onClick={() => {
+                onRead(n.id);
+                if (n.link) {
+                    window.location.href = n.link;
+                }
+            }}
         >
             <div className="flex-1 min-w-0">
                 <p className={cn('text-sm font-medium leading-tight', !n.read && 'text-white')}>

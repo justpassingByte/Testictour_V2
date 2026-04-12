@@ -33,6 +33,39 @@ async function ensurePaidPartner(userId: string) {
   if (!subscription || subscription.status !== 'ACTIVE' || subscription.plan === 'FREE') {
     throw new ApiError(403, 'A PRO or ENTERPRISE subscription is required to create tournaments. Please upgrade your plan.');
   }
+  
+  // Enforce monthly limits
+  const planConfig = await prisma.subscriptionPlanConfig.findUnique({
+    where: { plan: subscription.plan }
+  });
+  
+  const maxTournaments = planConfig ? planConfig.maxTournamentsPerMonth : 0;
+  if (maxTournaments !== -1) {
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const tournamentCountThisMonth = await prisma.tournament.count({
+      where: {
+        organizerId: userId,
+        createdAt: { gte: startOfMonth }
+      }
+    });
+
+    if (tournamentCountThisMonth >= maxTournaments) {
+      const io = (global as any).io;
+      if (io) {
+        io.to(`user:${userId}`).emit('admin_notification', {
+          id: `limit_${Date.now()}`,
+          title: 'Tournament Limit Reached',
+          body: `You have reached your limit of ${maxTournaments} tournaments this month on your ${subscription.plan} plan.`,
+          link: '/vi/dashboard/partner?action=upgrade',
+          sentAt: new Date().toISOString()
+        });
+      }
+      throw new ApiError(403, `You have reached the limit of ${maxTournaments} tournaments this month for your ${subscription.plan} plan.`);
+    }
+  }
 }
 
 const TournamentController = {

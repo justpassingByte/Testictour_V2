@@ -36,7 +36,6 @@ export default function TournamentRegistration({ params }: { params: { id: strin
   const [tournamentError, setTournamentError] = useState<string | null>(null)
   const [summonerName, setSummonerName] = useState("")
   const [gameTag, setGameTag] = useState("")
-  const [region, setRegion] = useState("AP") // Default to AP
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle")
   const [errorMessage, setErrorMessage] = useState("")
   const [summonerInfo, setSummonerInfo] = useState<{
@@ -61,6 +60,44 @@ export default function TournamentRegistration({ params }: { params: { id: strin
     }
     fetchTournament()
   }, [params.id])
+
+  const regionOptions = (() => {
+    if (!tournament) return [];
+    if (tournament.region === "AMERICAS") {
+      return [
+        { id: "NA1", name: "North America (NA1)" },
+        { id: "BR1", name: "Brazil (BR1)" },
+        { id: "LA1", name: "LAN (LA1)" },
+        { id: "LA2", name: "LAS (LA2)" },
+      ];
+    }
+    if (tournament.region === "EUROPE") {
+      return [
+        { id: "EUW1", name: "Europe West (EUW1)" },
+        { id: "EUN1", name: "Europe Nordic/East (EUN1)" },
+        { id: "TR1", name: "Turkey (TR1)" },
+        { id: "RU", name: "Russia (RU)" },
+      ];
+    }
+    // Default or ASIA
+    return [
+      { id: "VN2", name: "Vietnam (VN2)" },
+      { id: "TW2", name: "Taiwan (TW2)" },
+      { id: "SG2", name: "Singapore/Malaysia (SG2)" },
+      { id: "TH2", name: "Thailand (TH2)" },
+      { id: "PH2", name: "Philippines (PH2)" },
+      { id: "KR", name: "Korea (KR)" },
+      { id: "JP1", name: "Japan (JP1)" },
+    ];
+  })();
+
+  const [region, setRegion] = useState(regionOptions[0]?.id || "VN2")
+
+  useEffect(() => {
+    if (regionOptions.length > 0 && !regionOptions.find(r => r.id === region)) {
+      setRegion(regionOptions[0].id);
+    }
+  }, [regionOptions, region]);
 
   const handleSearch = async () => {
     if (!summonerName.trim() || !gameTag.trim() || !region) return
@@ -200,20 +237,12 @@ export default function TournamentRegistration({ params }: { params: { id: strin
               <Label htmlFor="region">{t("region")}</Label>
               <RadioGroup
                 defaultValue={region}
+                value={region}
                 onValueChange={setRegion}
                 className="grid grid-cols-1 gap-2 sm:grid-cols-2"
                 disabled={status === "loading" || status === "success"}
               >
-                {[
-                  { id: "AP", name: "Asia Pacific (AP)" },
-                  { id: "NA", name: "North America (NA)" },
-                  { id: "EUW", name: "Europe West (EUW)" },
-                  { id: "KR", name: "Korea (KR)" },
-                  { id: "BR", name: "Brazil (BR)" },
-                  { id: "LAN", name: "Latin America North (LAN)" },
-                  { id: "LAS", name: "Latin America South (LAS)" },
-                  { id: "OCE", name: "Oceania (OCE)" },
-                ].map((regionOption) => (
+                {regionOptions.map((regionOption) => (
                   <div key={regionOption.id} className="flex items-center space-x-2">
                     <RadioGroupItem value={regionOption.id} id={regionOption.id} />
                     <Label htmlFor={regionOption.id} className="cursor-pointer">

@@ -47,6 +47,12 @@ export default class UserService {
         region: platformRegion || 'VN2', // Store the platform identifier, default to VN2
         referrer: referrer || '',
         puuid: puuid,
+        balance: {
+          create: {
+            amount: 0,
+            coins: 1000
+          }
+        }
       },
     });
     const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, process.env.JWT_SECRET as string, {

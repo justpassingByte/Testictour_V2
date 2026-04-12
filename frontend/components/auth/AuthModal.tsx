@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -8,13 +8,17 @@ import { useAuthModalStore } from '@/app/stores/authModalStore';
 import { useTranslations } from 'next-intl';
 import { AuthClientService } from '@/app/services/AuthClientService';
 import { useUserStore } from '@/app/stores/userStore';
+import { Coins, Loader2, Sparkles } from "lucide-react"
 
 export function AuthModal() {
   const { isOpen, view, closeModal, setView } = useAuthModalStore();
   const t = useTranslations('common');
   const { setCurrentUser } = useUserStore();
+  
+  const [isLoading, setIsLoading] = useState(false);
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [password, setPassword] = useState('');
+  
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -22,172 +26,229 @@ export function AuthModal() {
   const [tagName, setTagName] = useState('');
   const [referrer, setReferrer] = useState('');
   const [region, setRegion] = useState('sea');
+  
   const [loginError, setLoginError] = useState('');
   const [registerError, setRegisterError] = useState('');
 
   const handleLogin = async () => {
-    console.log("[AuthModal] handleLogin called.");
     setLoginError('');
+    setIsLoading(true);
     try {
-      console.log("[AuthModal] Attempting login with:", { loginIdentifier, password });
       const { user } = await AuthClientService.login({ login: loginIdentifier, password });
       setCurrentUser(user);
-      console.log('[AuthModal] Login successful, user set:', user);
       closeModal();
     } catch (error: any) {
-      setLoginError(t('auth.loginError') || 'Đăng nhập thất bại.');
-      console.error('[AuthModal] Login failed with error:', error);
-      console.log("[AuthModal] Full error object from login:", JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+      setLoginError(t('auth.loginError') || 'Login failed.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleRegister = async () => {
     setRegisterError('');
     if (password !== confirmPassword) {
-      setRegisterError(t('auth.passwordMismatch') || 'Mật khẩu không khớp.');
+      setRegisterError(t('auth.passwordMismatch') || 'Passwords do not match.');
       return;
     }
+    setIsLoading(true);
     try {
       const user = await AuthClientService.register({ username, email, password, gameName, tagName, referrer, region });
-      console.log('Registration successful:', user);
       setView('login');
     } catch (error) {
-      setRegisterError(t('auth.registerError') || 'Đăng ký thất bại.');
-      console.error('Registration failed:', error);
+      setRegisterError(t('auth.registerError') || 'Registration failed.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={closeModal}>
-      <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{t("auth.title")}</DialogTitle>
-          <DialogDescription>
-            {t("auth.description")}
-          </DialogDescription>
-        </DialogHeader>
-        <Tabs value={view} onValueChange={(value) => setView(value as 'login' | 'register')} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="login">{t("auth.loginTab")}</TabsTrigger>
-            <TabsTrigger value="register">{t("auth.registerTab")}</TabsTrigger>
-          </TabsList>
-          <TabsContent value="login" className="space-y-4 pt-4">
-            <div className="grid gap-2">
-              <Label htmlFor="login-identifier">{t("auth.usernameOrEmail")}</Label>
-              <Input
-                id="login-identifier"
-                type="text"
-                placeholder="yourusername or m@example.com"
-                value={loginIdentifier}
-                onChange={(e) => setLoginIdentifier(e.target.value)}
-              />
+      <DialogContent className="sm:max-w-4xl p-0 overflow-hidden bg-zinc-950 border-zinc-800 text-zinc-100 shadow-2xl flex flex-col md:flex-row shadow-indigo-900/20">
+        
+        {/* Left Side: Promo Banner (Space Gods Vibe) */}
+        <div className="md:w-5/12 relative hidden md:flex flex-col justify-between p-8 bg-black">
+          <div className="absolute inset-0 z-0">
+            <img 
+              src="/auth-banner.png" 
+              alt="Space Gods Treasures" 
+              className="w-full h-full object-cover opacity-60 mix-blend-screen"
+            />
+            {/* Subtle Gradient Overlay */}
+            <div className="absolute inset-0 bg-gradient-to-t FROM-indigo-950/90 via-transparent to-black/80" />
+            <div className="absolute inset-0 bg-gradient-to-r from-zinc-950/80 to-transparent" />
+          </div>
+
+          <div className="relative z-10 flex items-center space-x-2">
+            <div className="p-2 rounded-xl bg-indigo-500/20 border border-indigo-400/30 backdrop-blur-md">
+              <Sparkles className="w-5 h-5 text-indigo-400" />
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="password-login">{t("auth.password")}</Label>
-              <Input
-                id="password-login"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
+            <span className="font-bold tracking-widest uppercase text-indigo-200 text-xs">TesticTour</span>
+          </div>
+
+          <div className="relative z-10 mt-auto">
+            <div className="inline-flex items-center px-3 py-1 mb-4 border rounded-full bg-amber-500/10 border-amber-500/30 text-amber-400">
+              <Coins className="w-4 h-4 mr-2" />
+              <span className="text-xs font-semibold tracking-wide uppercase">Welcome Bonus</span>
             </div>
-            {loginError && <div className="text-red-500 text-sm">{loginError}</div>}
-            <Button type="submit" className="w-full" onClick={handleLogin}>
-              {t("auth.loginButton")}
-            </Button>
-          </TabsContent>
-          <TabsContent value="register" className="space-y-3 pt-4 max-h-[70vh] overflow-y-auto pr-2">
-            <div className="grid gap-2">
-              <Label htmlFor="username-register">{t("auth.username")}</Label>
-              <Input
-                id="username-register"
-                type="text"
-                placeholder="yourusername"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="email-register">{t("auth.email")}</Label>
-              <Input
-                id="email-register"
-                type="email"
-                placeholder="m@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="password-register">{t("auth.password")}</Label>
-              <Input
-                id="password-register"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="confirm-password-register">{t("auth.confirmPassword")}</Label>
-              <Input
-                id="confirm-password-register"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="grid gap-2">
-                <Label htmlFor="game-name-register">{t("auth.gameName")}</Label>
-                <Input
-                  id="game-name-register"
-                  type="text"
-                  placeholder="Game name"
-                  value={gameName}
-                  onChange={(e) => setGameName(e.target.value)}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="tag-name-register">{t("auth.tagName")}</Label>
-                <Input
-                  id="tag-name-register"
-                  type="text"
-                  placeholder="Tag"
-                  value={tagName}
-                  onChange={(e) => setTagName(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="region-register">{t("auth.region")}</Label>
-              <select
-                id="region-register"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                value={region}
-                onChange={(e) => setRegion(e.target.value)}
+            <h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-br from-white via-indigo-100 to-indigo-400 leading-tight mb-4 tracking-tighter">
+              Claim Your Space<br/>Divine Gifts.
+            </h2>
+            <p className="text-zinc-400 text-sm leading-relaxed mb-6 font-medium">
+              Join the tournament realms today and instantly receive <strong className="text-amber-400">1,000 Free Coins</strong> to join premium MiniTour lobbies instantly.
+            </p>
+          </div>
+        </div>
+
+        {/* Right Side: Forms */}
+        <div className="md:w-7/12 p-6 md:p-10 relative">
+          
+          <Tabs value={view} onValueChange={(value) => setView(value as 'login' | 'register')} className="w-full">
+            <TabsList className="grid w-full grid-cols-2 p-1 mb-8 rounded-full bg-zinc-900 border border-zinc-800">
+              <TabsTrigger 
+                value="login" 
+                className="rounded-full data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-lg"
               >
-                <option value="sea">SEA</option>
-                <option value="na">NA</option>
-                <option value="eu">EU</option>
-                <option value="asia">ASIA</option>
-                <option value="kr">KR</option>
-              </select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="referrer-register">{t("auth.referrer")}</Label>
-              <Input
-                id="referrer-register"
-                type="text"
-                placeholder="Referral code (optional)"
-                value={referrer}
-                onChange={(e) => setReferrer(e.target.value)}
-              />
-            </div>
-            {registerError && <div className="text-red-500 text-sm">{registerError}</div>}
-            <Button type="submit" className="w-full mt-4" onClick={handleRegister}>
-              {t("auth.registerButton")}
-            </Button>
-          </TabsContent>
-        </Tabs>
+                {t("auth.loginTab")}
+              </TabsTrigger>
+              <TabsTrigger 
+                value="register"
+                className="rounded-full data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-lg"
+              >
+                {t("auth.registerTab")}
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="login" className="space-y-5 flex flex-col">
+              <div className="space-y-1 mb-2">
+                <h3 className="text-2xl font-bold tracking-tight text-white mb-1">Welcome back, Challenger.</h3>
+                <p className="text-sm text-zinc-400">Sign in to your account and rejoin the battles.</p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="login-identifier" className="text-zinc-300">Username or Email</Label>
+                  <Input
+                    id="login-identifier"
+                    type="text"
+                    className="bg-zinc-900/50 border-zinc-700 text-white placeholder:text-zinc-600 focus-visible:ring-indigo-500"
+                    placeholder="player_one"
+                    value={loginIdentifier}
+                    onChange={(e) => setLoginIdentifier(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password-login" className="text-zinc-300">Password</Label>
+                    <a href="#" className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">Forgot password?</a>
+                  </div>
+                  <Input
+                    id="password-login"
+                    type="password"
+                    className="bg-zinc-900/50 border-zinc-700 text-white focus-visible:ring-indigo-500"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {loginError && <div className="p-3 bg-red-950/50 border border-red-900/50 rounded-lg text-red-400 text-sm">{loginError}</div>}
+              
+              <Button 
+                type="submit" 
+                className="w-full mt-4 h-12 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl shadow-[0_0_20px_rgba(79,70,229,0.3)] transition-all hover:shadow-[0_0_25px_rgba(79,70,229,0.5)]"
+                onClick={handleLogin}
+                disabled={isLoading}
+              >
+                {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Sign In"}
+              </Button>
+            </TabsContent>
+
+            <TabsContent value="register" className="space-y-4 flex flex-col">
+              <div className="space-y-1 mb-2">
+                <h3 className="text-2xl font-bold tracking-tight text-white mb-1">Begin Your Ascendancy.</h3>
+                <p className="text-sm text-amber-400 font-medium">Create an account to claim your 1,000 Coins starting gift.</p>
+              </div>
+
+              <div className="pr-4 py-2 space-y-4 max-h-[55vh] overflow-y-auto w-full custom-scrollbar">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="username-register" className="text-zinc-300 text-xs uppercase tracking-wider font-semibold">Username <span className="text-red-400">*</span></Label>
+                    <Input id="username-register" type="text" className="bg-zinc-900/50 border-zinc-700 text-white h-10" value={username} onChange={(e) => setUsername(e.target.value)} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="email-register" className="text-zinc-300 text-xs uppercase tracking-wider font-semibold">Email <span className="text-red-400">*</span></Label>
+                    <Input id="email-register" type="email" className="bg-zinc-900/50 border-zinc-700 text-white h-10" value={email} onChange={(e) => setEmail(e.target.value)} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="password-register" className="text-zinc-300 text-xs uppercase tracking-wider font-semibold">Password <span className="text-red-400">*</span></Label>
+                    <Input id="password-register" type="password" className="bg-zinc-900/50 border-zinc-700 text-white h-10" value={password} onChange={(e) => setPassword(e.target.value)} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="confirm-password-register" className="text-zinc-300 text-xs uppercase tracking-wider font-semibold">Confirm Password</Label>
+                    <Input id="confirm-password-register" type="password" className="bg-zinc-900/50 border-zinc-700 text-white h-10" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl border border-indigo-500/20 bg-indigo-500/5 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+                  <h4 className="text-xs font-bold uppercase tracking-widest text-indigo-400 mb-3 flex items-center">
+                    <span className="w-2 h-2 rounded-full bg-indigo-500 mr-2"></span>
+                    Riot Integration
+                  </h4>
+                  <div className="grid grid-cols-2 gap-4 mb-3">
+                    <div className="grid gap-2">
+                      <Label htmlFor="game-name-register" className="text-zinc-400 text-xs font-medium">Game Name</Label>
+                      <Input id="game-name-register" type="text" placeholder="e.g. Faker" className="bg-black/40 border-zinc-800 text-white h-9 text-sm" value={gameName} onChange={(e) => setGameName(e.target.value)} />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="tag-name-register" className="text-zinc-400 text-xs font-medium">Tag Line</Label>
+                      <Input id="tag-name-register" type="text" placeholder="e.g. KR1" className="bg-black/40 border-zinc-800 text-white h-9 text-sm" value={tagName} onChange={(e) => setTagName(e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="region-register" className="text-zinc-400 text-xs font-medium">Region</Label>
+                    <select
+                      id="region-register"
+                      className="flex h-9 w-full rounded-md border border-zinc-800 bg-black/40 px-3 py-1 text-sm text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500"
+                      value={region}
+                      onChange={(e) => setRegion(e.target.value)}
+                    >
+                      <option value="sea">SEA (Southeast Asia)</option>
+                      <option value="na">NA (North America)</option>
+                      <option value="eu">EU (Europe)</option>
+                      <option value="kr">KR (Korea)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="referrer-register" className="text-zinc-300 text-xs uppercase tracking-wider font-semibold">Referral Code (Optional)</Label>
+                  <Input id="referrer-register" type="text" className="bg-zinc-900/50 border-zinc-700 text-white h-10" placeholder="Did someone invite you?" value={referrer} onChange={(e) => setReferrer(e.target.value)} />
+                </div>
+              </div>
+
+              {registerError && <div className="p-3 bg-red-950/50 border border-red-900/50 rounded-lg text-red-400 text-sm mt-2">{registerError}</div>}
+              
+              <Button 
+                type="submit" 
+                className="w-full mt-2 h-12 bg-amber-600 hover:bg-amber-500 text-white font-bold tracking-wide rounded-xl shadow-[0_0_20px_rgba(217,119,6,0.3)] transition-all hover:shadow-[0_0_25px_rgba(217,119,6,0.5)] flex items-center justify-center group"
+                onClick={handleRegister}
+                disabled={isLoading}
+              >
+                {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
+                  <>
+                    <Sparkles className="w-4 h-4 mr-2 group-hover:animate-pulse" />
+                    Register & Claim 1,000 Coins
+                  </>
+                )}
+              </Button>
+            </TabsContent>
+          </Tabs>
+
+        </div>
       </DialogContent>
     </Dialog>
   );

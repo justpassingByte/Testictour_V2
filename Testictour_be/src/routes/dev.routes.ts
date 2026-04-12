@@ -1045,6 +1045,20 @@ router.post('/automation/simulate-match', async (req: Request, res: Response) =>
       } // End of lobbies loop
 
       try {
+        const { checkAndAdvanceRound } = require('../jobs/roundCompletionWorker');
+        const uniqueRoundIds = Array.from(new Set(lobbies.map((l: any) => l.roundId)));
+        
+        for (const rId of uniqueRoundIds) {
+          // Delay briefly to allow transactions and events to settle
+          setTimeout(() => {
+            checkAndAdvanceRound(rId).catch((err: any) => console.error("Simulated match round advance error:", err));
+          }, 500);
+        }
+      } catch (err) {
+        console.error("Failed to trigger checkAndAdvanceRound:", err);
+      }
+
+      try {
         const io = (global as any).__io || (global as any).io;
         if (io && lobbies.length > 0) io.to(`tournament:${lobbies[0].round.phase.tournamentId}`).emit('tournament_update');
       } catch (_) { }

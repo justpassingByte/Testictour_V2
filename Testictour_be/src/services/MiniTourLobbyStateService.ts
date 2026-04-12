@@ -85,6 +85,26 @@ export default class MiniTourLobbyStateService {
       // But for Minitour, we can just trigger startMiniTourLobbyInternal at STARTING!
       try {
         await startMiniTourLobbyInternal(lobbyId);
+
+        // Send push notifications to players
+        const io = (global as any).__io || (global as any).io;
+        if (io) {
+          const lobby = await prisma.miniTourLobby.findUnique({
+            where: { id: lobbyId },
+            include: { participants: true }
+          });
+          if (lobby && lobby.participants) {
+            lobby.participants.forEach((p) => {
+              io.to(`user:${p.userId}`).emit('admin_notification', {
+                id: `start_${lobbyId}_${Date.now()}`,
+                title: 'Match is Starting!',
+                body: `Your match in ${lobby.name} is starting now! Enter the lobby to play.`,
+                link: `/vi/minitour/${lobbyId}`,
+                sentAt: new Date().toISOString()
+              });
+            });
+          }
+        }
       } catch (err) {
         logger.error(`MiniTourLobbyStateService: failed to auto-start minitour match: ${err}`);
       }

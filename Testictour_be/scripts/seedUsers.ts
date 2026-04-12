@@ -111,6 +111,7 @@ async function main() {
       create: {
           userId: systemUser.id,
           amount: 9999999, // Cho người dùng hệ thống nhiều tiền để nhận phí
+          coins: 9999999,
       }
   });
   console.log(`Đã đảm bảo người dùng hệ thống có bản ghi số dư.`);
@@ -165,6 +166,7 @@ async function main() {
       create: {
         userId: user.id,
         amount: 1000,
+        coins: 5000,
       },
     });
     console.log(`Đã đảm bảo người dùng ${user.username} có số dư.`);

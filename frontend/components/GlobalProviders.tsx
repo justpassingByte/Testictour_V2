@@ -18,6 +18,7 @@ export function GlobalProviders({ children }: { children: React.ReactNode }) {
         <SocketProvider
             role={currentUser?.role}
             tier={(currentUser as any)?.subscriptionPlan}
+            userId={currentUser?.id}
         >
             <NotificationProvider>
                 {children}

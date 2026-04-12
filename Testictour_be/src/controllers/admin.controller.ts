@@ -419,12 +419,44 @@ export const getSubscriptions = asyncHandler(async (req: Request, res: Response)
     orderBy: { createdAt: 'desc' },
   });
 
-  // Transform to match frontend's expected shape (user → partner alias)
-  const data = subscriptions.map(s => ({
-    ...s,
-    partnerId: s.userId,
-    partner: s.user,
-    user: undefined,
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const planConfigs = await prisma.subscriptionPlanConfig.findMany();
+  const planMap = Object.fromEntries(planConfigs.map((p) => [p.plan, p]));
+
+  // Transform to match frontend's expected shape and add limits mapping
+  const data = await Promise.all(subscriptions.map(async (s) => {
+    const limits = planMap[s.plan as string] || { maxLobbies: 0, maxTournamentsPerMonth: 0, maxPlayersPerLobby: 0 };
+
+    const activeLobbies = await prisma.miniTourLobby.count({
+      where: {
+        creatorId: s.userId,
+        status: { in: ['WAITING', 'READY_CHECK', 'GRACE_PERIOD', 'STARTING', 'IN_PROGRESS'] }
+      }
+    });
+
+    const tournamentsThisMonth = await prisma.tournament.count({
+      where: {
+        organizerId: s.userId,
+        createdAt: { gte: startOfMonth }
+      }
+    });
+
+    return {
+      ...s,
+      limits: {
+        maxLobbies: limits.maxLobbies,
+        maxTournamentsPerMonth: limits.maxTournamentsPerMonth,
+        maxPlayersPerLobby: limits.maxPlayersPerLobby,
+        usage: {
+          activeLobbies,
+          tournamentsThisMonth
+        }
+      },
+      partnerId: s.userId,
+      partner: s.user,
+      user: undefined,
+    };
   }));
 
   res.status(200).json({ data });
@@ -753,6 +785,34 @@ export const getPartnerDetailForAdmin = asyncHandler(async (req: Request, res: R
     }
   });
 
+  let enrichedSubscription: any = partner.partnerSubscription;
+  if (partner.partnerSubscription) {
+    const planConfig = await prisma.subscriptionPlanConfig.findUnique({
+      where: { plan: partner.partnerSubscription.plan }
+    });
+    
+    // Tournaments this month
+    const tournamentsThisMonth = await prisma.tournament.count({
+      where: {
+        organizerId: partnerId,
+        createdAt: { gte: startOfMonth }
+      }
+    });
+
+    enrichedSubscription = {
+      ...partner.partnerSubscription,
+      limits: {
+        maxLobbies: planConfig?.maxLobbies || 0,
+        maxTournamentsPerMonth: planConfig?.maxTournamentsPerMonth || 0,
+        maxPlayersPerLobby: planConfig?.maxPlayersPerLobby || 0,
+        usage: {
+          activeLobbies, // already tracked in stats calculation above
+          tournamentsThisMonth
+        }
+      }
+    };
+  }
+
   // Return the combined object AdminPartnerDetail
   res.status(200).json({
     partner: partnerDetail,
@@ -770,6 +830,6 @@ export const getPartnerDetailForAdmin = asyncHandler(async (req: Request, res: R
     lobbies,
     tournaments: [],
     players,
-    subscription: partner.partnerSubscription
+    subscription: enrichedSubscription
   });
 });

@@ -13,6 +13,7 @@ import { TournamentLobbyButton } from "@/app/[locale]/tournaments/[id]/component
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { getTranslations } from "next-intl/server"
 import { 
   Globe, Users, Calendar, 
@@ -59,6 +60,12 @@ export default async function TournamentPage({ params }: { params: { id: string 
   }
   const currentStatus = statusMapping[tournament.status as keyof typeof statusMapping] || 
     { text: tournament.status, color: "" }
+
+  const regionSubRegions: Record<string, string> = {
+    AMERICAS: "North America (NA1), Brazil (BR1), LATAM North (LA1), LATAM South (LA2)",
+    EUROPE: "Europe West (EUW1), Europe Nordic & East (EUN1), Turkey (TR1), Russia (RU)",
+    ASIA: "Vietnam (VN2), Taiwan (TW2), Singapore/Malaysia (SG2), Thailand (TH2), Philippines (PH2), Korea (KR), Japan (JP1)"
+  };
 
   return (
     <div className="container py-8">
@@ -117,7 +124,25 @@ export default async function TournamentPage({ params }: { params: { id: string 
                   </li>
                   <li className="flex items-center justify-between">
                     <span className="text-muted-foreground flex items-center"><Globe className="mr-2 h-4 w-4" /> {t("region")}:</span>
-                    <span className="font-medium">{tournament.region || 'N/A'}</span>
+                    {tournament.region && regionSubRegions[tournament.region] ? (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <span className="font-medium underline decoration-dashed underline-offset-4 decoration-muted-foreground cursor-help hover:text-primary transition-colors">
+                              {tournament.region}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-[200px] text-center border-white/10 bg-black/80 backdrop-blur-md">
+                            <p className="font-semibold text-xs mb-1">Included sub-regions:</p>
+                            <p className="text-xs text-muted-foreground leading-relaxed">
+                              {regionSubRegions[tournament.region]}
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ) : (
+                      <span className="font-medium">{tournament.region || 'N/A'}</span>
+                    )}
                   </li>
                   <li className="flex items-center justify-between">
                     <span className="text-muted-foreground flex items-center"><Calendar className="mr-2 h-4 w-4" /> {t("registration_deadline")}:</span>

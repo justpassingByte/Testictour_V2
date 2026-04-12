@@ -19,21 +19,44 @@ const STATE_LABELS: Record<string, { label: string; color: string }> = {
   ADMIN_INTERVENTION: { label: 'Admin Review',  color: 'text-red-400' },
 };
 
-function useCountdown(phaseStartedAt: string | undefined, durationSeconds: number) {
-  const [remaining, setRemaining] = useState(0);
+function useCountdown(phaseStartedAt: string | undefined, durationSeconds: number, status: string) {
+  const [display, setDisplay] = useState('00:00');
+  
   useEffect(() => {
-    if (!phaseStartedAt || !durationSeconds) return;
+    if (!phaseStartedAt) {
+      setDisplay('00:00');
+      return;
+    }
+    const startObj = new Date(phaseStartedAt).getTime();
+    
     const tick = () => {
-      const endsAt = new Date(phaseStartedAt).getTime() + durationSeconds * 1000;
-      setRemaining(Math.max(0, Math.floor((endsAt - Date.now()) / 1000)));
+      const now = Date.now();
+      if (status === 'IN_PROGRESS' || status === 'PLAYING') {
+        // COUNT UP: time elapsed since start
+        const elapsedSec = Math.max(0, Math.floor((now - startObj) / 1000));
+        const m = Math.floor(elapsedSec / 60).toString().padStart(2, '0');
+        const s = (elapsedSec % 60).toString().padStart(2, '0');
+        setDisplay(`${m}:${s}`);
+      } else {
+        // COUNT DOWN
+        if (!durationSeconds) {
+           setDisplay('00:00');
+           return;
+        }
+        const endsAt = startObj + durationSeconds * 1000;
+        const remainingSec = Math.max(0, Math.floor((endsAt - now) / 1000));
+        const m = Math.floor(remainingSec / 60).toString().padStart(2, '0');
+        const s = (remainingSec % 60).toString().padStart(2, '0');
+        setDisplay(`${m}:${s}`);
+      }
     };
+    
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [phaseStartedAt, durationSeconds]);
-  const m = Math.floor(remaining / 60).toString().padStart(2, '0');
-  const s = (remaining % 60).toString().padStart(2, '0');
-  return { display: `${m}:${s}`, remaining };
+  }, [phaseStartedAt, durationSeconds, status]);
+  
+  return { display };
 }
 
 interface IncomingMatch {
@@ -48,9 +71,10 @@ interface IncomingMatch {
 }
 
 function IncomingMatchItem({ match }: { match: IncomingMatch }) {
-  const { display } = useCountdown(match.phaseStartedAt, match.phaseDuration);
+  const { display } = useCountdown(match.phaseStartedAt, match.phaseDuration, match.state);
   const sc = STATE_LABELS[match.state] || { label: match.state, color: 'text-muted-foreground' };
   const isActive = !['WAITING', 'FINISHED'].includes(match.state);
+  const isPlaying = match.state === 'PLAYING' || match.state === 'IN_PROGRESS';
 
   return (
     <Card className={`group transition-all border bg-card/60 dark:bg-card/40 backdrop-blur-lg duration-300 ${isActive ? 'border-primary/50 shadow-md shadow-primary/10 -translate-y-0.5' : 'border-gray-700/50 hover:border-primary/30'}`}>
@@ -64,9 +88,11 @@ function IncomingMatchItem({ match }: { match: IncomingMatch }) {
             <span className="text-muted-foreground">Status:</span>
             <span className={`font-medium ${sc.color} ${isActive ? 'animate-pulse' : ''}`}>{sc.label}</span>
           </div>
-          {isActive && match.phaseDuration > 0 && (
+          {isActive && (match.phaseDuration > 0 || isPlaying) && (
             <div className="flex justify-between items-center">
-              <span className="text-muted-foreground flex items-center gap-1"><Timer className="h-3 w-3" /> Time left:</span>
+              <span className="text-muted-foreground flex items-center gap-1">
+                <Timer className="h-3 w-3" /> {isPlaying ? 'Elapsed:' : 'Time left:'}
+              </span>
               <span className="font-mono font-bold tabular-nums">{display}</span>
             </div>
           )}
@@ -92,6 +118,8 @@ interface PlayerUpcomingMatchesCardProps {
 export function PlayerUpcomingMatchesCard({ playerId }: PlayerUpcomingMatchesCardProps) {
   const [matches, setMatches] = useState<IncomingMatch[]>([]);
   const [loading, setLoading] = useState(true);
+  const { io: socketClient } = require("socket.io-client");
+  const [socket, setSocket] = useState<any>(null);
 
   useEffect(() => {
     if (!playerId) return;
@@ -108,12 +136,25 @@ export function PlayerUpcomingMatchesCard({ playerId }: PlayerUpcomingMatchesCar
 
     fetchMatches();
 
-    // Poll every 10s so incoming matches appear automatically when tournament starts
-    const interval = setInterval(fetchMatches, 10000);
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+    const s = socketClient(apiUrl, { withCredentials: true });
+    setSocket(s);
+
+    s.on('player_profile_update', (data: any) => {
+      // If the update targets this player or is global
+      if (!data.userId || data.userId === playerId) {
+        if (isMounted) fetchMatches();
+      }
+    });
+
+    s.on('admin_notification', () => {
+      // Also refetch on admin notifications in case it's a match start alert
+      if (isMounted) fetchMatches();
+    });
 
     return () => {
       isMounted = false;
-      clearInterval(interval);
+      s.disconnect();
     };
   }, [playerId]);
 

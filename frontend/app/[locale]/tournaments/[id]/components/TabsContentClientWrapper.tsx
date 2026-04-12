@@ -33,11 +33,18 @@ export default function TabsContentClientWrapper({ tournament: initialTournament
     });
     
     socket.on('tournament_update', () => {
-      // Only fetch the heavyweight tournament details when the backend explicitly fires an update event
+      // Fetch heavyweight tournament details
       fetchTournamentDetail(initialTournament.id);
+      // Also notify bracket tab to fetch lobby changes since tournament_update often comes from lobby finishes
+      window.dispatchEvent(new CustomEvent('bracket_update'));
     });
 
-    // Listen for bracket_update to notify the TournamentBracketTab to re-fetch
+    socket.on('tournaments_refresh', () => {
+      fetchTournamentDetail(initialTournament.id);
+      window.dispatchEvent(new CustomEvent('bracket_update'));
+    });
+
+    // Listen for explicit bracket_update to notify the TournamentBracketTab to re-fetch
     socket.on('bracket_update', () => {
       // Dispatch custom window event so TournamentBracketTab can re-fetch bracket data
       window.dispatchEvent(new CustomEvent('bracket_update'));

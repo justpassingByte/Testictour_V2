@@ -219,56 +219,8 @@ export default function AdminPartnersPage() {
                   <SheetDescription>{selectedPartnerDetail.partner.email}</SheetDescription>
                 </SheetHeader>
 
-                {/* Quick Stats */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                  <Card className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border-emerald-500/20">
-                    <CardContent className="p-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-[10px] text-emerald-400 font-medium uppercase">{t("revenue", { defaultValue: "Revenue" })}</p>
-                          <p className="text-lg font-bold">${partnerData.monthlyRevenue?.toLocaleString()}</p>
-                        </div>
-                        <DollarSign className="h-4 w-4 text-emerald-400" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                  <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border-blue-500/20">
-                    <CardContent className="p-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-[10px] text-blue-400 font-medium uppercase">{t("balance", { defaultValue: "Balance" })}</p>
-                          <p className="text-lg font-bold">${partnerData.balance?.toLocaleString()}</p>
-                        </div>
-                        <DollarSign className="h-4 w-4 text-blue-400" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                  <Card className="bg-gradient-to-br from-orange-500/10 to-orange-600/5 border-orange-500/20">
-                    <CardContent className="p-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-[10px] text-orange-400 font-medium uppercase">{t("players", { defaultValue: "Players" })}</p>
-                          <p className="text-lg font-bold">{partnerData.totalPlayers}</p>
-                        </div>
-                        <Users className="h-4 w-4 text-orange-400" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                  <Card className="bg-gradient-to-br from-violet-500/10 to-violet-600/5 border-violet-500/20">
-                    <CardContent className="p-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-[10px] text-violet-400 font-medium uppercase">{t("lobbies", { defaultValue: "Lobbies" })}</p>
-                          <p className="text-lg font-bold">{partnerData.totalLobbies}</p>
-                        </div>
-                        <Gamepad2 className="h-4 w-4 text-violet-400" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
                 {/* Tabbed Detail Sections */}
-                <Tabs defaultValue="overview" className="space-y-4">
+                <Tabs defaultValue="overview" className="space-y-4 pt-2">
                   <TabsList className="w-full justify-start overflow-x-auto no-scrollbar h-auto shrink-0">
                     <TabsTrigger value="overview">{t("overview", { defaultValue: "Overview" })}</TabsTrigger>
                     <TabsTrigger value="lobbies">{t("lobbies", { defaultValue: "Lobbies" })}</TabsTrigger>

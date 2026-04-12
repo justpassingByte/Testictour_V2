@@ -426,7 +426,7 @@ export default function DevToolsPage() {
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs text-muted-foreground">Tag Line</Label>
-                      <Input placeholder="(Optional)" value={simTagLine3} onChange={e => setTagLine3(e.target.value)} className="bg-black/30 border-white/10 h-8 text-xs" />
+                      <Input placeholder="(Optional)" value={simTagLine3} onChange={e => setSimTagLine3(e.target.value)} className="bg-black/30 border-white/10 h-8 text-xs" />
                     </div>
                   </div>
 
@@ -438,7 +438,7 @@ export default function DevToolsPage() {
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs text-muted-foreground">Tag Line</Label>
-                      <Input placeholder="(Optional)" value={simTagLine4} onChange={e => setTagLine4(e.target.value)} className="bg-black/30 border-white/10 h-8 text-xs" />
+                      <Input placeholder="(Optional)" value={simTagLine4} onChange={e => setSimTagLine4(e.target.value)} className="bg-black/30 border-white/10 h-8 text-xs" />
                     </div>
                   </div>
                 </div>

@@ -120,13 +120,9 @@ export default function AddPlayerModal({ open, onClose, onCreate }: AddPlayerMod
                   <SelectValue placeholder="Select region" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="NA">North America</SelectItem>
-                  <SelectItem value="EU">Europe</SelectItem>
-                  <SelectItem value="KR">Korea</SelectItem>
-                  <SelectItem value="CN">China</SelectItem>
-                  <SelectItem value="BR">Brazil</SelectItem>
-                  <SelectItem value="JP">Japan</SelectItem>
-                  <SelectItem value="OCE">Oceania</SelectItem>
+                  <SelectItem value="AMER">Americas</SelectItem>
+                  <SelectItem value="EMEA">Europe, Middle East, Africa</SelectItem>
+                  <SelectItem value="APAC">Asia Pacific</SelectItem>
                 </SelectContent>
               </Select>
             </div>

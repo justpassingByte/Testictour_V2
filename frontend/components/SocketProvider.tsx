@@ -5,10 +5,11 @@ import { io, Socket } from 'socket.io-client';
 const SocketContext = createContext<Socket | null>(null);
 export const useSocket = () => useContext(SocketContext);
 
-export function SocketProvider({ children, role, tier }: {
+export function SocketProvider({ children, role, tier, userId }: {
     children: React.ReactNode;
     role?: string;
     tier?: string;
+    userId?: string;
 }) {
     const [socket, setSocket] = useState<Socket | null>(null);
     const socketRef = useRef<Socket | null>(null);
@@ -26,6 +27,7 @@ export function SocketProvider({ children, role, tier }: {
         s.on('connect', () => {
             if (role) s.emit('join_role_room', role);
             if (role === 'partner' && tier) s.emit('join_tier_room', tier);
+            if (userId) s.emit('join_user_room', userId);
         });
 
         return () => { s.disconnect(); };

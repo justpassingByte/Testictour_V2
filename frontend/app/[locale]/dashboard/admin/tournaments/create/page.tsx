@@ -33,7 +33,7 @@ export default function CreateTournamentPage() {
   const [form, setForm] = useState({
     name: "",
     description: "",
-    region: "VN",
+    region: "ASIA",
     maxPlayers: 32,
     entryFee: 0,
     hostFeePercent: 0.1,
@@ -157,11 +157,9 @@ export default function CreateTournamentPage() {
                 <Select value={form.region} onValueChange={(v) => updateForm("region", v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="VN">Vietnam</SelectItem>
-                    <SelectItem value="NA">North America</SelectItem>
-                    <SelectItem value="EUW">Europe West</SelectItem>
-                    <SelectItem value="KR">Korea</SelectItem>
-                    <SelectItem value="JP">Japan</SelectItem>
+                    <SelectItem value="ASIA">Asia</SelectItem>
+                    <SelectItem value="AMERICAS">Americas</SelectItem>
+                    <SelectItem value="EUROPE">Europe</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -235,7 +233,15 @@ export default function CreateTournamentPage() {
             <div className="grid gap-4 md:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="maxPlayers">{t("max_players")}</Label>
-                <Input id="maxPlayers" type="number" min={2} value={form.maxPlayers} onChange={(e) => updateForm("maxPlayers", parseInt(e.target.value))} />
+                <Select value={form.maxPlayers.toString()} onValueChange={(v) => updateForm("maxPlayers", parseInt(v))}>
+                  <SelectTrigger id="maxPlayers"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="16">16 Players</SelectItem>
+                    <SelectItem value="32">32 Players</SelectItem>
+                    <SelectItem value="48">48 Players</SelectItem>
+                    <SelectItem value="64">64 Players</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="entryFee">{t("registration_fee")}</Label>

@@ -3,9 +3,9 @@
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
-import { Trophy, Star, Target, Flame, MapPin, Shield, Copy, Check } from "lucide-react";
+import { Shield, Camera, Image as ImageIcon } from "lucide-react";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { useUserStore } from "@/app/stores/userStore";
 
 interface PlayerHeaderProps {
   inGameName: string;
@@ -15,14 +15,9 @@ interface PlayerHeaderProps {
   level: number;
   puuid?: string;
   riotGameTag?: string;
-}
-
-function getRankGradient(rank: string) {
-  if (rank.includes("Challenger")) return "from-amber-400/30 via-yellow-500/20 to-transparent"
-  if (rank.includes("Grandmaster")) return "from-red-500/30 via-rose-500/20 to-transparent"
-  if (rank.includes("Master")) return "from-violet-500/30 via-purple-500/20 to-transparent"
-  if (rank.includes("Diamond")) return "from-cyan-400/30 via-blue-500/20 to-transparent"
-  return "from-primary/20 via-primary/10 to-transparent"
+  avatarUrl?: string;
+  backgroundUrl?: string;
+  userId?: string;
 }
 
 function getRankBadgeStyle(rank: string) {
@@ -41,24 +36,40 @@ export function PlayerHeader({
   level,
   puuid,
   riotGameTag,
+  avatarUrl,
+  backgroundUrl,
+  userId,
 }: PlayerHeaderProps) {
-  const [copied, setCopied] = useState(false);
-  
-  const copyPuuid = () => {
-    if (puuid) {
-      navigator.clipboard.writeText(puuid);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
+  const { currentUser } = useUserStore();
+  const isOwner = !!(currentUser?.id && userId && currentUser.id === userId);
+
+  const defaultAvatar = `https://api.dicebear.com/9.x/shapes/svg?seed=${inGameName}`;
+  const gridBackgroundStyle = {
+    backgroundImage: `linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px)`,
+    backgroundSize: '24px 24px',
+    backgroundColor: '#0a0a0a'
   };
+
+  const finalBackgroundStyle = backgroundUrl 
+    ? { backgroundImage: `url(${backgroundUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } 
+    : gridBackgroundStyle;
 
   return (
     <Card className="overflow-hidden bg-card/95 dark:bg-card/40 shadow-sm backdrop-blur-lg border border-white/20 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10">
       {/* Premium gradient banner */}
-      <div className={`h-32 bg-gradient-to-r ${getRankGradient(rank)} relative overflow-hidden`}>
-        {/* Decorative pattern */}
-        <div className="absolute inset-0 grid-pattern opacity-20" />
-        <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-card/90 to-transparent" />
+      <div className={`h-32 relative overflow-hidden ${isOwner ? 'group/banner cursor-pointer' : ''}`}
+           style={finalBackgroundStyle}>
+        
+        {isOwner && (
+          <div className="absolute inset-0 bg-black/0 group-hover/banner:bg-black/40 transition-colors duration-300 flex items-center justify-center z-20">
+            <label className="cursor-pointer opacity-0 group-hover/banner:opacity-100 transition-opacity duration-300 flex items-center gap-2 text-white bg-black/60 px-4 py-2 rounded-full text-sm font-medium backdrop-blur-sm border border-white/20 hover:bg-black/80">
+              <ImageIcon className="w-4 h-4" />
+              <span>Change Cover</span>
+              <input type="file" accept="image/*" className="hidden" onChange={() => {}} />
+            </label>
+          </div>
+        )}
+        <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-card/90 to-transparent z-10" />
         
         {/* Rank badge floating */}
         <div className="absolute top-4 right-4">
@@ -72,42 +83,30 @@ export function PlayerHeader({
       <CardContent className="p-6 -mt-12 relative z-10">
         <div className="flex items-end space-x-5">
           {/* Avatar overlapping the banner */}
-          <Avatar className="h-24 w-24 ring-4 ring-background shadow-xl shrink-0">
-            <AvatarImage src={`/placeholder-user.jpg`} alt={username} />
-            <AvatarFallback className="text-2xl font-bold bg-gradient-to-br from-primary to-primary/60 text-white">
-              {username?.charAt(0)}
-            </AvatarFallback>
-          </Avatar>
+          <div className={`relative ${isOwner ? 'group/avatar cursor-pointer' : ''}`}>
+            <Avatar className={`h-24 w-24 ring-4 ring-background shadow-xl shrink-0 ${isOwner ? 'group-hover/avatar:opacity-80' : ''} transition-opacity`}>
+              <AvatarImage src={avatarUrl || defaultAvatar} alt={inGameName} />
+              <AvatarFallback className="text-2xl font-bold bg-gradient-to-br from-primary to-primary/60 text-white">
+                {inGameName?.charAt(0)}
+              </AvatarFallback>
+            </Avatar>
+            {isOwner && (
+              <label className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity duration-300 z-10 cursor-pointer rounded-full bg-black/40 backdrop-blur-sm">
+                <Camera className="w-6 h-6 text-white drop-shadow-md" />
+                <input type="file" accept="image/*" className="hidden" onChange={() => {}} />
+              </label>
+            )}
+          </div>
           
           <div className="flex-1 pb-1">
             <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-3xl md:text-4xl font-black tracking-tight">{username}</h1>
-              <Badge variant="outline" className="text-sm font-semibold">
-                Lv. {level || 312}
-              </Badge>
-            </div>
-            <div className="flex items-center gap-2 mt-2 flex-wrap">
-              <Badge variant="secondary" className="flex items-center gap-1">
-                <MapPin className="h-3 w-3" />
-                {region}
-              </Badge>
-              <span className="text-sm text-muted-foreground">
-                {inGameName} #{riotGameTag}
-              </span>
+              <h1 className="text-3xl md:text-4xl font-black tracking-tight flex items-baseline gap-2">
+                {inGameName} 
+                <span className="text-xl md:text-2xl text-muted-foreground font-semibold">#{riotGameTag}</span>
+              </h1>
             </div>
           </div>
         </div>
-        
-        {/* PUUID row */}
-        {puuid && (
-          <div className="mt-4 flex items-center gap-2 p-2.5 rounded-lg bg-muted/50 border border-border/50">
-            <span className="text-xs text-muted-foreground font-medium">PUUID</span>
-            <span className="text-xs font-mono truncate flex-1">{puuid}</span>
-            <Button variant="ghost" size="sm" className="h-7 px-2" onClick={copyPuuid}>
-              {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
-            </Button>
-          </div>
-        )}
       </CardContent>
     </Card>
   );

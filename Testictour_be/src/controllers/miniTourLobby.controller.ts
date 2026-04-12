@@ -101,8 +101,17 @@ export const createMiniTourLobby = asyncHandler(async (req: Request, res: Respon
       });
 
       if (activeLobbyCount >= maxLobbies) {
-        res.status(403);
-        throw new Error(`You have reached the maximum number of active lobbies (${maxLobbies}) for your ${planName} subscription.`);
+        const io = (global as any).io;
+        if (io) {
+          io.to(`user:${creatorId}`).emit('admin_notification', {
+            id: `limit_${Date.now()}`,
+            title: 'Lobby Limit Reached',
+            body: `You have reached the limit of ${maxLobbies} active lobbies for your ${planName} plan.`,
+            link: '/vi/dashboard/partner?action=upgrade',
+            sentAt: new Date().toISOString()
+          });
+        }
+        throw new ApiError(403, `You have reached the maximum number of active lobbies (${maxLobbies}) for your ${planName} subscription.`);
       }
     }
   }
@@ -406,18 +415,22 @@ export const joinMiniTourLobby = asyncHandler(async (req: Request, res: Response
       userBalance = await prisma.balance.upsert({
         where: { userId: userId },
         update: {},
-        create: { userId: userId, amount: 0 },
+        create: { userId: userId, amount: 0, coins: 0 },
       });
     }
 
-    if (userBalance.amount < lobby.entryFee) {
-      throw new Error(`Insufficient coins. Requires ${lobby.entryFee}, but user has ${userBalance.amount}.`);
+    const isCoinEntry = lobby.entryType === 'coins';
+    const userWallet = isCoinEntry ? userBalance.coins : userBalance.amount;
+
+    if (userWallet < lobby.entryFee) {
+      throw new Error(`Insufficient funds. Requires ${lobby.entryFee} ${lobby.entryType}, but user has ${userWallet}.`);
     }
 
     // 1. Trừ phí vào cửa từ số dư của người dùng
+    const decrementData = isCoinEntry ? { coins: { decrement: lobby.entryFee } } : { amount: { decrement: lobby.entryFee } };
     await prisma.balance.update({
       where: { userId: userId },
-      data: { amount: { decrement: lobby.entryFee } },
+      data: decrementData,
     });
 
     // 2. Tính toán các khoản phí
@@ -429,24 +442,26 @@ export const joinMiniTourLobby = asyncHandler(async (req: Request, res: Response
 
     // 3. Chuyển phí cho người tạo sảnh (Giả định người tạo đã có bản ghi số dư)
     if (creatorFee > 0) {
+      const creatorIncrementData = isCoinEntry ? { coins: { increment: creatorFee } } : { amount: { increment: creatorFee } };
       await prisma.balance.update({
         where: { userId: lobby.creatorId },
-        data: { amount: { increment: creatorFee } },
+        data: creatorIncrementData,
       });
     }
 
     // 4. Chuyển phí cho nền tảng (Giả định tài khoản hệ thống đã có bản ghi số dư)
     if (platformFee > 0) {
+      const platformIncrementData = isCoinEntry ? { coins: { increment: platformFee } } : { amount: { increment: platformFee } };
       await prisma.balance.update({
         where: { userId: 'SYSTEM_USER_ID' },
-        data: { amount: { increment: platformFee } },
+        data: platformIncrementData,
       });
     }
 
     // 5. Ghi lại giao dịch chính cho người dùng
     await prisma.transaction.create({
       data: {
-        userId: userId, type: 'entry_fee', amount: -lobby.entryFee, status: 'success', refId: id,
+        userId: userId, type: 'entry_fee', currency: lobby.entryType, amount: -lobby.entryFee, status: 'success', refId: id,
       },
     });
 
@@ -519,14 +534,18 @@ export const startMiniTourLobbyInternal = async (id: string) => {
     if (isInfinite && lobby.matches.length > 0 && lobby.entryFee > 0) {
       // Need to deduct entry fee for all players for Match N
       for (const p of lobby.participants) {
+        const isCoinEntry = lobby.entryType === 'coins';
         const userBalance = await tx.balance.findUnique({ where: { userId: p.userId } });
-        if (!userBalance || userBalance.amount < lobby.entryFee) {
-          throw new Error(`Cannot start: Player ${p.user.id} does not have enough coins (${lobby.entryFee}) for the next match.`);
+        const userWallet = isCoinEntry ? userBalance?.coins || 0 : userBalance?.amount || 0;
+
+        if (!userBalance || userWallet < lobby.entryFee) {
+          throw new Error(`Cannot start: Player ${p.user.id} does not have enough funds (${lobby.entryFee} ${lobby.entryType}) for the next match.`);
         }
         
+        const decrementData = isCoinEntry ? { coins: { decrement: lobby.entryFee } } : { amount: { decrement: lobby.entryFee } };
         await tx.balance.update({
           where: { userId: p.userId },
-          data: { amount: { decrement: lobby.entryFee } }
+          data: decrementData
         });
 
         // Split fees
@@ -537,22 +556,24 @@ export const startMiniTourLobbyInternal = async (id: string) => {
         const distributable = lobby.entryFee - creatorFee - platformFee;
 
         if (creatorFee > 0) {
+          const creatorIncrementData = isCoinEntry ? { coins: { increment: creatorFee } } : { amount: { increment: creatorFee } };
           await tx.balance.update({
             where: { userId: lobby.creatorId },
-            data: { amount: { increment: creatorFee } }
+            data: creatorIncrementData
           });
         }
 
         if (platformFee > 0) {
+          const platformIncrementData = isCoinEntry ? { coins: { increment: platformFee } } : { amount: { increment: platformFee } };
           await tx.balance.update({
             where: { userId: 'SYSTEM_USER_ID' },
-            data: { amount: { increment: platformFee } }
+            data: platformIncrementData
           });
         }
 
         await tx.transaction.create({
           data: {
-            userId: p.userId, type: 'entry_fee', amount: -lobby.entryFee, status: 'success', refId: id,
+            userId: p.userId, type: 'entry_fee', currency: lobby.entryType, amount: -lobby.entryFee, status: 'success', refId: id,
           }
         });
 
@@ -750,10 +771,13 @@ export const leaveMiniTourLobby = asyncHandler(async (req: Request, res: Respons
       throw new ApiError(400, 'Cannot leave a lobby that has already started or finished.');
     }
 
+    const isCoinEntry = miniTourLobby.entryType === 'coins';
+    
     // 2. Refund the entry fee to the user's balance
+    const refundData = isCoinEntry ? { coins: { increment: miniTourLobby.entryFee } } : { amount: { increment: miniTourLobby.entryFee } };
     await tx.balance.update({
       where: { userId: userId },
-      data: { amount: { increment: miniTourLobby.entryFee } },
+      data: refundData,
     });
 
     // 3. Create a refund transaction record for traceability
@@ -761,6 +785,7 @@ export const leaveMiniTourLobby = asyncHandler(async (req: Request, res: Respons
       data: {
         userId: userId,
         type: 'entry_fee_refund',
+        currency: miniTourLobby.entryType,
         amount: miniTourLobby.entryFee,
         status: 'success',
         refId: id, // Reference to the lobby ID
@@ -776,17 +801,19 @@ export const leaveMiniTourLobby = asyncHandler(async (req: Request, res: Respons
 
     // Decrement creator's balance
     if (creatorFee > 0 && miniTourLobby.creatorId) {
+      const creatorDecrementData = isCoinEntry ? { coins: { decrement: creatorFee } } : { amount: { decrement: creatorFee } };
       await tx.balance.update({
         where: { userId: miniTourLobby.creatorId },
-        data: { amount: { decrement: creatorFee } }
+        data: creatorDecrementData
       });
     }
 
     // Decrement platform's balance
     if (platformFee > 0) {
+      const platformDecrementData = isCoinEntry ? { coins: { decrement: platformFee } } : { amount: { decrement: platformFee } };
       await tx.balance.update({
         where: { userId: 'SYSTEM_USER_ID' },
-        data: { amount: { decrement: platformFee } }
+        data: platformDecrementData
       });
     }
 

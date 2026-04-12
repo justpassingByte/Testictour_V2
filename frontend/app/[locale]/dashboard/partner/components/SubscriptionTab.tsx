@@ -210,16 +210,9 @@ export default function SubscriptionTab({ partnerId }: { partnerId?: string }) {
   })();
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">My Subscription</h1>
-        <Button
-          onClick={() => alert('Contact support to manage your subscription')}
-          variant="outline"
-        >
-          <Settings className="mr-2 h-4 w-4" />
-          Manage Subscription
-        </Button>
+    <div className="space-y-6 pb-20">
+      <div className="flex flex-col gap-2">
+        <p className="text-muted-foreground text-sm">Review your active limits and upgrade your plan to scale your business.</p>
       </div>
 
       {!subscription ? (
@@ -237,100 +230,88 @@ export default function SubscriptionTab({ partnerId }: { partnerId?: string }) {
         </Card>
       ) : (
         <>
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="flex flex-col gap-6">
             {['FREE', 'PRO', 'ENTERPRISE'].map((planKey) => {
               const features = ACTIVE_PLAN_FEATURES[planKey as keyof typeof ACTIVE_PLAN_FEATURES] as any;
               const isCurrent = subscription.plan === planKey;
-              const title = planKey === 'FREE' ? 'Basic Plan' : planKey === 'PRO' ? 'Professional' : 'Enterprise';
+              const title = planKey === 'FREE' ? 'Basic' : planKey === 'PRO' ? 'Professional' : 'Enterprise';
               const price = planKey === 'FREE' ? 0 : planKey === 'PRO' ? 29.99 : 99.99;
               
+              const borderColors = planKey === 'FREE' ? 'border-slate-500/30' : planKey === 'PRO' ? 'border-yellow-500/50' : 'border-purple-500/50';
+              const bgGlow = planKey === 'FREE' ? 'from-slate-500/5' : planKey === 'PRO' ? 'from-yellow-500/10' : 'from-purple-500/10';
+              const textGlow = planKey === 'FREE' ? 'text-slate-200' : planKey === 'PRO' ? 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.5)]' : 'text-purple-400 drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]';
+              const buttonTheme = planKey === 'FREE' ? 'bg-slate-700 hover:bg-slate-600' : planKey === 'PRO' ? 'bg-yellow-500 hover:bg-yellow-600 text-black font-bold' : 'bg-purple-600 hover:bg-purple-700 text-white font-bold shadow-[0_0_15px_rgba(168,85,247,0.5)]';
+
               return (
-                <Card key={planKey} className={`relative flex flex-col ${isCurrent ? 'border-primary ring-2 ring-primary/20 bg-primary/5' : 'bg-card'}`}>
+                <div key={planKey} className={`relative flex flex-col rounded-xl overflow-hidden backdrop-blur-xl border ${borderColors} ${isCurrent ? 'ring-2 ring-primary/50' : ''}`}>
+                  <div className={`absolute inset-0 bg-gradient-to-br ${bgGlow} to-transparent z-0`}></div>
+                  <div className="relative z-10 p-6 flex flex-col h-full bg-card/40 hover:bg-card/60 transition-colors duration-300">
                   {isCurrent && (
-                     <div className="absolute top-0 right-0 transform translate-x-2 -translate-y-2 z-10">
-                       <Badge className="bg-primary text-primary-foreground shadow-lg px-2 py-1 text-xs">Current Plan</Badge>
+                     <div className="absolute top-4 right-4">
+                       <Badge className="bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30 shadow-lg px-3 py-1 font-semibold uppercase tracking-wider text-[10px]">
+                         Active Plan
+                       </Badge>
                      </div>
                   )}
-                  <CardHeader className="pb-4">
-                    <CardTitle className="flex items-center gap-2">
-                       <div className={`p-2 rounded-lg ${getPlanColor(planKey)} border`}>
+                  <div className="pb-4">
+                    <div className="flex items-center gap-3 mb-2">
+                       <div className={`p-2 rounded-lg bg-black/40 border border-white/10 ${textGlow}`}>
                          {getPlanIcon(planKey)}
                        </div>
-                      {title}
-                    </CardTitle>
-                    <div className="mt-4">
-                       <span className="text-3xl font-bold">${price}</span>
-                       <span className="text-sm text-muted-foreground">/month</span>
+                       <h3 className={`text-2xl font-black uppercase tracking-widest ${textGlow}`}>{title}</h3>
                     </div>
-                    {isCurrent && (
-                      <div className="text-xs text-muted-foreground mt-2">
-                        {getStatusBadge(subscription.status)} Active since {new Date(subscription.startDate).toLocaleDateString()}
-                      </div>
-                    )}
-                  </CardHeader>
-                  <CardContent className="flex-1 flex flex-col">
-                     <div className="space-y-3 mb-6 bg-muted/40 p-3 rounded-lg">
-                       <div className="flex justify-between text-sm items-center">
-                          <span className="text-muted-foreground flex items-center gap-1.5"><Users className="h-4 w-4" /> Players</span>
-                          <span className="font-bold text-blue-500">{features.maxPlayers === -1 ? 'Unlimited' : features.maxPlayers}</span>
+                    <div className="mt-4 flex items-end gap-1">
+                       <span className="text-4xl font-extrabold tracking-tight">${price}</span>
+                       <span className="text-sm text-muted-foreground font-medium pb-1">/month</span>
+                    </div>
+                  </div>
+                  <div className="flex-1 flex flex-col">
+                     <div className="grid grid-cols-2 gap-3 mb-6">
+                       <div className="bg-black/30 border border-white/5 p-3 rounded-xl flex flex-col items-center justify-center text-center">
+                          <span className="text-xl font-bold text-blue-400">{features.maxPlayers === -1 ? '∞' : features.maxPlayers}</span>
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1">Players</span>
                        </div>
-                       <div className="flex justify-between text-sm items-center">
-                          <span className="text-muted-foreground flex items-center gap-1.5"><Crown className="h-4 w-4" /> Lobbies</span>
-                          <span className="font-bold text-green-500">{features.maxLobbies === -1 ? 'Unlimited' : features.maxLobbies}</span>
+                       <div className="bg-black/30 border border-white/5 p-3 rounded-xl flex flex-col items-center justify-center text-center">
+                          <span className="text-xl font-bold text-emerald-400">{features.maxLobbies === -1 ? '∞' : features.maxLobbies}</span>
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1">Lobbies / M</span>
                        </div>
                      </div>
-                     
-                     <div className="space-y-3 mb-6 flex-1">
+                     <div className="space-y-3 mb-8 flex-1 grid grid-cols-2 gap-x-2 gap-y-3">
                         {Object.entries(features).map(([key, value]) => {
                            if (key === 'maxPlayers' || key === 'maxLobbies' || key === 'supportLevel' || key === 'withdrawalProcessing') return null;
                            if (!value) return null; // Don't show inactive features
                            
                            return (
-                             <div key={key} className="flex items-start gap-2 text-sm">
-                               <CheckCircle className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+                             <div key={key} className="flex items-center gap-2 text-xs">
+                               <CheckCircle className="h-3 w-3 text-emerald-500 shrink-0" />
                                <span className="text-muted-foreground">{key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}</span>
                              </div>
                            );
                         })}
-                        <div className="flex items-start gap-2 text-sm">
-                           <CheckCircle className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+                        <div className="flex items-center gap-2 text-xs">
+                           <CheckCircle className="h-3 w-3 text-emerald-500 shrink-0" />
                            <span className="text-muted-foreground capitalize">{features.supportLevel} Support</span>
                         </div>
                         {features.withdrawalProcessing && (
-                           <div className="flex items-start gap-2 text-sm">
-                              <CheckCircle className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
-                              <span className="text-muted-foreground capitalize">{features.withdrawalProcessing} Withdrawal</span>
+                           <div className="flex items-center gap-2 text-xs">
+                             <CheckCircle className="h-3 w-3 text-emerald-500 shrink-0" />
+                             <span className="text-muted-foreground capitalize">{features.withdrawalProcessing} Withdrawals</span>
                            </div>
                         )}
                      </div>
-
-                     {!isCurrent && (
-                        <div className="mt-auto pt-4">
-                            {subscription.plan === 'ENTERPRISE' || (subscription.plan === 'PRO' && planKey === 'FREE') ? (
-                              // Downgrade or lower tier
-                              <Button disabled variant="outline" className="w-full">
-                                Included in Your Plan
-                              </Button>
-                            ) : (
-                              <Button 
-                                className="w-full" 
-                                variant={planKey === 'PRO' ? 'default' : 'outline'}
-                                onClick={() => handleUpgradePlan(planKey)}
-                              >
-                                Upgrade to {title}
-                              </Button>
-                            )}
-                        </div>
-                     )}
-                     {isCurrent && (
-                        <div className="mt-auto pt-4">
-                          <Button disabled variant="secondary" className="w-full opacity-75">
-                            Your Active Plan
-                          </Button>
-                        </div>
-                     )}
-                  </CardContent>
-                </Card>
+                     <div className="mt-auto pt-4">
+                       <Button 
+                         className={`w-full py-6 text-sm uppercase tracking-widest transition-transform hover:scale-[1.02] ${buttonTheme}`}
+                         variant={isCurrent ? "outline" : "default"}
+                         disabled={isCurrent}
+                         onClick={() => handleUpgradePlan(planKey)}
+                       >
+                         {isCurrent ? 'Current Plan' : `Select ${title}`}
+                       </Button>
+                     </div>
+                  </div>
+                 </div>
+                </div>
               )
             })}
           </div>

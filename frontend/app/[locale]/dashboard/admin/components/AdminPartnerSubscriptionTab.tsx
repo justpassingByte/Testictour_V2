@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/use-toast"
-import { Loader2, Crown, CheckCircle2, Wallet } from "lucide-react"
+import { Progress } from "@/components/ui/progress"
+import { Loader2, Crown, CheckCircle2, Wallet, Activity } from "lucide-react"
 import api from "@/app/lib/apiConfig"
 
 interface SubscriptionData {
@@ -18,6 +19,15 @@ interface SubscriptionData {
     annualPrice?: number
     autoRenew: boolean
     createdAt?: string
+    limits?: {
+        maxLobbies: number;
+        maxTournamentsPerMonth: number;
+        maxPlayersPerLobby: number;
+        usage: {
+            activeLobbies: number;
+            tournamentsThisMonth: number;
+        }
+    }
 }
 
 interface AdminPartnerSubscriptionTabProps {
@@ -172,6 +182,46 @@ export default function AdminPartnerSubscriptionTab({
                             </div>
                         )}
                     </div>
+                    {currentSubscription?.limits && (
+                        <div className="space-y-4 pt-4 border-t border-white/10">
+                            <label className="text-sm font-medium flex items-center gap-2">
+                                <Activity className="h-4 w-4 text-emerald-400" />
+                                Current Plan Usage
+                            </label>
+                            
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <div className="space-y-2 p-3 rounded-lg bg-black/20 border border-white/5">
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="text-muted-foreground">Active Lobbies</span>
+                                        <span className="font-medium">
+                                            {currentSubscription.limits.usage.activeLobbies} / 
+                                            {currentSubscription.limits.maxLobbies === -1 ? '∞' : currentSubscription.limits.maxLobbies}
+                                        </span>
+                                    </div>
+                                    <Progress 
+                                        value={currentSubscription.limits.maxLobbies === -1 ? 0 : 
+                                            (currentSubscription.limits.usage.activeLobbies / currentSubscription.limits.maxLobbies) * 100} 
+                                        className="h-2" 
+                                    />
+                                </div>
+
+                                <div className="space-y-2 p-3 rounded-lg bg-black/20 border border-white/5">
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="text-muted-foreground">Tournaments (This Month)</span>
+                                        <span className="font-medium">
+                                            {currentSubscription.limits.usage.tournamentsThisMonth} / 
+                                            {currentSubscription.limits.maxTournamentsPerMonth === -1 ? '∞' : currentSubscription.limits.maxTournamentsPerMonth}
+                                        </span>
+                                    </div>
+                                    <Progress 
+                                        value={currentSubscription.limits.maxTournamentsPerMonth === -1 ? 0 : 
+                                            (currentSubscription.limits.usage.tournamentsThisMonth / currentSubscription.limits.maxTournamentsPerMonth) * 100} 
+                                        className="h-2" 
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="space-y-3 pt-4 border-t border-white/10">
                         <div className="flex items-center justify-between">

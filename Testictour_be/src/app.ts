@@ -69,6 +69,13 @@ io.on('connection', (socket) => {
       }
     }
   });
+
+  socket.on('worker_emit_notification', (data) => {
+    const { userId, payload } = data;
+    if (userId && payload) {
+      io.to(`user:${userId}`).emit('admin_notification', payload);
+    }
+  });
 });
 
 // Khởi tạo SummaryManagerService workers only if Redis is available

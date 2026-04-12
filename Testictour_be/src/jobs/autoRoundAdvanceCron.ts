@@ -27,11 +27,19 @@ cron.schedule('* * * * *', async () => {
 
     for (const round of roundsToStart) {
       try {
-        // Add job to the queue, the worker will pick it up and call RoundService.autoAdvance
-        await autoAdvanceRoundQueue.add('autoAdvanceRound', { roundId: round.id });
-        logger.info(`Queued round ${round.id} to be started.`);
+        if (autoAdvanceRoundQueue) {
+          await autoAdvanceRoundQueue.add('autoAdvanceRound', { roundId: round.id });
+          logger.info(`Queued round ${round.id} to be started.`);
+        } else {
+          logger.info(`[NoRedis] Queue unavailable — scheduling direct autoAdvance for round ${round.id}`);
+          setTimeout(() => {
+            RoundService.autoAdvance(round.id).catch(err => {
+              logger.error(`[NoRedis] Direct autoAdvance failed for round ${round.id}: ${err instanceof Error ? err.message : String(err)}`);
+            });
+          }, 0);
+        }
       } catch (error) {
-        logger.error(`Failed to queue round ${round.id}: ${error instanceof Error ? error.message : String(error)}`);
+        logger.error(`Failed to start/queue round ${round.id}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
   } catch (error) {

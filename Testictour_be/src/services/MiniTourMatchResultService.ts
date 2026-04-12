@@ -227,6 +227,20 @@ export default class MiniTourMatchResultService {
                       refId: miniTourLobby.id
                     }
                   });
+                  
+                  if (ioClient) {
+                    ioClient.emit('worker_emit_notification', {
+                      userId: winner.userId,
+                      payload: {
+                        id: `prize_${winner.userId}_${Date.now()}`,
+                        title: 'Prize Received! 🏆',
+                        body: `You received ${amount} coins from ${miniTourLobby.name}.`,
+                        link: `/vi/players/${winner.userId}`,
+                        sentAt: new Date().toISOString()
+                      }
+                    });
+                  }
+                  
                   totalDistributed += amount;
                 }
               }
@@ -332,6 +346,19 @@ export default class MiniTourMatchResultService {
                       refId: miniTourLobby.id
                     }
                   });
+
+                  if (ioClient) {
+                    ioClient.emit('worker_emit_notification', {
+                      userId: rp.userId,
+                      payload: {
+                        id: `prize_series_${rp.userId}_${Date.now()}`,
+                        title: 'Tournament Prize Received! 🏆',
+                        body: `Congratulations! You received ${amount} coins from ${miniTourLobby.name}.`,
+                        link: `/vi/players/${rp.userId}`,
+                        sentAt: new Date().toISOString()
+                      }
+                    });
+                  }
                 }
               }
               logger.info(`Series Lobby payouts distributed for lobby ${miniTourLobby.id}.`);

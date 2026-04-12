@@ -26,7 +26,14 @@ export function MatchDetailsModal({ matchId, userId, isOpen, onClose }: MatchDet
   }, [isOpen, matchId, fetchPlayerMatchResults]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Find the summary to get prize, points, and placement
-  const summary = playerMatches.find(m => m.matchId === matchId);
+  let summary = null;
+  for (const group of playerMatches) {
+    const match = group.matches.find(m => m.matchId === matchId);
+    if (match) {
+      summary = match;
+      break;
+    }
+  }
 
   // Detect data format
   const isGrimoire = isGrimoireMatchData(matchDetailsRaw);

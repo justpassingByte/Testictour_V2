@@ -225,6 +225,7 @@ export default function PlayerPage() {
             level={player.user?.level || 312}
             puuid={player.user?.puuid}
             riotGameTag={player.user?.riotGameTag}
+            userId={player.user?.id}
           />
 
           <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1">

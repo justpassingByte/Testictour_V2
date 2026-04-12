@@ -11,6 +11,7 @@ export interface AppNotification {
     body: string;
     sentAt: string;
     read: boolean;
+    link?: string;
 }
 
 interface NotificationContextType {
@@ -51,10 +52,18 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     useEffect(() => {
         if (!socket) return;
 
-        const handler = (data: { id: string; title: string; body: string; sentAt: string }) => {
+        const handler = (data: { id: string; title: string; body: string; sentAt: string; link?: string }) => {
             const newNotif: AppNotification = { ...data, read: false };
             setNotifications(prev => [newNotif, ...prev].slice(0, MAX_STORED));
-            toast({ title: data.title, description: data.body });
+            toast({ 
+                title: data.title, 
+                description: data.body,
+                onClick: () => {
+                    if (data.link) {
+                        window.location.href = data.link; // simple navigation from outside setup
+                    }
+                }
+            });
         };
 
         socket.on('admin_notification', handler);

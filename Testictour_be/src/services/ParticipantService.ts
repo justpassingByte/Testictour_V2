@@ -32,7 +32,7 @@ export default class ParticipantService {
       // Deduct entry fee AND create Transaction record atomically via TransactionService
       // Previously this only called balance.decrement without creating a transaction record
       if (entryFee > 0) {
-        await TransactionService.entryFee(userId, tournamentId, entryFee, tx);
+        await TransactionService.entryFee(userId, tournamentId, entryFee, tx, (tournament as any).entryType || 'usd');
       }
 
       const participant = await tx.participant.create({ data: { tournamentId, userId, paid: entryFee > 0 } });
@@ -71,7 +71,7 @@ export default class ParticipantService {
       // Only refund if tournament hasn't started
       if (tournament.status === 'pending' && participant.paid) {
         const entryFee = (tournament as any).entryFee || 0;
-        await TransactionService.refund(participant.userId, tournament.id, entryFee);
+        await TransactionService.refund(participant.userId, tournament.id, entryFee, tx, (tournament as any).entryType || 'usd');
       }
       await tx.participant.delete({ where: { id: participantId } });
 

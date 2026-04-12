@@ -16,7 +16,7 @@ export function TournamentPhasesTab({ phases }: TournamentPhasesTabProps) {
     <div className="space-y-4">
       {phases.map((phase, index) => {
         // Human readable phase format
-        let formatType = phase.type;
+        let formatType: string = phase.type;
         switch(phase.type?.toLowerCase()) {
           case 'group_stage': formatType = 'Group Stage'; break;
           case 'knockout': formatType = 'Knockout'; break;

@@ -11,33 +11,33 @@ const headers = {
 
 const riotMatchDataForTest = {
   "metadata": {
-      "data_version": "6",
-      "match_id": "VN2_930395393",
-      "participants": [
-          "DH7MwwQjP_IRTHXCK0TlDM0jADBBOa8h1Fb9KLGwlRXTfx9LttT0bHW5rGHpQwWREyX7_xVyobDPXQ",
-          "L1GIB4J6UDyVW3eA3HtgxkN25G3Jx-ES-Kvz8-XWu1UF2U6QnKihPVE0t6LRfbGhleit0R9E1B2c9A",
-          "gof2amxArpVkT3cdj5NagV1UhwWasvsxbBCdqI7Blsl7cSUCbrsWeflqWw2GjVeK5xZoqgu1TAv4wQ",
-          "jOyHV7N0EJJh_WjXNQymtjW4d1RkLTkhrzjJmRtw0k_-zWaz0Y2GICbZl--Ezk08rLrkKEeTvxGbvw",
-          "QwVqUQ4qNIZ-9FSF4sozqIs4ImKWPHo05nBxNj6QYh5vXIEVWd8SxMcZIrLLLOXPqVQjRXv8Tb_ekA",
-          "hyoHk_vBGrk3U2bLJg9h4E4BXJ02BT3W0D3GvbAIdZsO5c41W4WxHk0mgtg3EI_0I49OjQNabCZRvA",
-          "hi7m9Gb4WATkoxYUMCgwoIITRQl12TgWYi3_q5LOFML8KkIYmqr8b1EUXJcPTnxyIXwCGI2jLyDGDg",
-          "rXEKrL8dSyGem4gwqjV5_90L9M_o63yBI7oR8TwJJyoZmPstu65jkpy4xTYRZynpn3igqF4ypwNBLg"
-      ]
+    "data_version": "6",
+    "match_id": "VN2_930395393",
+    "participants": [
+      "DH7MwwQjP_IRTHXCK0TlDM0jADBBOa8h1Fb9KLGwlRXTfx9LttT0bHW5rGHpQwWREyX7_xVyobDPXQ",
+      "L1GIB4J6UDyVW3eA3HtgxkN25G3Jx-ES-Kvz8-XWu1UF2U6QnKihPVE0t6LRfbGhleit0R9E1B2c9A",
+      "gof2amxArpVkT3cdj5NagV1UhwWasvsxbBCdqI7Blsl7cSUCbrsWeflqWw2GjVeK5xZoqgu1TAv4wQ",
+      "jOyHV7N0EJJh_WjXNQymtjW4d1RkLTkhrzjJmRtw0k_-zWaz0Y2GICbZl--Ezk08rLrkKEeTvxGbvw",
+      "QwVqUQ4qNIZ-9FSF4sozqIs4ImKWPHo05nBxNj6QYh5vXIEVWd8SxMcZIrLLLOXPqVQjRXv8Tb_ekA",
+      "hyoHk_vBGrk3U2bLJg9h4E4BXJ02BT3W0D3GvbAIdZsO5c41W4WxHk0mgtg3EI_0I49OjQNabCZRvA",
+      "hi7m9Gb4WATkoxYUMCgwoIITRQl12TgWYi3_q5LOFML8KkIYmqr8b1EUXJcPTnxyIXwCGI2jLyDGDg",
+      "rXEKrL8dSyGem4gwqjV5_90L9M_o63yBI7oR8TwJJyoZmPstu65jkpy4xTYRZynpn3igqF4ypwNBLg"
+    ]
   },
   "info": {
-      "endOfGameResult": "GameComplete",
-      "gameCreation": 1750697572000, // Unix timestamp in milliseconds
-      "gameId": 930395393,
-      "game_datetime": 1750699528571,
-      "game_length": 1919.3426513671875,
-      "game_version": "Linux Version 15.12.688.6522 (Jun 10 2025/18:29:33) [PUBLIC] ",
-      "mapId": 22,
-      "participants": [], // Full data not needed for this test, as we only care about puuids from metadata
-      "queueId": 1090,
-      "queue_id": 1090,
-      "tft_game_type": "standard",
-      "tft_set_core_name": "TFTSet14",
-      "tft_set_number": 14
+    "endOfGameResult": "GameComplete",
+    "gameCreation": 1750697572000, // Unix timestamp in milliseconds
+    "gameId": 930395393,
+    "game_datetime": 1750699528571,
+    "game_length": 1919.3426513671875,
+    "game_version": "Linux Version 15.12.688.6522 (Jun 10 2025/18:29:33) [PUBLIC] ",
+    "mapId": 22,
+    "participants": [], // Full data not needed for this test, as we only care about puuids from metadata
+    "queueId": 1090,
+    "queue_id": 1090,
+    "tft_game_type": "standard",
+    "tft_set_core_name": "TFTSet14",
+    "tft_set_number": 14
   }
 };
 
@@ -124,15 +124,15 @@ async function setupTestUsersAndLobby(): Promise<string | null> {
         name: `Automated Test Lobby - ${Date.now()}`,
         description: 'Lobby for testing Riot API match sync.',
         maxPlayers: riotMatchDataForTest.metadata.participants.length,
-        entryFee: 0,
-        entryType: 'free',
+        entryFee: 100,
+        entryType: 'coin',
         prizePool: 0,
         gameMode: 'TFT',
         skillLevel: 'Any',
         theme: 'Automated',
         tags: ['automated-test'],
         rules: ['No specific rules for this test.'],
-        prizeDistribution: { "1": 1.0 },
+        prizeDistribution: { "1": 0.5, "2": 0.3, "3": 0.2 },
         settings: { autoStart: true, privateMode: true },
         status: "WAITING",
         currentPlayers: riotMatchDataForTest.metadata.participants.length,
@@ -182,7 +182,7 @@ async function triggerSyncAndVerify(lobbyId: string) {
     // --- Hardcode Riot Match ID to skip the search step ---
     // This is to specifically test the data comparison and sync process,
     // bypassing the match discovery logic.
-    const riotMatchId = "VN2_930395393"; 
+    const riotMatchId = "VN2_930395393";
     console.log(`Skipping match search. Using hardcoded Riot Match ID: ${riotMatchId}`);
 
     if (riotMatchId) {
