@@ -16,6 +16,13 @@ services:
       - FRONTEND_URL=http://${VPS_IP:-localhost}
       - BACKEND_SERVICE_URL=http://testictour-backend:4000
       - GRIMOIRE_API_URL=http://grimoire-backend:3001
+      # Gateway Variables
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - MOMO_ENDPOINT=${MOMO_ENDPOINT}
+      - MOMO_PARTNER_CODE=${MOMO_PARTNER_CODE}
+      - MOMO_ACCESS_KEY=${MOMO_ACCESS_KEY}
+      - MOMO_SECRET_KEY=${MOMO_SECRET_KEY}
       # Uncomment when Redis is available:
       # - REDIS_URL=redis://redis:6379
     # depends_on:

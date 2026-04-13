@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Send, History, FileText, Plus, Trash2, Eye } from "lucide-react";
+import { Send, History, FileText, Plus, Trash2, Eye, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
 import api from "@/app/lib/apiConfig";
 import { formatDistanceToNow } from "date-fns";
+import MaintenanceModeSection from "./MaintenanceModeSection";
 
 interface NotificationRecord { id: string; title: string; body: string; targetType: string; sentAt: string; status: string; sender?: { username: string }; }
 interface Template { id: string; name: string; title: string; body: string; }
@@ -106,6 +107,7 @@ export default function PushNotificationsSection() {
                     <TabsTrigger value="compose"><Send className="mr-2 h-3.5 w-3.5" />Compose</TabsTrigger>
                     <TabsTrigger value="history"><History className="mr-2 h-3.5 w-3.5" />History</TabsTrigger>
                     <TabsTrigger value="templates"><FileText className="mr-2 h-3.5 w-3.5" />Templates</TabsTrigger>
+                    <TabsTrigger value="maintenance"><AlertTriangle className="mr-2 h-3.5 w-3.5" />Maintenance</TabsTrigger>
                 </TabsList>
 
                 {/* Compose */}
@@ -200,6 +202,11 @@ export default function PushNotificationsSection() {
                             </Button>
                         </div>
                     ))}
+                </TabsContent>
+
+                {/* Maintenance */}
+                <TabsContent value="maintenance" className="mt-4">
+                    <MaintenanceModeSection />
                 </TabsContent>
             </Tabs>
 

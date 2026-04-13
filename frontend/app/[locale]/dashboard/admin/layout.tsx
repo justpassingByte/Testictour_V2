@@ -1,54 +1,40 @@
 "use client";
 
-import React from "react";
+import React, { useState, useMemo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
-  LayoutDashboard,
-  Trophy,
-  Handshake,
-  Users,
-  Gamepad2,
-  DollarSign,
-  Settings,
-  Menu,
-  X,
-  Star,
-  Gift,
-  ChevronLeft,
-  ChevronRight,
-  Database,
+  LayoutDashboard, Trophy, Handshake, Users, Gamepad2,
+  DollarSign, Settings, Menu, X, Star, Gift,
+  ChevronLeft, ChevronRight, Database, ShieldAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState, useMemo } from "react";
-import { useTranslations } from "next-intl";
 
 export default function AdminDashboardLayout({ children }: { children: React.ReactNode }) {
-  const t = useTranslations("common");
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(true);
 
   const sidebarItems = useMemo(() => [
-    { label: t("overview", { defaultValue: "Overview" }),     href: "/dashboard/admin",              icon: LayoutDashboard, exact: true },
-    { label: t("tournaments", { defaultValue: "Tournaments" }),  href: "/dashboard/admin/tournaments",  icon: Trophy },
-    { label: t("partners", { defaultValue: "Partners" }),     href: "/dashboard/admin/partners",     icon: Handshake },
-    { label: t("players", { defaultValue: "Players" }),      href: "/dashboard/admin/players",      icon: Users },
-    { label: t("lobbies", { defaultValue: "Lobbies" }),      href: "/dashboard/admin/lobbies",      icon: Gamepad2 },
+    { label: "Overview",      href: "/dashboard/admin",              icon: LayoutDashboard, exact: true },
+    { label: "Tournaments",   href: "/dashboard/admin/tournaments",  icon: Trophy },
+    { label: "Partners",      href: "/dashboard/admin/partners",     icon: Handshake },
+    { label: "Players",       href: "/dashboard/admin/players",      icon: Users },
+    { label: "Lobbies",       href: "/dashboard/admin/lobbies",      icon: Gamepad2 },
     { label: "---" },
-    { label: t("revenue", { defaultValue: "Revenue" }),      href: "/dashboard/admin/revenue",      icon: DollarSign },
-    { label: t("achievements_tab", { defaultValue: "Achievements" }), href: "/dashboard/admin/achievements", icon: Star },
-    { label: t("loyalty_program", { defaultValue: "Loyalty" }),      href: "/dashboard/admin/loyalty",      icon: Gift },
+    { label: "Revenue",       href: "/dashboard/admin/revenue",      icon: DollarSign },
+    { label: "Achievements",  href: "/dashboard/admin/achievements", icon: Star },
+    { label: "Loyalty",       href: "/dashboard/admin/loyalty",      icon: Gift },
     { label: "---" },
-    { label: t("dev_tools", { defaultValue: "Dev Tools" }),          href: "/dashboard/admin/dev-tools",    icon: Database },
-    { label: t("settings", { defaultValue: "Settings" }),     href: "/dashboard/admin/settings",     icon: Settings },
-  ], [t]);
+    { label: "Escrow Ops",    href: "/dashboard/admin/escrow",       icon: ShieldAlert },
+    { label: "Dev Tools",     href: "/dashboard/admin/dev-tools",    icon: Database },
+    { label: "Settings",      href: "/dashboard/admin/settings",     icon: Settings },
+  ], []);
 
-  // Strip locale prefix for matching (e.g. /en/dashboard/admin → /dashboard/admin)
   const normalizedPath = pathname.replace(/^\/[a-z]{2}(?=\/)/, "");
 
-  const isActive = (item: typeof sidebarItems[0]) => {
+  const isActive = (item: (typeof sidebarItems)[0]) => {
     if (!item.href) return false;
     if (item.exact) return normalizedPath === item.href;
     return normalizedPath.startsWith(item.href);
@@ -58,13 +44,13 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
     <nav className="flex flex-col gap-1 px-3 py-4 flex-1 overflow-hidden">
       <div className={cn("px-3 mb-6 transition-all duration-300", isCollapsed && "opacity-0 invisible h-0 mb-0")}>
         <h2 className="text-lg font-bold tracking-tight bg-gradient-to-r from-violet-400 to-cyan-400 bg-clip-text text-transparent truncate">
-          {t("admin_panel", { defaultValue: "Admin Panel" })}
+          Admin Panel
         </h2>
-        <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{t("manage_your_platform", { defaultValue: "Manage your platform" })}</p>
+        <p className="text-[11px] text-muted-foreground mt-0.5 truncate">Manage your platform</p>
       </div>
       {sidebarItems.map((item, idx) => {
         if (item.label === "---") return <div key={idx} className="my-2 h-px bg-white/10 mx-3" />;
-        const active = isActive(item as typeof sidebarItems[0]);
+        const active = isActive(item);
         return (
           <Link
             key={item.href}
@@ -83,6 +69,7 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
               <item.icon
                 className={cn(
                   "h-4 w-4 shrink-0 transition-colors",
+                  item.label === "Escrow Ops" && active ? "text-orange-400" : "",
                   active ? "text-violet-400" : "text-muted-foreground group-hover:text-foreground"
                 )}
               />
@@ -103,7 +90,6 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
         "hidden lg:flex shrink-0 flex-col border-r border-white/10 bg-card/95 backdrop-blur-xl sticky top-0 h-screen transition-all duration-300",
         isExpanded ? "w-[240px]" : "w-[64px]"
       )}>
-        {/* Expand/Collapse Toggle */}
         <div className={cn("flex items-center p-3 border-b border-white/10 shrink-0", isExpanded ? "justify-end" : "justify-center")}>
           <Button
             variant="ghost"
@@ -115,15 +101,13 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
             {isExpanded ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           </Button>
         </div>
-        
         <SidebarContent isCollapsed={!isExpanded} />
       </aside>
 
-      {/* Mobile menu toggle */}
+      {/* Mobile toggle */}
       <div className="lg:hidden fixed bottom-4 right-4 z-50">
         <Button
-          size="icon"
-          variant="default"
+          size="icon" variant="default"
           className="rounded-full h-12 w-12 shadow-xl bg-violet-600 hover:bg-violet-700"
           onClick={() => setMobileOpen(!mobileOpen)}
         >
@@ -131,7 +115,7 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
         </Button>
       </div>
 
-      {/* Mobile Sidebar Overlay */}
+      {/* Mobile sidebar */}
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-40">
           <div className="absolute inset-0 bg-black/60" onClick={() => setMobileOpen(false)} />
@@ -141,7 +125,6 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
         </div>
       )}
 
-      {/* Main content area */}
       <main className="flex-1 min-w-0">
         {children}
       </main>

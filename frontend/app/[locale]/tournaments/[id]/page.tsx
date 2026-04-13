@@ -17,7 +17,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { getTranslations } from "next-intl/server"
 import { 
   Globe, Users, Calendar, 
-  DollarSign, Clock, Download, Loader2
+  DollarSign, Clock, Download, Loader2,
+  AlertTriangle, ShieldCheck
 } from "lucide-react"
 
 // Server-side data fetching
@@ -80,8 +81,31 @@ export default async function TournamentPage({ params }: { params: { id: string 
                 <Badge variant="outline" className={`${currentStatus.color} capitalize`}>
                   {currentStatus.text}
                 </Badge>
+                {tournament.isCommunityMode ? (
+                  <Badge variant="outline" className="bg-orange-500/10 text-orange-500 border-orange-500/30">
+                    <AlertTriangle className="mr-1 h-3 w-3 inline mb-0.5" />
+                    {t("community_mode") || "Community Mode"}
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30">
+                    <ShieldCheck className="mr-1 h-3 w-3 inline mb-0.5" />
+                    {t("escrow_secured") || "Escrow Secured"}
+                  </Badge>
+                )}
               </div>
               <p className="text-muted-foreground">{tournament.description}</p>
+              
+              {tournament.isCommunityMode && (
+                <div className="bg-orange-500/10 border border-orange-500/20 rounded-md p-4 mt-2 mb-4">
+                  <div className="flex items-start">
+                    <AlertTriangle className="h-5 w-5 text-orange-500 mt-0.5 mr-3 flex-shrink-0" />
+                    <div>
+                      <h4 className="text-orange-500 font-medium mb-1">{t("community_tournament_notice")}</h4>
+                      <p className="text-sm text-orange-500/80">{t("this_tournament_is_operating_in_communit_desc")}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">

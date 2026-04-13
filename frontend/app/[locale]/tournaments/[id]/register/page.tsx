@@ -33,10 +33,10 @@ import { SubRegionSelector } from "@/components/ui/SubRegionSelector"
 export default function TournamentRegistration({ params }: { params: { id: string } }) {
   const t = useTranslations('common')
   const [tournament, setTournament] = useState<ITournament | null>(null)
-  const [loadingTournament, setLoadingTournament] = useState(true)
-  const [tournamentError, setTournamentError] = useState<string | null>(null)
   const [summonerName, setSummonerName] = useState("")
   const [gameTag, setGameTag] = useState("")
+  const [loadingTournament, setLoadingTournament] = useState(true)
+  const [tournamentError, setTournamentError] = useState("")
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle")
   const [errorMessage, setErrorMessage] = useState("")
   const [summonerInfo, setSummonerInfo] = useState<{
@@ -121,7 +121,7 @@ export default function TournamentRegistration({ params }: { params: { id: strin
     return (
       <div className="flex flex-col items-center justify-center min-h-screen py-12">
         <Loader2 className="mr-2 h-16 w-16 animate-spin text-primary" />
-        <p className="mt-4 text-lg text-muted-foreground">Loading tournament details...</p>
+        <p className="mt-4 text-lg text-muted-foreground">{t("loading_tournament_details")}</p>
       </div>
     )
   }
@@ -139,7 +139,7 @@ export default function TournamentRegistration({ params }: { params: { id: strin
     return (
       <div className="flex flex-col items-center justify-center min-h-screen py-12 text-red-500">
         <AlertCircle className="mr-2 h-16 w-16" />
-        <p className="mt-4 text-lg">Tournament not found.</p>
+        <p className="mt-4 text-lg">{t("tournament_not_found")}</p>
       </div>
     )
   }
@@ -147,13 +147,13 @@ export default function TournamentRegistration({ params }: { params: { id: strin
   return (
     <div className="container py-8">
       <div className="flex items-center space-x-2 text-sm text-muted-foreground mb-6">
-        <Link href="/">Home</Link>
+        <Link href="/">{t("home")}</Link>
         <ChevronRight className="h-4 w-4" />
-        <Link href="/tournaments">Tournaments</Link>
+        <Link href="/tournaments">{t("tournaments")}</Link>
         <ChevronRight className="h-4 w-4" />
         <Link href={`/tournaments/${params.id}`}>{tournament.name}</Link>
         <ChevronRight className="h-4 w-4" />
-        <span className="font-medium text-foreground">Register</span>
+        <span className="font-medium text-foreground">{t("register")}</span>
       </div>
 
       <div className="max-w-2xl mx-auto">
@@ -163,12 +163,28 @@ export default function TournamentRegistration({ params }: { params: { id: strin
           {tournament.entryFee}
         </p>
 
+        {tournament.isCommunityMode && (
+          <Alert className="mb-8 border-orange-500/30 bg-orange-500/10 text-orange-500">
+            <AlertCircle className="h-5 w-5 !text-orange-500" />
+            <AlertTitle className="text-orange-500 font-bold tracking-wide uppercase text-sm">{t("community_mode")}</AlertTitle>
+            <AlertDescription className="mt-1 opacity-90">{t("the_entry_fee_and_prize_pool_for_this_to_desc")}<strong>{t("not_secured_by_escrow")}</strong>{t("by_registering_you_acknowledge_that_payo_desc")}</AlertDescription>
+          </Alert>
+        )}
+
+
+        {/* Escrow gating */}
+        {!tournament.isCommunityMode && tournament.escrowStatus === "not_funded" && (
+          <Alert className="mb-8 border-red-500/30 bg-red-500/10">
+            <AlertCircle className="h-5 w-5 !text-red-500" />
+            <AlertTitle className="text-red-400 font-bold tracking-wide uppercase text-sm">Registration Unavailable</AlertTitle>
+            <AlertDescription className="mt-1 text-red-300/90">This tournament&apos;s escrow has <strong>not been funded</strong>. Registration is locked until the organizer deposits the required amount.</AlertDescription>
+          </Alert>
+        )}
+
         <Card className="animate-fade-in bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20">
           <CardHeader>
-            <CardTitle>Player Information</CardTitle>
-            <CardDescription>
-              We will use your Riot account to track your tournament progress automatically.
-            </CardDescription>
+            <CardTitle>{t("player_information")}</CardTitle>
+            <CardDescription>{t("we_will_use_your_riot_account_to_track_y_desc")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-2">
@@ -196,14 +212,10 @@ export default function TournamentRegistration({ params }: { params: { id: strin
                 >
                   {status === "loading" ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Searching
-                    </>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />{t("searching")}</>
                   ) : (
                     <>
-                      <Search className="mr-2 h-4 w-4" />
-                      Search
-                    </>
+                      <Search className="mr-2 h-4 w-4" />{t("search")}</>
                   )}
                 </Button>
               </div>
@@ -223,7 +235,7 @@ export default function TournamentRegistration({ params }: { params: { id: strin
                   <span className="font-bold" style={{ color: majorRegion.color }}>
                     {majorRegion.name}
                   </span>
-                  <span className="text-zinc-400">— Select your server</span>
+                  <span className="text-zinc-400">{t("select_your_server")}</span>
                 </div>
               )}
               <SubRegionSelector
@@ -236,7 +248,7 @@ export default function TournamentRegistration({ params }: { params: { id: strin
             {status === "error" && (
               <Alert variant="destructive" className="animate-fade-in">
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Error</AlertTitle>
+                <AlertTitle>{t("error")}</AlertTitle>
                 <AlertDescription>{errorMessage}</AlertDescription>
               </Alert>
             )}
@@ -244,7 +256,7 @@ export default function TournamentRegistration({ params }: { params: { id: strin
             {summonerInfo && (
               <Alert className="bg-primary/10 border-primary/20 text-primary animate-fade-in">
                 <CheckCircle2 className="h-4 w-4" />
-                <AlertTitle>Summoner Found</AlertTitle>
+                <AlertTitle>{t("summoner_found")}</AlertTitle>
                 <AlertDescription className="flex flex-col gap-2">
                   <div>
                     <span className="font-medium">{summonerInfo.name}</span> (Level {summonerInfo.level})
@@ -256,37 +268,33 @@ export default function TournamentRegistration({ params }: { params: { id: strin
             )}
 
             <div className="rounded-md border p-4 bg-muted/50 border-white/20">
-              <h3 className="font-medium mb-2">Registration Details</h3>
+              <h3 className="font-medium mb-2">{t("registration_details")}</h3>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Tournament:</span>
+                  <span className="text-muted-foreground">{t("tournament")}</span>
                   <span>{tournament.name}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Registration Fee:</span>
+                  <span className="text-muted-foreground">{t("registration_fee")}</span>
                   <span>{tournament.entryFee}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Payment Method:</span>
-                  <span>Credit Card / PayPal (Payment integration not yet available)</span>
+                  <span className="text-muted-foreground">{t("payment_method")}</span>
+                  <span>{t("credit_card_paypal_payment_integration_n_desc")}</span>
                 </div>
               </div>
             </div>
           </CardContent>
           <CardFooter className="flex justify-between">
             <Button variant="outline" asChild>
-              <Link href={`/tournaments/${params.id}`}>Cancel</Link>
+              <Link href={`/tournaments/${params.id}`}>{t("cancel")}</Link>
             </Button>
-            <Button onClick={handleSubmit} disabled={!summonerInfo || status === "loading"}>
+            <Button onClick={handleSubmit} disabled={!summonerInfo || status === "loading" || (!tournament.isCommunityMode && tournament.escrowStatus === "not_funded")}>
               {status === "loading" ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Registering...
-                </>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />{t("registering")}</>
               ) : (
-                <>
-                  Register
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                <>{t("register")}<ArrowRight className="ml-2 h-4 w-4" />
                 </>
               )}
             </Button>

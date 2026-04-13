@@ -2,6 +2,7 @@ import Link from "next/link"
 import { Github, Twitter } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { getLocale } from 'next-intl/server'
 
 const DiscordIcon = ({ className }: { className?: string }) => (
   <svg
@@ -15,7 +16,8 @@ const DiscordIcon = ({ className }: { className?: string }) => (
   </svg>
 )
 
-export function Footer() {
+export async function Footer() {
+  const locale = await getLocale()
   return (
     <footer className="border-t bg-background/50 backdrop-blur supports-[backdrop-filter]:bg-background/20 mt-12">
       <div className="container py-12 md:py-16">
@@ -67,7 +69,9 @@ export function Footer() {
 
           <div className="flex flex-col gap-3">
             <h2 className="font-semibold text-foreground">Legal</h2>
-            <Link href="/terms" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Terms of Service</Link>
+            <Link href="/terms/escrow" className="text-sm text-[#D4B263] hover:text-[#f4d17f] transition-colors font-medium">
+              {locale === 'vi' ? 'Quy Định Ký Quỹ Giải Đấu' : 'Tournament Escrow Policy'}
+            </Link>
             <Link href="/privacy" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Privacy Policy</Link>
             <Link href="/contact" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Contact Us</Link>
           </div>

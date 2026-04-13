@@ -9,7 +9,6 @@ async function main() {
     const platformSettings = [
         { key: 'maintenance_mode', value: 'false', type: 'boolean', label: 'Maintenance Mode', group: 'general' },
         { key: 'maintenance_message', value: 'We are under scheduled maintenance. We will be back soon!', type: 'string', label: 'Maintenance Message', group: 'general' },
-        { key: 'platform_fee_pct', value: '10', type: 'number', label: 'Platform Fee (%)', group: 'financial' },
         { key: 'max_lobby_players', value: '8', type: 'number', label: 'Max Players Per Lobby', group: 'limits' },
         { key: 'max_tournament_size', value: '64', type: 'number', label: 'Max Tournament Size', group: 'limits' },
     ];
@@ -46,7 +45,7 @@ async function main() {
             monthlyPrice: 0,
             annualPrice: 0,
             maxLobbies: 1,
-            maxPlayersPerLobby: 8,
+            maxTournamentSize: 32,
             maxTournamentsPerMonth: 2,
             features: { customBranding: false, analyticsExport: false, prioritySupport: false, revenueShare: false },
         },
@@ -55,7 +54,7 @@ async function main() {
             monthlyPrice: 29.99,
             annualPrice: 299.99,
             maxLobbies: 5,
-            maxPlayersPerLobby: 16,
+            maxTournamentSize: 64,
             maxTournamentsPerMonth: 15,
             features: { customBranding: true, analyticsExport: true, prioritySupport: false, revenueShare: false },
         },
@@ -64,7 +63,7 @@ async function main() {
             monthlyPrice: 99.99,
             annualPrice: 999.99,
             maxLobbies: -1, // unlimited (-1 = no limit)
-            maxPlayersPerLobby: 32,
+            maxTournamentSize: -1,
             maxTournamentsPerMonth: -1,
             features: { customBranding: true, analyticsExport: true, prioritySupport: true, revenueShare: true },
         },

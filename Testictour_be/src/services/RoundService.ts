@@ -3,6 +3,7 @@ import ApiError from '../utils/ApiError';
 import LobbyService from './LobbyService';
 import logger from '../utils/logger';
 import { Prisma, Participant } from '@prisma/client';
+import EscrowService from './EscrowService';
 
 import { autoAdvanceRoundQueue } from '../lib/queues';
 import { fetchMatchDataQueue } from '../lib/queues';
@@ -450,6 +451,7 @@ export default class RoundService {
 
           // If this is the first round of the first phase, update tournament status
           if (currentRound.phase.phaseNumber === 1 && tournament.status === 'pending') {
+            await EscrowService.assertTournamentCanStart(tournament.id, tx);
             await tx.tournament.update({
               where: { id: tournament.id },
               data: { status: 'in_progress' },

@@ -6,6 +6,7 @@ import logger from '../utils/logger';
 import TournamentSummaryService from './TournamentSummaryService';
 import SummaryManagerService from './SummaryManagerService';
 import { fetchMatchDataQueue, flowProducer, syncCompletionQueue } from '../lib/queues';
+import EscrowService from './EscrowService';
 
 export default class TournamentService {
   /**
@@ -184,6 +185,7 @@ export default class TournamentService {
     expectedParticipants?: number;
     templateId?: string;
     phases?: any[];
+    isCommunityMode?: boolean;
   }) {
     let templateData: any = {};
     let finalStartTime = data.startTime;
@@ -253,6 +255,7 @@ export default class TournamentService {
         registrationDeadline: data.registrationDeadline || (templateData as any).registrationDeadline || new Date(),
         prizeStructure: (templateData as any).prizeStructure || {},
         expectedParticipants: (templateData as any).expectedParticipants || 0,
+        isCommunityMode: data.isCommunityMode || false,
       },
       include: { phases: { orderBy: { phaseNumber: 'asc' } } }
     }).then(async (tournament) => {
@@ -280,6 +283,20 @@ export default class TournamentService {
         }
         logger.info(`Initial rounds for the first phase of tournament ${tournament.id} created.`);
       }
+
+      // Initialize Escrow for the newly created tournament
+      try {
+        await EscrowService.recalculateTournamentEscrow(tournament.id, {
+          entryFee: tournament.entryFee,
+          maxPlayers: tournament.maxPlayers,
+          expectedParticipants: tournament.expectedParticipants,
+          hostFeePercent: tournament.hostFeePercent,
+        });
+        logger.info(`Escrow initialized for tournament ${tournament.id}`);
+      } catch (err: any) {
+        logger.error(`Failed to initialize escrow for tournament ${tournament.id}: ${err.message}`);
+      }
+
       return tournament;
     });
   }
@@ -300,7 +317,77 @@ export default class TournamentService {
   }
 
   static async remove(id: string) {
-    return prisma.tournament.delete({ where: { id } });
+    const tournament = await prisma.tournament.findUnique({
+      where: { id },
+      include: {
+        phases: {
+          include: {
+            rounds: {
+              include: {
+                lobbies: {
+                  include: {
+                    matches: true
+                  }
+                }
+              }
+            }
+          }
+        },
+        participants: true,
+      }
+    });
+
+    if (!tournament) return;
+
+    const phaseIds = tournament.phases.map(p => p.id);
+    const roundIds = tournament.phases.flatMap(p => p.rounds.map(r => r.id));
+    const lobbyIds = tournament.phases.flatMap(p => p.rounds.flatMap(r => r.lobbies.map(l => l.id)));
+    const matchIds = tournament.phases.flatMap(p => p.rounds.flatMap(r => r.lobbies.flatMap(l => l.matches.map(m => m.id))));
+    const participantIds = tournament.participants.map(p => p.id);
+
+    return prisma.$transaction(async (tx) => {
+      if (matchIds.length > 0) {
+        await tx.matchResult.deleteMany({ where: { matchId: { in: matchIds } } });
+        await tx.playerMatchSummary.deleteMany({ where: { matchId: { in: matchIds } } });
+      }
+
+      if (matchIds.length > 0) {
+        await tx.match.deleteMany({ where: { id: { in: matchIds } } });
+      }
+      if (lobbyIds.length > 0) {
+        await tx.lobby.deleteMany({ where: { id: { in: lobbyIds } } });
+      }
+
+      if (participantIds.length > 0 || roundIds.length > 0) {
+        await tx.roundOutcome.deleteMany({
+          where: {
+            OR: [
+              ...(participantIds.length > 0 ? [{ participantId: { in: participantIds } }] : []),
+              ...(roundIds.length > 0 ? [{ roundId: { in: roundIds } }] : [])
+            ]
+          }
+        });
+      }
+
+      if (roundIds.length > 0) {
+        await tx.round.deleteMany({ where: { id: { in: roundIds } } });
+      }
+      if (phaseIds.length > 0) {
+        await tx.phase.deleteMany({ where: { id: { in: phaseIds } } });
+      }
+
+      if (participantIds.length > 0) {
+        await tx.reward.deleteMany({ where: { participantId: { in: participantIds } } });
+        await tx.participant.deleteMany({ where: { id: { in: participantIds } } });
+      }
+
+      // Also there might be Rewards mapped directly to tournamentId
+      await tx.reward.deleteMany({ where: { tournamentId: id } });
+
+      await tx.userTournamentSummary.deleteMany({ where: { tournamentId: id } });
+
+      return tx.tournament.delete({ where: { id } });
+    });
   }
 
   // Call this when registration closes

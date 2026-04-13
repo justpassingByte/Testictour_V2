@@ -18,6 +18,8 @@ import miniTourLobbyRoutes from './miniTourLobby.route';
 import partnerRoutes from './partner.routes';
 import lobbyStateRoutes from './lobbyState.routes';
 import devRoutes from './dev.routes';
+import escrowRoutes from './escrow.routes';
+import adminEscrowRoutes from './adminEscrow.routes';
 
 const router = Router();
 
@@ -26,6 +28,7 @@ router.use('/tournaments', tournamentRoutes);
 router.use('/tournament-templates', templateRoutes);
 router.use('/templates', templateRoutes); // Alias for frontend compatibility
 router.use('/tournaments', participantRoutes);
+router.use('/tournaments', escrowRoutes);  // Escrow routes scoped to /tournaments/:id
 router.use('/phases', phaseRoutes);
 router.use('/rounds', roundRoutes);
 router.use('/', lobbyRoutes);
@@ -34,6 +37,7 @@ router.use('/matches', matchSyncRoutes); // Match sync & minitour match creation
 router.use('/', balanceRoutes);
 router.use('/', playerRoutes);
 router.use('/admin', adminRoutes);
+router.use('/admin', adminEscrowRoutes);  // Admin escrow operational endpoints
 router.use('/admin/notifications', adminNotificationsRoutes);
 router.use('/admin/settings', adminSettingsRoutes);
 router.use('/minitour-lobbies', miniTourLobbyRoutes);

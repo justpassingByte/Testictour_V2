@@ -311,9 +311,14 @@ function TournamentCard({ tournament, index }: { tournament: ITournament; index:
               <Badge variant="outline" className={`${statusColor} capitalize`}>
                 {getStatusTranslation(tournament.status)}
               </Badge>
-              <Badge variant="outline" className="bg-transparent backdrop-blur-sm">
-                {t('region_label', { region: tournament.region })}
-              </Badge>
+              <div className="flex gap-2">
+                <Badge variant="outline" className={`bg-transparent backdrop-blur-sm shadow-black/50 shadow-sm ${tournament.isCommunityMode ? 'text-orange-400 border-orange-500/50 bg-orange-500/20' : 'text-emerald-400 border-emerald-500/50 bg-emerald-500/20'}`}>
+                  {tournament.isCommunityMode ? 'Community' : 'Escrow'}
+                </Badge>
+                <Badge variant="outline" className="bg-transparent backdrop-blur-sm">
+                  {t('region_label', { region: tournament.region })}
+                </Badge>
+              </div>
             </div>
           </div>
         </Link>

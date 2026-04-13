@@ -426,7 +426,7 @@ export const getSubscriptions = asyncHandler(async (req: Request, res: Response)
 
   // Transform to match frontend's expected shape and add limits mapping
   const data = await Promise.all(subscriptions.map(async (s) => {
-    const limits = planMap[s.plan as string] || { maxLobbies: 0, maxTournamentsPerMonth: 0, maxPlayersPerLobby: 0 };
+    const limits = planMap[s.plan as string] || { maxLobbies: 0, maxTournamentsPerMonth: 0, maxTournamentSize: 0 };
 
     const activeLobbies = await prisma.miniTourLobby.count({
       where: {
@@ -447,7 +447,7 @@ export const getSubscriptions = asyncHandler(async (req: Request, res: Response)
       limits: {
         maxLobbies: limits.maxLobbies,
         maxTournamentsPerMonth: limits.maxTournamentsPerMonth,
-        maxPlayersPerLobby: limits.maxPlayersPerLobby,
+        maxTournamentSize: limits.maxTournamentSize,
         usage: {
           activeLobbies,
           tournamentsThisMonth
@@ -804,7 +804,7 @@ export const getPartnerDetailForAdmin = asyncHandler(async (req: Request, res: R
       limits: {
         maxLobbies: planConfig?.maxLobbies || 0,
         maxTournamentsPerMonth: planConfig?.maxTournamentsPerMonth || 0,
-        maxPlayersPerLobby: planConfig?.maxPlayersPerLobby || 0,
+        maxTournamentSize: planConfig?.maxTournamentSize || 0,
         usage: {
           activeLobbies, // already tracked in stats calculation above
           tournamentsThisMonth

@@ -408,20 +408,6 @@ export default function CreateOrEditLobbyPage() {
                         disabled={lobbyData.entryType === "free"}
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="partnerRevenueShare">Partner Share (%)</Label>
-                      <Input
-                        id="partnerRevenueShare"
-                        type="number"
-                        placeholder="20"
-                        min="0"
-                        max="100"
-                        value={Math.round((lobbyData.partnerRevenueShare || 0) * 100)}
-                        onChange={(e) => setLobbyData({ ...lobbyData, partnerRevenueShare: (parseFloat(e.target.value) || 0) / 100 })}
-                        disabled={lobbyData.entryType === "free"}
-                      />
-                      <p className="text-xs text-muted-foreground">Percentage of entry fees you keep.</p>
-                    </div>
                   </div>
 
                   <div className="space-y-2 pb-4">
@@ -443,29 +429,8 @@ export default function CreateOrEditLobbyPage() {
                   </div>
 
                   <div className="space-y-4 pt-4 border-t border-muted">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label htmlFor="partnerRevenueShare">Partner Revenue Share (%)</Label>
-                        <p className="text-sm text-muted-foreground">Phần trăm phí bạn nhận được từ mỗi người tham gia</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          id="partnerRevenueShare"
-                          type="number"
-                          min="0"
-                          max="100"
-                          className="w-24"
-                          value={Math.round(lobbyData.partnerRevenueShare * 100)}
-                          onChange={(e) => {
-                            const val = Math.min(100, Math.max(0, Number(e.target.value)))
-                            setLobbyData({ ...lobbyData, partnerRevenueShare: val / 100 })
-                          }}
-                        />
-                        <span className="text-sm font-medium">%</span>
-                      </div>
-                    </div>
-                    <p className="text-xs text-muted-foreground italic">
-                      * Ví dụ: Nếu phí là 100 coins và share là 20%, bạn nhận 20 coins, prize pool là 80 coins.
+                    <p className="text-sm text-muted-foreground italic">
+                      * Host fee của bạn được cấu hình tự động dựa trên cài đặt trong phần Settings.
                     </p>
                   </div>
                 </CardContent>
@@ -661,10 +626,6 @@ export default function CreateOrEditLobbyPage() {
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Prize Distribution:</span>
                           <span className="capitalize">{lobbyData.prizeDistribution.replace("-", " ")}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Revenue Share:</span>
-                          <span>{Math.round(lobbyData.partnerRevenueShare * 100)}%</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Auto Start:</span>

@@ -21,6 +21,11 @@ interface PartnerSubscription {
   autoRenew: boolean
   createdAt: string
   updatedAt: string
+  currentUsage?: {
+    activeLobbies: number
+    activeTournaments: number
+    tournamentsThisMonth: number
+  }
 }
 
 const PLAN_FEATURES = {
@@ -29,51 +34,36 @@ const PLAN_FEATURES = {
     basicAnalytics: true,
     revenueTracking: true,
     csvExport: true,
-    maxPlayers: 50,
-    maxLobbies: 5,
+    maxTournamentSize: 32,
+    maxLobbies: 1,
+    maxTournamentsPerMonth: 2,
     supportLevel: 'basic',
-    paymentGateway: false,
     automaticWithdrawals: false,
-    playerDeposits: false,
-    withdrawalManagement: false
+    customBranding: false
   },
   PRO: {
     playerManagement: true,
-    basicAnalytics: true,
     advancedAnalytics: true,
     revenueTracking: true,
     csvExport: true,
-    customBranding: true,
-    apiAccess: true,
-    maxPlayers: 500,
-    maxLobbies: 50,
+    maxTournamentSize: 64,
+    maxLobbies: 5,
+    maxTournamentsPerMonth: 15,
     supportLevel: 'priority',
-    withdrawalProcessing: 'fast',
-    paymentGateway: true,
     automaticWithdrawals: true,
-    playerDeposits: true,
-    withdrawalManagement: true
+    customBranding: true
   },
   ENTERPRISE: {
     playerManagement: true,
-    basicAnalytics: true,
     advancedAnalytics: true,
     revenueTracking: true,
     csvExport: true,
-    customBranding: true,
-    apiAccess: true,
-    whiteLabel: true,
-    customIntegrations: true,
-    dedicatedSupport: true,
-    maxPlayers: -1, // unlimited
+    maxTournamentSize: -1, // unlimited
     maxLobbies: -1, // unlimited
+    maxTournamentsPerMonth: -1, // unlimited
     supportLevel: 'dedicated',
-    withdrawalProcessing: 'priority',
-    paymentGateway: true,
     automaticWithdrawals: true,
-    playerDeposits: true,
-    withdrawalManagement: true,
-    customPaymentGateway: true
+    customBranding: true
   }
 }
 
@@ -147,23 +137,22 @@ export default function SubscriptionTab({ partnerId }: { partnerId?: string }) {
 
   const handleUpgradePlan = async (plan: string) => {
     try {
-      const response = await fetch('/api/partner/subscription/upgrade', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ plan })
-      })
+      // Free plan downgrade or current plan is not handled through Stripe
+      const response = await api.post('/partner/subscription/upgrade', { plan });
 
-      if (response.ok) {
-        alert('Upgrade request submitted successfully')
-        fetchSubscription()
+      if (response.data && response.data.success) {
+        if (response.data.data.requiresPayment && response.data.data.checkoutUrl) {
+           window.location.href = response.data.data.checkoutUrl;
+           return;
+        }
+        alert('Plan updated successfully');
+        fetchSubscription();
       } else {
-        alert('Failed to submit upgrade request')
+        alert('Failed to submit upgrade request');
       }
-    } catch (error) {
-      console.error('Error upgrading plan:', error)
-      alert('Error upgrading plan')
+    } catch (error: any) {
+      console.error('Error upgrading plan:', error);
+      alert(error.response?.data?.error || 'Error upgrading plan');
     }
   }
 
@@ -202,7 +191,8 @@ export default function SubscriptionTab({ partnerId }: { partnerId?: string }) {
           }
 
           if (plan.maxLobbies !== undefined) merged[planKey].maxLobbies = plan.maxLobbies;
-          if (plan.maxPlayersPerLobby !== undefined) merged[planKey].maxPlayers = plan.maxPlayersPerLobby;
+          if (plan.maxTournamentSize !== undefined) merged[planKey].maxTournamentSize = plan.maxTournamentSize;
+          if (plan.maxTournamentsPerMonth !== undefined) merged[planKey].maxTournamentsPerMonth = plan.maxTournamentsPerMonth;
       }
     });
 
@@ -230,13 +220,14 @@ export default function SubscriptionTab({ partnerId }: { partnerId?: string }) {
         </Card>
       ) : (
         <>
-          <div className="flex flex-col gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {['FREE', 'PRO', 'ENTERPRISE'].map((planKey) => {
               const features = ACTIVE_PLAN_FEATURES[planKey as keyof typeof ACTIVE_PLAN_FEATURES] as any;
               const isCurrent = subscription.plan === planKey;
+              const dbPlan = availablePlans.find((p: any) => p.plan === planKey);
               const title = planKey === 'FREE' ? 'Basic' : planKey === 'PRO' ? 'Professional' : 'Enterprise';
-              const price = planKey === 'FREE' ? 0 : planKey === 'PRO' ? 29.99 : 99.99;
-              
+              const price = dbPlan?.monthlyPrice !== undefined ? dbPlan.monthlyPrice : (planKey === 'FREE' ? 0 : planKey === 'PRO' ? 29.99 : 99.99);
+
               const borderColors = planKey === 'FREE' ? 'border-slate-500/30' : planKey === 'PRO' ? 'border-yellow-500/50' : 'border-purple-500/50';
               const bgGlow = planKey === 'FREE' ? 'from-slate-500/5' : planKey === 'PRO' ? 'from-yellow-500/10' : 'from-purple-500/10';
               const textGlow = planKey === 'FREE' ? 'text-slate-200' : planKey === 'PRO' ? 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.5)]' : 'text-purple-400 drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]';
@@ -266,19 +257,48 @@ export default function SubscriptionTab({ partnerId }: { partnerId?: string }) {
                     </div>
                   </div>
                   <div className="flex-1 flex flex-col">
-                     <div className="grid grid-cols-2 gap-3 mb-6">
-                       <div className="bg-black/30 border border-white/5 p-3 rounded-xl flex flex-col items-center justify-center text-center">
-                          <span className="text-xl font-bold text-blue-400">{features.maxPlayers === -1 ? '∞' : features.maxPlayers}</span>
-                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1">Players</span>
+                     <div className="flex flex-col gap-4 mb-6">
+                       {/* Max Tournament Size */}
+                       <div className="bg-black/30 border border-white/5 p-3 rounded-xl flex items-center justify-between">
+                          <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Tournament Size</span>
+                          <span className="text-lg font-bold text-blue-400">{features.maxTournamentSize === -1 ? 'Unlimited' : features.maxTournamentSize + ' Players'}</span>
                        </div>
-                       <div className="bg-black/30 border border-white/5 p-3 rounded-xl flex flex-col items-center justify-center text-center">
-                          <span className="text-xl font-bold text-emerald-400">{features.maxLobbies === -1 ? '∞' : features.maxLobbies}</span>
-                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1">Lobbies / M</span>
+
+                       {/* Lobbies (Concurrent MiniTours) */}
+                       <div className="bg-black/30 border border-white/5 p-3 rounded-xl flex flex-col gap-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Active Lobbies</span>
+                            <span className="text-lg font-bold text-emerald-400">{features.maxLobbies === -1 ? 'Unlimited' : features.maxLobbies}</span>
+                          </div>
+                          {isCurrent && subscription?.currentUsage && features.maxLobbies !== -1 && (
+                            <div className="flex flex-col gap-1">
+                              <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
+                                <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, (subscription.currentUsage.activeLobbies / features.maxLobbies) * 100)}%` }}></div>
+                              </div>
+                              <span className="text-xs text-right text-emerald-500 font-medium">{subscription.currentUsage.activeLobbies} / {features.maxLobbies} Used</span>
+                            </div>
+                          )}
+                       </div>
+
+                       {/* Tournaments Per Month */}
+                       <div className="bg-black/30 border border-white/5 p-3 rounded-xl flex flex-col gap-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Tournaments / Mo</span>
+                            <span className="text-lg font-bold text-purple-400">{features.maxTournamentsPerMonth === -1 ? 'Unlimited' : features.maxTournamentsPerMonth}</span>
+                          </div>
+                          {isCurrent && subscription?.currentUsage && features.maxTournamentsPerMonth !== -1 && (
+                            <div className="flex flex-col gap-1">
+                              <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
+                                <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, (subscription.currentUsage.tournamentsThisMonth / features.maxTournamentsPerMonth) * 100)}%` }}></div>
+                              </div>
+                              <span className="text-xs text-right text-purple-500 font-medium">{subscription.currentUsage.tournamentsThisMonth} / {features.maxTournamentsPerMonth} Used</span>
+                            </div>
+                          )}
                        </div>
                      </div>
                      <div className="space-y-3 mb-8 flex-1 grid grid-cols-2 gap-x-2 gap-y-3">
                         {Object.entries(features).map(([key, value]) => {
-                           if (key === 'maxPlayers' || key === 'maxLobbies' || key === 'supportLevel' || key === 'withdrawalProcessing') return null;
+                           if (key === 'maxTournamentSize' || key === 'maxTournamentsPerMonth' || key === 'maxPlayers' || key === 'maxLobbies' || key === 'supportLevel' || key === 'withdrawalProcessing') return null;
                            if (!value) return null; // Don't show inactive features
                            
                            return (

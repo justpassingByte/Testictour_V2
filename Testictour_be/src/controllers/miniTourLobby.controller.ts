@@ -80,12 +80,18 @@ export const createMiniTourLobby = asyncHandler(async (req: Request, res: Respon
 
   const creatorId = (req as any).user.id; // Get creatorId from authenticated user
 
+  let hostFeePercent = 0.10; // Default 10%
   // Subscription plan limit enforcement for partners
   const creatorUser = await prisma.user.findUnique({ where: { id: creatorId } });
   if (creatorUser && (creatorUser.role === 'PARTNER' || creatorUser.role === 'partner')) {
     const sub = await prisma.partnerSubscription.findUnique({ where: { userId: creatorId } });
     const planName = sub?.plan || 'FREE';
     const planConfig = await prisma.subscriptionPlanConfig.findUnique({ where: { plan: planName } });
+
+    const features = sub?.features as any || {};
+    if (typeof features?.hostFeePercent === 'number') {
+      hostFeePercent = features.hostFeePercent;
+    }
 
     // Default to FREE limits if not found
     const maxLobbies = planConfig ? planConfig.maxLobbies : 5;
@@ -167,6 +173,7 @@ export const createMiniTourLobby = asyncHandler(async (req: Request, res: Respon
       tags: parsedTags, // Use the parsed tags array
       rules: parsedRules, // Use the parsed rules array
       prizeDistribution,
+      partnerRevenueShare: hostFeePercent,
       settings: { // Group these into a settings object
         autoStart: parsedAutoStart, // Use parsed boolean
         privateMode: parsedPrivateMode, // Use parsed boolean

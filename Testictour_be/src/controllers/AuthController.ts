@@ -52,7 +52,23 @@ export default {
   },
 
   async me(req: Request, res: Response) {
-    res.json({ user: (req as any).user });
+    const jwtUser = (req as any).user;
+    if (!jwtUser) {
+      return res.status(401).json({ user: null });
+    }
+
+    const { prisma } = require('../services/prisma');
+    const dbUser = await prisma.user.findUnique({
+      where: { id: jwtUser.id },
+      select: { id: true, username: true, email: true, role: true, isActive: true }
+    });
+
+    if (!dbUser || !dbUser.isActive) {
+      res.cookie('authToken', '', { ...cookieOptions, expires: new Date(0), maxAge: undefined });
+      return res.status(401).json({ user: null });
+    }
+
+    res.json({ user: jwtUser });
   },
 
   async logout(req: Request, res: Response) {

@@ -1,5 +1,6 @@
-import { Request, Response, NextFunction } from 'express';
 import { PrismaClient } from '@prisma/client';
+import StripeService from '../services/StripeService';
+import { Request, Response, NextFunction } from 'express';
 
 const prisma = new PrismaClient();
 
@@ -42,9 +43,9 @@ export default {
             ).size;
 
             // Calculate revenue (sum of creator fees from entry fees)
-            const CREATOR_FEE_PERCENT = 0.10;
             const totalRevenue = lobbies.reduce((sum, lobby) => {
-                return sum + (lobby.entryFee * lobby.currentPlayers * CREATOR_FEE_PERCENT);
+                const legacyShare = lobby.partnerRevenueShare || 0.10;
+                return sum + (lobby.entryFee * lobby.currentPlayers * legacyShare);
             }, 0);
 
             // Monthly revenue (lobbies created this month)
@@ -53,7 +54,8 @@ export default {
             const monthlyRevenue = lobbies
                 .filter(l => new Date(l.createdAt) >= monthStart)
                 .reduce((sum, lobby) => {
-                    return sum + (lobby.entryFee * lobby.currentPlayers * CREATOR_FEE_PERCENT);
+                    const legacyShare = lobby.partnerRevenueShare || 0.10;
+                    return sum + (lobby.entryFee * lobby.currentPlayers * legacyShare);
                 }, 0);
 
             // Lobby status breakdown
@@ -62,6 +64,13 @@ export default {
                 IN_PROGRESS: lobbies.filter(l => l.status === 'IN_PROGRESS').length,
                 COMPLETED: completedLobbies,
             };
+
+            // Get Partner Subscription for Default Host Fee Config
+            const sub = await prisma.partnerSubscription.findUnique({
+                where: { userId }
+            });
+            const features = sub?.features as any || {};
+            const currentHostFeePercent = typeof features?.hostFeePercent === 'number' ? Math.round(features.hostFeePercent * 100) : 10;
 
             const summary = {
                 id: userId,
@@ -74,7 +83,7 @@ export default {
                 monthlyRevenue: Math.round(monthlyRevenue * 100) / 100,
                 balance: balance?.amount || 0,
                 totalMatches,
-                revenueShare: 10, // 10% default
+                revenueShare: currentHostFeePercent, // Default or Custom
                 lobbyStatuses,
                 metrics: {
                     totalPlayers: Math.max(referredPlayers, totalPlayers),
@@ -84,7 +93,7 @@ export default {
                     monthlyRevenue: Math.round(monthlyRevenue * 100) / 100,
                     balance: balance?.amount || 0,
                     totalMatches,
-                    revenueShare: 10,
+                    revenueShare: currentHostFeePercent,
                 },
             };
 
@@ -539,10 +548,9 @@ export default {
     async updateSettings(req: Request, res: Response, next: NextFunction) {
         try {
             const userId = (req as any).user.id;
-            const { riotApiKey, usePersonalRiotApi, partnerName, contactEmail } = req.body;
+            const { partnerName, contactEmail, hostFeePercent } = req.body;
 
             // Store settings in user metadata or a separate settings store
-            // For now, we update what we can on the user record
             const updateData: any = {};
             if (partnerName) updateData.username = partnerName;
             if (contactEmail) updateData.email = contactEmail;
@@ -554,13 +562,28 @@ export default {
                 });
             }
 
-            // TODO: Store riotApiKey and usePersonalRiotApi in a partner settings table
-            // For now, acknowledge the update
+            // Save hostFeePercent inside PartnerSubscription features
+            if (hostFeePercent !== undefined) {
+                let boundedFee = parseFloat(hostFeePercent);
+                // Partners can only lower host fee, max is 0.10 (10%)
+                if (isNaN(boundedFee) || boundedFee < 0) boundedFee = 0;
+                if (boundedFee > 0.10) boundedFee = 0.10;
+
+                const sub = await prisma.partnerSubscription.findUnique({ where: { userId } });
+                if (sub) {
+                    const features = sub.features as any || {};
+                    features.hostFeePercent = boundedFee;
+                    await prisma.partnerSubscription.update({
+                        where: { userId },
+                        data: { features }
+                    });
+                }
+            }
+
             res.json({
                 success: true,
                 data: {
-                    riotApiKey: riotApiKey ? '****' + riotApiKey.slice(-4) : null,
-                    usePersonalRiotApi: usePersonalRiotApi || false,
+                    message: "Settings Updated"
                 },
             });
         } catch (err) {
@@ -588,8 +611,8 @@ export default {
                 const defaultFeatures = freeConfig ? {
                     ...(freeConfig.features as object),
                     maxLobbies: freeConfig.maxLobbies,
-                    maxPlayers: freeConfig.maxPlayersPerLobby,
-                } : { maxPlayers: 50, maxLobbies: 5 };
+                    maxTournamentSize: freeConfig.maxTournamentSize,
+                } : { maxTournamentSize: 32, maxLobbies: 1 };
 
                 subscription = await prisma.partnerSubscription.create({
                     data: {
@@ -611,7 +634,7 @@ export default {
                     ...(typeof subscription.features === 'object' && subscription.features ? subscription.features : {}),
                     ...(typeof liveConfig.features === 'object' && liveConfig.features ? liveConfig.features : {}),
                     maxLobbies: liveConfig.maxLobbies,
-                    maxPlayers: liveConfig.maxPlayersPerLobby,
+                    maxTournamentSize: liveConfig.maxTournamentSize,
                 };
                 subscription.monthlyPrice = liveConfig.monthlyPrice;
                 subscription.annualPrice = liveConfig.annualPrice;
@@ -619,9 +642,28 @@ export default {
 
             const allConfigs = await prisma.subscriptionPlanConfig.findMany();
 
+            // Calculate current usage
+            const activeLobbies = await prisma.miniTourLobby.count({
+                where: { creatorId: lookupUserId, status: { in: ['WAITING', 'IN_PROGRESS'] } }
+            });
+            const activeTournaments = await prisma.tournament.count({
+                where: { organizerId: lookupUserId, status: { in: ['pending', 'in_progress', 'upcoming'] } }
+            });
+            
+            const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+            const tournamentsThisMonth = await prisma.tournament.count({
+                where: { organizerId: lookupUserId, createdAt: { gte: startOfMonth } }
+            });
+
+            const currentUsage = {
+                activeLobbies,
+                activeTournaments,
+                tournamentsThisMonth
+            };
+
             res.json({
                 success: true,
-                data: subscription,
+                data: { ...subscription, currentUsage },
                 availablePlans: allConfigs
             });
         } catch (err) {
@@ -646,7 +688,7 @@ export default {
             const features = {
                 ...(typeof liveConfig.features === 'object' && liveConfig.features ? liveConfig.features : {}),
                 maxLobbies: liveConfig.maxLobbies,
-                maxPlayers: liveConfig.maxPlayersPerLobby,
+                maxTournamentSize: liveConfig.maxTournamentSize,
             };
 
             const priceToCharge = liveConfig.monthlyPrice || 0;
@@ -655,29 +697,23 @@ export default {
                 const existingSub = await tx.partnerSubscription.findUnique({ where: { userId } });
                 const isUpgrade = existingSub?.plan !== plan && priceToCharge > 0;
 
+                let checkoutUrl = '';
+
                 if (isUpgrade) {
-                    const userBalance = await tx.balance.findUnique({ where: { userId } });
+                    const serverUrl = process.env.API_URL || 'http://localhost:3001/api/v1';
+                    const successUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/partner?tab=plans&upgradeSuccess=true`;
+                    const cancelUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/partner?tab=plans&upgradeCancelled=true`;
 
-                    if (!userBalance || userBalance.amount < priceToCharge) {
-                        throw new Error("Insufficient balance");
-                    }
-
-                    // Deduct from balance
-                    await tx.balance.update({
-                        where: { userId },
-                        data: { amount: { decrement: priceToCharge } }
+                    checkoutUrl = await StripeService.createSubscriptionCheckout({
+                        partnerId: userId,
+                        plan,
+                        priceUsd: priceToCharge,
+                        successUrl,
+                        cancelUrl
                     });
 
-                    // Log transaction
-                    await tx.transaction.create({
-                        data: {
-                            userId,
-                            type: 'subscription_payment',
-                            amount: priceToCharge,
-                            status: 'success',
-                            refId: `partner_self_upgrade_${plan}_${Date.now()}`
-                        }
-                    });
+                    // We do NOT update the plan directly here since they must pay first!
+                    return { requiresPayment: true, checkoutUrl };
                 }
 
                 return await tx.partnerSubscription.upsert({

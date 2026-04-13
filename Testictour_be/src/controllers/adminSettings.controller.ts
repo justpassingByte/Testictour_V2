@@ -126,7 +126,7 @@ export const updateSubscriptionPlan = async (req: Request, res: Response) => {
         const adminId = (req as any).user?.id;
         const {
             monthlyPrice, annualPrice,
-            maxLobbies, maxPlayersPerLobby, maxTournamentsPerMonth,
+            maxLobbies, maxTournamentSize, maxTournamentsPerMonth,
             features,
         } = req.body;
 
@@ -139,7 +139,7 @@ export const updateSubscriptionPlan = async (req: Request, res: Response) => {
                 ...(monthlyPrice !== undefined && { monthlyPrice: parseFloat(monthlyPrice) }),
                 ...(annualPrice !== undefined && { annualPrice: parseFloat(annualPrice) }),
                 ...(maxLobbies !== undefined && { maxLobbies: parseInt(maxLobbies) }),
-                ...(maxPlayersPerLobby !== undefined && { maxPlayersPerLobby: parseInt(maxPlayersPerLobby) }),
+                ...(maxTournamentSize !== undefined && { maxTournamentSize: parseInt(maxTournamentSize) }),
                 ...(maxTournamentsPerMonth !== undefined && { maxTournamentsPerMonth: parseInt(maxTournamentsPerMonth) }),
                 ...(features !== undefined && { features }),
                 updatedBy: adminId,

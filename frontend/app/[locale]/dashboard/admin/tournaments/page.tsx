@@ -168,8 +168,13 @@ export default function AdminTournamentsPage() {
                           <Link href={`/tournaments/${tournament.id}`} className="font-medium hover:text-violet-400 transition-colors">
                             {tournament.name}
                           </Link>
-                          <div className="text-xs text-muted-foreground mt-0.5">
-                            {tournament.organizer?.username || 'System'}
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="text-xs text-muted-foreground">
+                              {tournament.organizer?.username || 'System'}
+                            </div>
+                            <Badge variant="outline" className={`text-[10px] px-1.5 h-4 shadow-black/50 shadow-sm ${tournament.isCommunityMode ? 'text-orange-400 border-orange-500/50 bg-orange-500/10' : 'text-emerald-400 border-emerald-500/50 bg-emerald-500/10'}`}>
+                              {tournament.isCommunityMode ? 'Community' : 'Escrow'}
+                            </Badge>
                           </div>
                         </div>
                       </TableCell>

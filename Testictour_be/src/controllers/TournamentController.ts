@@ -137,7 +137,10 @@ const TournamentController = {
         description: req.body.description,
         image: req.body.image,
         region: req.body.region,
-        phases: req.body.phases,
+        phases: req.body.config?.phases || req.body.phases,
+        hostFeePercent: req.body.hostFeePercent,
+        expectedParticipants: req.body.expectedParticipants,
+        isCommunityMode: req.body.isCommunityMode,
       });
       res.json({ tournament: data });
     } catch (err) {

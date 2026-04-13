@@ -211,4 +211,9 @@ export interface ITournament extends ITournamentTemplate {
   currentRound: number;
   lastSyncTime?: string | null;
   syncStatus?: 'SYNCING' | 'SUCCESS' | 'FAILED' | null;
+  // Escrow fields
+  isCommunityMode?: boolean;
+  escrowStatus?: string | null;
+  escrowRequiredAmount?: number;
+  communityThresholdSnapshot?: number | null;
 } 

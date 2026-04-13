@@ -2,13 +2,14 @@
 
 import Link from "next/link"
 import {
-  Coins,
+  Wallet,
   Star,
   Trophy,
   Users,
   TrendingUp,
   Plus,
   History,
+  DollarSign,
 } from "lucide-react"
 
 import { MiniTourLobby, PartnerData } from "@/app/stores/miniTourLobbyStore"
@@ -33,17 +34,17 @@ export function OverviewTabNew({ partnerData, lobbies }: { partnerData: PartnerD
           <CardHeader>
             <CardTitle className="flex items-center">
               <Star className="mr-2 h-5 w-5 text-primary" />
-              Total Revenue
+              Host Fee Earnings
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
               <div className="flex items-baseline justify-between">
                 <span className="text-3xl font-bold">${partnerData?.totalRevenue?.toLocaleString() || 0}</span>
-                <span className="text-sm text-muted-foreground">total</span>
+                <span className="text-sm text-muted-foreground">all-time</span>
               </div>
               <Progress value={Math.min((partnerData?.totalRevenue || 0) / 100, 100)} className="h-2" />
-              <p className="text-sm text-muted-foreground">Total Revenue</p>
+              <p className="text-sm text-muted-foreground">Based on {partnerData?.revenueShare || 10}% host fee</p>
             </div>
           </CardContent>
         </Card>
@@ -51,19 +52,19 @@ export function OverviewTabNew({ partnerData, lobbies }: { partnerData: PartnerD
         <Card className="border-violet-500/50 bg-violet-500/5">
           <CardHeader>
             <CardTitle className="flex items-center">
-              <Coins className="mr-2 h-5 w-5 text-violet-500" />
-              Partner Balance
+              <TrendingUp className="mr-2 h-5 w-5 text-violet-500" />
+              Monthly Earnings
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
               <div className="flex items-baseline justify-between">
-                <span className="text-3xl font-bold">${partnerData?.balance?.toLocaleString() || 0}</span>
-                <span className="text-sm text-muted-foreground">current</span>
+                <span className="text-3xl font-bold">${partnerData?.monthlyRevenue?.toLocaleString() || 0}</span>
+                <span className="text-sm text-muted-foreground">this month</span>
               </div>
               <div className="flex items-center text-sm text-violet-500">
-                <TrendingUp className="mr-1 h-4 w-4" />
-                <span>Available to use</span>
+                <History className="mr-1 h-4 w-4" />
+                <span>Recent tournament fees</span>
               </div>
             </div>
           </CardContent>
@@ -175,7 +176,7 @@ export function OverviewTabNew({ partnerData, lobbies }: { partnerData: PartnerD
                             {lobby.currentPlayers}/{lobby.maxPlayers}
                           </span>
                           <span className="flex items-center">
-                            <Coins className="mr-1 h-3 w-3" />
+                            <DollarSign className="mr-1 h-3 w-3" />
                             {lobby.prizePool.toLocaleString()}
                           </span>
                         </div>

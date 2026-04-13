@@ -1,5 +1,6 @@
 "use client"
 
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { GLOBAL_REGIONS } from "@/app/config/regions"
 import { cn } from "@/lib/utils"
 
@@ -8,66 +9,56 @@ interface SubRegionSelectorProps {
   onChange: (value: string) => void
   className?: string
   id?: string
-  /** If true renders as a native <select> for form compat */
-  native?: boolean
+  label?: string
 }
 
-/**
- * A sub-region selector grouped by major region.
- * Renders as a styled <select> with <optgroup> elements.
- */
-export function SubRegionSelector({ value, onChange, className, id, native = true }: SubRegionSelectorProps) {
-  if (native) {
-    return (
-      <select
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={cn(
-          "flex h-9 w-full rounded-md border border-zinc-800 bg-black/40 px-3 py-1 text-sm text-white",
-          "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500",
-          "appearance-none cursor-pointer",
-          className
-        )}
-      >
-        {GLOBAL_REGIONS.map((region) => (
-          <optgroup
-            key={region.id}
-            label={`${region.icon} ${region.name} (${region.shortName})`}
-            style={{ fontWeight: "bold", color: "#9ca3af" }}
-          >
-            {region.subRegions.map((sub) => (
-              <option key={sub.id} value={sub.id}>
-                {sub.flag} {sub.id} — {sub.name}
-              </option>
-            ))}
-          </optgroup>
-        ))}
-      </select>
-    )
-  }
-
-  // Custom styled dropdown (non-native)
+export function SubRegionSelector({
+  value,
+  onChange,
+  className,
+  id,
+  label,
+}: SubRegionSelectorProps) {
   return (
-    <select
-      id={id}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className={cn(
-        "flex h-9 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1 text-sm text-white",
-        "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-500",
-        className
+    <div className={cn("flex flex-col space-y-1.5", className)}>
+      {label && (
+        <label htmlFor={id} className="text-sm font-medium text-zinc-300">
+          {label}
+        </label>
       )}
-    >
-      {GLOBAL_REGIONS.map((region) => (
-        <optgroup key={region.id} label={`── ${region.name} (${region.shortName}) ──`}>
-          {region.subRegions.map((sub) => (
-            <option key={sub.id} value={sub.id}>
-              {sub.flag} {sub.id} – {sub.name}
-            </option>
-          ))}
-        </optgroup>
-      ))}
-    </select>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger 
+          id={id} 
+          className="w-full bg-zinc-900 border-zinc-700 text-zinc-100 h-[42px] focus:ring-zinc-600 focus:ring-offset-0 focus:border-zinc-500"
+        >
+          <SelectValue placeholder="Select a region" />
+        </SelectTrigger>
+        <SelectContent className="max-h-[300px] border-zinc-700 bg-zinc-950 text-zinc-100 z-[99999]">
+          {GLOBAL_REGIONS.map((region) => {
+            if (region.subRegions.length === 0) return null;
+            return (
+              <SelectGroup key={region.id} className="pt-1">
+                <SelectLabel className="flex items-center gap-2 text-[10px] uppercase font-bold tracking-wider py-1.5 opacity-80" style={{ color: region.color }}>
+                  <span>{region.icon}</span> {region.shortName}
+                </SelectLabel>
+                {region.subRegions.map((sub) => (
+                  <SelectItem 
+                    key={sub.id} 
+                    value={sub.id}
+                    className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer pl-6 py-2"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-base w-6 text-center">{sub.flag}</span>
+                      <span className="font-semibold text-xs min-w-[3rem] opacity-90">{sub.id}</span>
+                      <span className="text-xs opacity-70">{sub.name}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            )
+          })}
+        </SelectContent>
+      </Select>
+    </div>
   )
 }

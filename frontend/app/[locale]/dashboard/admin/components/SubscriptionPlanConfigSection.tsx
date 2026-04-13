@@ -12,7 +12,7 @@ import api from "@/app/lib/apiConfig";
 interface PlanConfig {
     id: string; plan: string;
     monthlyPrice: number; annualPrice: number;
-    maxLobbies: number; maxPlayersPerLobby: number; maxTournamentsPerMonth: number;
+    maxLobbies: number; maxTournamentSize: number; maxTournamentsPerMonth: number;
     features: Record<string, boolean>;
 }
 
@@ -82,7 +82,7 @@ export default function SubscriptionPlanConfigSection() {
                 monthlyPrice: d.monthlyPrice,
                 annualPrice: d.annualPrice,
                 maxLobbies: d.maxLobbies,
-                maxPlayersPerLobby: d.maxPlayersPerLobby,
+                maxTournamentSize: d.maxTournamentSize,
                 maxTournamentsPerMonth: d.maxTournamentsPerMonth,
                 features: d.features,
             });
@@ -134,7 +134,7 @@ export default function SubscriptionPlanConfigSection() {
                                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Limits</p>
                                 {[
                                     { field: 'maxLobbies' as const, label: 'Max Lobbies' },
-                                    { field: 'maxPlayersPerLobby' as const, label: 'Max Players/Lobby' },
+                                    { field: 'maxTournamentSize' as const, label: 'Max Tournament Size' },
                                     { field: 'maxTournamentsPerMonth' as const, label: 'Max Tournaments/Month' },
                                 ].map(({ field, label }) => (
                                     <div key={field} className="space-y-1">

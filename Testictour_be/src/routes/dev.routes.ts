@@ -1165,4 +1165,89 @@ router.post('/automation/advance-round', async (req: Request, res: Response) => 
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ESCROW SIMULATOR ENDPOINTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * POST /dev/escrow/simulate-webhook
+ * Simulates a Stripe/MoMo payment webhook for dev/testing.
+ * Directly calls EscrowService.processWebhook with a synthetic event payload
+ * so you don't need a real payment gateway to test the reconciliation flow.
+ *
+ * Body: { transactionId, eventType: 'funding.succeeded' | 'payout.succeeded', providerEventId? }
+ */
+router.post('/escrow/simulate-webhook', async (req: Request, res: Response) => {
+  try {
+    const { transactionId, eventType, providerEventId } = req.body;
+    if (!transactionId || !eventType) {
+      return res.status(400).json({ success: false, error: 'transactionId and eventType are required.' });
+    }
+
+    const EscrowService = require('../services/EscrowService').default;
+
+    await EscrowService.processWebhook('dev_simulator', {
+      providerEventId: providerEventId || `dev_sim_${Date.now()}`,
+      transactionReference: transactionId,
+      eventType,
+    });
+
+    const { prisma: db } = require('../services/prisma');
+    const tx = await db.transaction.findUnique({
+      where: { id: transactionId },
+      include: { escrow: { include: { tournament: { select: { id: true, escrowStatus: true } } } } },
+    });
+
+    return res.json({
+      success: true,
+      message: `Webhook '${eventType}' processed for transaction ${transactionId}`,
+      transaction: tx ? { id: tx.id, status: tx.status, type: tx.type } : null,
+      escrow: tx?.escrow ? { status: tx.escrow.status, fundedAmount: tx.escrow.fundedAmount, releasedAmount: tx.escrow.releasedAmount } : null,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /dev/escrow/assert-start
+ * Manually calls EscrowService.assertTournamentCanStart() to simulate the
+ * start gate check that triggers when a tournament's first round begins.
+ * Returns success if the tournament escrow is funded, or the blocking error if not.
+ *
+ * Body: { tournamentId }
+ */
+router.post('/escrow/assert-start', async (req: Request, res: Response) => {
+  try {
+    const { tournamentId } = req.body;
+    if (!tournamentId) {
+      return res.status(400).json({ success: false, error: 'tournamentId is required.' });
+    }
+
+    const EscrowService = require('../services/EscrowService').default;
+    await EscrowService.assertTournamentCanStart(tournamentId);
+
+    const { prisma: db } = require('../services/prisma');
+    const escrow = await db.escrow.findUnique({
+      where: { tournamentId },
+      select: { status: true, fundedAmount: true, requiredAmount: true },
+    });
+
+    return res.json({
+      success: true,
+      message: `Tournament ${tournamentId} CAN start — escrow gate passed.`,
+      escrow,
+    });
+  } catch (err: any) {
+    // Gate check failed — return 200 so the dev knows the reason
+    return res.status(200).json({
+      success: false,
+      blocked: true,
+      message: 'assertTournamentCanStart() BLOCKED tournament start.',
+      reason: err.message,
+    });
+  }
+});
+
 export default router;
+

@@ -97,6 +97,7 @@ app.use(cors({
   origin: [process.env.FRONTEND_URL || 'http://localhost:3000', 'http://localhost:3000'],
   credentials: true,
 }));
+app.use('/api/webhooks/payments/stripe', express.raw({ type: 'application/json' }));
 app.use(express.json()); // Re-enable JSON body parsing
 app.use(express.static(path.join(__dirname, '..', 'public'))); // Serve static files from the 'public' directory
 

@@ -46,6 +46,7 @@ export const TournamentService = {
     expectedParticipants?: number;
     templateId?: string;
     config?: { phases: IPhaseConfig[] };
+    isCommunityMode?: boolean;
   }): Promise<ITournament> {
     try {
       const response = await api.post('/tournaments', {

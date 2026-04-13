@@ -6,7 +6,7 @@ import {
   ArrowLeft, Loader2, Save, Trophy, RefreshCw, Users, Play,
   Square, CheckCircle2, XCircle, Clock, AlertTriangle, Settings2,
   ChevronRight, MoreVertical, UserMinus, Crown, Skull, Image as ImageIcon,
-  ShieldAlert, Wrench, GitBranch, FastForward, SkipForward
+  ShieldAlert, ShieldCheck, Wrench, GitBranch, FastForward, SkipForward
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -246,6 +246,17 @@ export default function TournamentManagePage() {
                 <StatusIcon className="h-3 w-3" />
               {statusCfg.label === 'pending' ? t('idle') : statusCfg.label === 'upcoming' ? t('upcoming') : statusCfg.label === 'in_progress' ? t('ongoing') : statusCfg.label === 'completed' ? t('finished') : t(statusCfg.label)}
               </Badge>
+              {tournament.isCommunityMode ? (
+                <Badge variant="outline" className="bg-orange-500/10 text-orange-500 border-orange-500/30">
+                  <AlertTriangle className="mr-1 h-3 w-3 inline" />
+                  Community Mode
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30">
+                  <ShieldCheck className="mr-1 h-3 w-3 inline" />
+                  Escrow Secured
+                </Badge>
+              )}
             </div>
             <p className="text-sm text-muted-foreground mt-0.5">
               ID: {tournament.id.substring(0, 12)}... · Organizer: <strong>{tournament.organizer?.username || 'System'}</strong>

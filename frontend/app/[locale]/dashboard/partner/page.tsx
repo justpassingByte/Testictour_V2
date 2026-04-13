@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { Plus, Settings, DollarSign, Users, Trophy, BarChart3, Coins, Crown, Menu, PanelLeftClose, HandCoins } from "lucide-react"
+import { Plus, Settings, DollarSign, Users, Trophy, BarChart3, Coins, Crown, Menu, PanelLeftClose, HandCoins, ShieldCheck } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 
 import { Button } from "@/components/ui/button"
@@ -183,12 +183,6 @@ export default function PartnerDashboardPage() {
               <Settings className="h-4 w-4 shrink-0" /> {isSidebarOpen && "Settings"}
             </TabsTrigger>
 
-            {/* Separator / Spacer */}
-            <div className="flex-1" />
-
-            <TabsTrigger value="plans" className={`w-full ${isSidebarOpen ? "justify-start" : "justify-center"} gap-3 data-[state=active]:bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/10`}>
-              <Crown className="h-4 w-4 shrink-0" /> {isSidebarOpen && "Plans & Billing"}
-            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -236,13 +230,7 @@ export default function PartnerDashboardPage() {
             </TabsContent>
 
             <TabsContent value="settings" className="m-0 space-y-4 outline-none">
-              <SettingsTab />
-            </TabsContent>
-
-            <TabsContent value="plans" className="m-0 space-y-4 outline-none">
-              <Suspense fallback={<TabContentSkeleton />}>
-                <SubscriptionTab />
-              </Suspense>
+              <SettingsTab partnerData={partnerData as any} />
             </TabsContent>
           </div>
         </div>

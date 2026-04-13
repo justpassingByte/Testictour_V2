@@ -41,6 +41,7 @@ export default function CreateTournamentPage() {
     startTime: "",
     registrationDeadline: "",
     image: "",
+    isCommunityMode: false,
   })
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [imageFile, setImageFile] = useState<File | null>(null)
@@ -117,6 +118,7 @@ export default function CreateTournamentPage() {
         hostFeePercent: form.hostFeePercent,
         expectedParticipants: form.maxPlayers,
         config: { phases: phaseConfigs as any },
+        isCommunityMode: form.isCommunityMode,
       })
 
       toast({ title: "Tournament Created", description: `${form.name} has been created successfully.` })
@@ -258,6 +260,36 @@ export default function CreateTournamentPage() {
               </div>
             )}
           </CardContent>
+        </Card>
+
+        {/* Mode Configuration */}
+        <Card className="bg-card/60 border-white/10">
+           <CardHeader>
+             <CardTitle className="flex items-center gap-2">
+               <Trophy className="h-5 w-5 text-orange-400" /> Escrow / Community Mode
+             </CardTitle>
+             <CardDescription>Configure financial protection rules for this tournament.</CardDescription>
+           </CardHeader>
+           <CardContent>
+             <div className="flex items-center gap-4 bg-white/5 border border-white/10 p-4 rounded-lg">
+               <div className="flex-1">
+                 <h4 className="font-semibold">{form.isCommunityMode ? 'Community Mode' : 'Escrow Secured'}</h4>
+                 <p className="text-sm text-muted-foreground mt-1">
+                   {form.isCommunityMode 
+                     ? 'Giải đấu tự do. Không có quỹ Escrow bảo lãnh từ nền tảng. Phù hợp đánh giao hữu.' 
+                     : 'Giải đấu bảo trợ Escrow. Yêu cầu tạo quỹ tiền thưởng trước khi bắt đầu để đảm bảo an toàn, minh bạch.'}
+                 </p>
+               </div>
+               <Button 
+                 type="button" 
+                 variant={form.isCommunityMode ? "outline" : "default"} 
+                 className={!form.isCommunityMode ? "bg-emerald-600 hover:bg-emerald-700" : "border-orange-500/50 text-orange-400"}
+                 onClick={() => updateForm("isCommunityMode", !form.isCommunityMode)}
+               >
+                 {form.isCommunityMode ? 'Switch to Escrow' : 'Switch to Community'}
+               </Button>
+             </div>
+           </CardContent>
         </Card>
 
         {/* Phase Configuration */}

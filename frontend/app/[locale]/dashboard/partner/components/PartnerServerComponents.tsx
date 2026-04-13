@@ -3,7 +3,6 @@
 import Link from "next/link"
 import {
   BarChart3,
-  Coins,
   Crown,
   DollarSign,
   MoreHorizontal,
@@ -13,6 +12,7 @@ import {
   TrendingUp,
   Trophy,
   Users,
+  Wallet,
 } from "lucide-react"
 
 import { MiniTourLobby, PartnerData, AnalyticsData } from "@/app/stores/miniTourLobbyStore"
@@ -39,6 +39,9 @@ import api from "@/app/lib/apiConfig"
 import React, { FormEvent, useState } from 'react';
 import LobbiesTabClient from "./LobbiesTabClient";
 import { useTranslations } from "next-intl";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import SubscriptionTab from "./SubscriptionTab"
+import { Save } from "lucide-react"
 
 // --- ASYNC COMPONENTS ---
 
@@ -82,10 +85,10 @@ export function KeyMetrics({ partnerData }: { partnerData: PartnerData | null })
       <Card>
         <CardContent className="pt-6">
           <div className="flex items-center">
-            <Coins className="mr-3 h-8 w-8 text-primary" />
+            <Star className="mr-3 h-8 w-8 text-primary" />
             <div>
-              <p className="text-2xl font-bold">${partnerData.balance?.toLocaleString() || 0}</p>
-              <p className="text-xs text-muted-foreground">{t("coins")}</p>
+              <p className="text-2xl font-bold">{partnerData.revenueShare || 10}%</p>
+              <p className="text-xs text-muted-foreground">Host Fee</p>
             </div>
           </div>
         </CardContent>
@@ -211,7 +214,7 @@ export function OverviewTab({ partnerData, lobbies }: { partnerData: PartnerData
                   </div>
                   <div className="text-right">
                     <div className="font-bold text-primary">
-                      <Coins className="mr-1 inline h-4 w-4" />
+                      <DollarSign className="mr-1 inline h-4 w-4" />
                       {lobby.prizePool}
                     </div>
                     <div className="text-sm text-muted-foreground">{t("prize_pool")}</div>
@@ -338,11 +341,11 @@ export function RevenueTab({ partnerData, lobbies }: { partnerData: PartnerData 
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center">
-              <Coins className="mr-3 h-8 w-8 text-primary" />
+              <Star className="mr-3 h-8 w-8 text-primary" />
               <div>
-                <p className="text-2xl font-bold">${partnerData.balance?.toLocaleString() || 0}</p>
-                <p className="text-xs text-muted-foreground">{t("coins")}</p>
-                <p className="text-xs text-blue-600">Available for payout</p>
+                <p className="text-2xl font-bold">{partnerData.revenueShare || 10}%</p>
+                <p className="text-xs text-muted-foreground">Host Fee Config</p>
+                <p className="text-xs text-blue-600">Per tournament payout</p>
               </div>
             </div>
           </CardContent>
@@ -434,8 +437,8 @@ export function RevenueTab({ partnerData, lobbies }: { partnerData: PartnerData 
                 <TableHead>{t("lobby")}</TableHead>
                 <TableHead>{t("status")}</TableHead>
                 <TableHead>{t("prize_pool")}</TableHead>
-                <TableHead>{t("registration_fee")}</TableHead>
-                <TableHead>{t("budget")}</TableHead>
+                <TableHead>Host Fee %</TableHead>
+                <TableHead>Revenue</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -464,18 +467,12 @@ export function RevenueTab({ partnerData, lobbies }: { partnerData: PartnerData 
   );
 }
 
-export function SettingsTab() {
+export function SettingsTab({ partnerData }: { partnerData?: PartnerData }) {
   const t = useTranslations("common")
-  // Mock data that would normally come from an API
   const [partnerSettings, setPartnerSettings] = useState({
-    partnerName: "TesTicTour Partner",
-    partnerLogo: "/placeholder.svg",
-    contactEmail: "partner@example.com",
-    payoutMethod: "Bank Transfer",
-    autoPayout: true,
-    riotApiKey: "",
-    usePersonalRiotApi: false,
-    partnerRevenueShare: 30, // Default 30% revenue share
+    partnerName: partnerData?.username || "TesTicTour Partner",
+    contactEmail: partnerData?.email || "partner@example.com",
+    hostFeePercent: partnerData?.revenueShare ?? 10,
     notifications: {
       email: true,
       sms: false,
@@ -485,13 +482,14 @@ export function SettingsTab() {
   const handleSaveSettings = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const riotApiKey = formData.get('riotApiKey') as string;
-    const usePersonalRiotApi = formData.get('usePersonalRiotApi') === 'on';
+    const hostFeePercentValue = formData.get('hostFeePercent');
+    const hostFeePercent = hostFeePercentValue ? Number(hostFeePercentValue) / 100 : undefined;
 
     try {
       const response = await api.put('/partner/settings', {
-        riotApiKey,
-        usePersonalRiotApi,
+        partnerName: formData.get('partnerName'),
+        contactEmail: formData.get('contactEmail'),
+        hostFeePercent,
       });
 
       if (response.status === 200) {
@@ -506,91 +504,158 @@ export function SettingsTab() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold">{t("dashboard.partner.settings")}</h2>
-      <form onSubmit={handleSaveSettings} className="space-y-6">
-        <Card>
-          <CardHeader><CardTitle>{t("tournament_details")}</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="partnerName">{t("summoner_name")}</Label>
-              <Input id="partnerName" defaultValue={partnerSettings.partnerName} />
-            </div>
-            <div>
-              <Label htmlFor="partnerLogo">Partner Logo URL</Label>
-              <Input id="partnerLogo" defaultValue={partnerSettings.partnerLogo} />
-            </div>
-            <div>
-              <Label htmlFor="contactEmail">Contact Email</Label>
-              <Input id="contactEmail" type="email" defaultValue={partnerSettings.contactEmail} />
-            </div>
-          </CardContent>
-        </Card>
+      <div className="flex flex-col gap-2">
+        <h2 className="text-2xl font-bold tracking-tight">{t("dashboard.partner.settings", { defaultValue: "Settings & Configuration" })}</h2>
+        <p className="text-muted-foreground text-sm">Manage your partner profile, payment gateways, plans, and global preferences.</p>
+      </div>
 
-        <Card>
-          <CardHeader><CardTitle>{t("reward_history_tab")}</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="payoutMethod">{t("prize_pool")}</Label>
-              <Input id="payoutMethod" defaultValue={partnerSettings.payoutMethod} />
+      <Tabs defaultValue="general" className="w-full">
+        <TabsList className="mb-6 bg-card/60 border border-white/5 p-1 w-full flex overflow-x-auto justify-start h-auto flex-wrap">
+          <TabsTrigger value="general" className="flex-1 rounded-md py-2">General Profile</TabsTrigger>
+          <TabsTrigger value="payments" className="flex-1 rounded-md py-2">Gateways & Fees</TabsTrigger>
+          <TabsTrigger value="plans" className="flex-1 rounded-md py-2">Plans & Billing</TabsTrigger>
+          <TabsTrigger value="notifications" className="flex-1 rounded-md py-2">Notifications</TabsTrigger>
+        </TabsList>
+        
+        <form onSubmit={handleSaveSettings}>
+          <TabsContent value="general" className="space-y-4 outline-none active:outline-none focus:outline-none">
+            <Card>
+              <CardHeader><CardTitle>{t("tournament_details")}</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="partnerName">{t("summoner_name")}</Label>
+                  <Input id="partnerName" name="partnerName" defaultValue={partnerSettings.partnerName} />
+                </div>
+                <div>
+                  <Label htmlFor="contactEmail">Contact Email</Label>
+                  <Input id="contactEmail" name="contactEmail" type="email" defaultValue={partnerSettings.contactEmail} />
+                </div>
+              </CardContent>
+            </Card>
+            
+            <div className="flex justify-end pt-4">
+              <Button type="submit" size="lg" className="shadow-xl shadow-primary/20">
+                <Save className="mr-2 h-4 w-4" /> Save General Settings
+              </Button>
             </div>
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="autoPayout"
-                defaultChecked={partnerSettings.autoPayout}
-              />
-              <Label htmlFor="autoPayout">{t("live_updates")}</Label>
+          </TabsContent>
+
+          <TabsContent value="payments" className="space-y-6 outline-none active:outline-none focus:outline-none">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center text-xl">
+                  <Star className="mr-2 h-5 w-5 text-primary" />
+                  Global Host Fee Config
+                </CardTitle>
+                <CardDescription>Set the default revenue share you receive from tournament entry fees. Maximum allowed is 10%.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="hostFeePercent" className="text-base">Host Fee Percentage</Label>
+                    <div className="flex items-center gap-2">
+                      <Input 
+                        id="hostFeePercent" 
+                        name="hostFeePercent" 
+                        type="number" 
+                        min="0" 
+                        max="10" 
+                        defaultValue={partnerSettings.hostFeePercent}
+                        className="w-20 font-bold"
+                      />
+                      <span className="text-muted-foreground">%</span>
+                    </div>
+                  </div>
+                  <p className="text-sm text-yellow-500 bg-yellow-500/10 p-3 rounded-md border border-yellow-500/20">
+                    Lưu ý: Partner chỉ được cấu hình Host Fee tối đa 10%. Thiết lập này sẽ tự động áp dụng cho mọi giải đấu bạn tạo.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-card/40 backdrop-blur-md border border-white/10 shadow-xl overflow-hidden relative">
+              <CardHeader>
+                <CardTitle className="text-xl">Payout & Gateways</CardTitle>
+                <CardDescription>Configure how you receive payouts from tournament revenue securely.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Stripe Card */}
+                  <div className="border border-white/10 bg-black/20 rounded-xl p-5 flex flex-col justify-between space-y-4 hover:border-blue-500/50 transition duration-300">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 bg-blue-600 rounded-full flex items-center justify-center shrink-0">
+                        <DollarSign className="text-white h-5 w-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-lg">Stripe Connect</h4>
+                        <p className="text-sm text-muted-foreground w-full break-words">International & USD Payouts</p>
+                      </div>
+                    </div>
+                    <Button type="button" onClick={() => alert('Redirecting to Stripe Connect onboarding...')} className="bg-blue-600 hover:bg-blue-700 text-white w-full shadow-lg shadow-blue-500/20 mt-2">
+                      Connect Stripe
+                    </Button>
+                  </div>
+
+                  {/* Momo Card */}
+                  <div className="border border-white/10 bg-black/20 rounded-xl p-5 flex flex-col justify-between space-y-4 hover:border-pink-500/50 transition duration-300">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 bg-pink-500 rounded-full flex items-center justify-center shrink-0">
+                        <Wallet className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-lg">MoMo Wallet</h4>
+                        <p className="text-sm text-muted-foreground w-full break-words">VND Local Payouts</p>
+                      </div>
+                    </div>
+                    <Button type="button" variant="outline" className="border-pink-500/30 text-pink-500 hover:bg-pink-500 hover:text-white w-full transition select-none mt-2">
+                      Link MoMo (Coming Soon)
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="flex justify-end pt-4">
+              <Button type="submit" size="lg" className="shadow-xl shadow-primary/20">
+                <Save className="mr-2 h-4 w-4" /> Save Fee Settings
+              </Button>
             </div>
-          </CardContent>
-        </Card>
+          </TabsContent>
 
-        <Card>
-          <CardHeader><CardTitle>{t("api_status")}</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="riotApiKey">{t("api_status")}</Label>
-              <Input
-                id="riotApiKey"
-                name="riotApiKey"
-                defaultValue={partnerSettings.riotApiKey}
-                placeholder="RGAPI-..."
-              />
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="usePersonalRiotApi"
-                  name="usePersonalRiotApi"
-                  defaultChecked={partnerSettings.usePersonalRiotApi}
-                />
-                <Label htmlFor="usePersonalRiotApi">{t("operational")}</Label>
-              </div>
+          <TabsContent value="notifications" className="space-y-4 outline-none active:outline-none focus:outline-none">
+            <Card>
+              <CardHeader><CardTitle>{t("settings")}</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="emailNotifications"
+                    name="emailNotifications"
+                    defaultChecked={partnerSettings.notifications.email}
+                  />
+                  <Label htmlFor="emailNotifications">{t("auth.email")}</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="smsNotifications"
+                    defaultChecked={partnerSettings.notifications.sms}
+                  />
+                  <Label htmlFor="smsNotifications">{t("settings")}</Label>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <div className="flex justify-end pt-4">
+              <Button type="submit" size="lg" className="shadow-xl shadow-primary/20">
+                <Save className="mr-2 h-4 w-4" /> Save Notifications
+              </Button>
             </div>
-          </CardContent>
-        </Card>
+          </TabsContent>
+        </form>
 
-
-
-        <Card>
-          <CardHeader><CardTitle>{t("settings")}</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="emailNotifications"
-                name="emailNotifications"
-                defaultChecked={partnerSettings.notifications.email}
-              />
-              <Label htmlFor="emailNotifications">{t("auth.email")}</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="smsNotifications"
-                defaultChecked={partnerSettings.notifications.sms}
-              />
-              <Label htmlFor="smsNotifications">{t("settings")}</Label>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Button type="submit">{t("save")}</Button>
-      </form>
+        <TabsContent value="plans" className="m-0 outline-none active:outline-none focus:outline-none">
+          <SubscriptionTab partnerId={partnerData?.id} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

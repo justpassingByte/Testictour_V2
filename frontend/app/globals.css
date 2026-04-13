@@ -119,10 +119,27 @@ body {
 }
 
 /* --- FORCE REMOVE ALL TRANSPARENCY AND BLUR --- */
-[class*="backdrop-blur"] {
+/* Exempt region dropdown overlays from this rule */
+[class*="backdrop-blur"]:not([class*="z-[200]"]) {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
+
+/* Custom scrollbar for region dropdowns */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255,255,255,0.12);
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.22);
+}
+
 
 /* Force solid card backgrounds matching the design */
 .bg-card\/40,

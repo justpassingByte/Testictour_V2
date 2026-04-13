@@ -2,16 +2,18 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import {
-  Plus, Search, Filter, RefreshCw, Eye, Loader2, Trophy, Lock, Users, ImagePlus, Trash2
+  Plus, Search, Filter, RefreshCw, Eye, Loader2, Trophy, Lock, Users, ImagePlus, Trash2, MoreVertical, Settings
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { RegionSelector } from "@/components/ui/RegionSelector"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Progress } from "@/components/ui/progress"
 import { toast } from "@/components/ui/use-toast"
@@ -44,6 +46,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
     startTime: "",
     registrationDeadline: "",
     image: "",
+    isCommunityMode: false,
   })
   
   const [imagePreview, setImagePreview] = useState<string | null>(null)
@@ -137,11 +140,12 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
         image: imageFile ? (imagePreview || form.image || undefined) : (form.image || undefined),
         roundsTotal: phases.reduce((sum, p) => sum + p.numberOfRounds, 0),
         config: { phases: phaseConfigs },
+        isCommunityMode: form.isCommunityMode,
       })
 
       toast({ title: "Tournament Created!", description: `${form.name} has been created successfully.` })
       setCreateOpen(false)
-      setForm({ name: "", description: "", region: "APAC", maxPlayers: 32, entryFee: 0, hostFeePercent: 0.1, startTime: "", registrationDeadline: "", image: "" })
+      setForm({ name: "", description: "", region: "APAC", maxPlayers: 32, entryFee: 0, hostFeePercent: 0.1, startTime: "", registrationDeadline: "", image: "", isCommunityMode: false })
       setPhases([{ name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "top_n_scores", advancementValue: 4 }])
       setImageFile(null)
       setImagePreview(null)
@@ -157,6 +161,17 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
   const filteredTournaments = tournaments.filter((t) =>
     t.name.toLowerCase().includes(searchQuery.toLowerCase())
   )
+
+  const handleDeleteTournament = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete this tournament? This action cannot be undone.")) return;
+    try {
+      await api.delete(`/tournaments/${id}`);
+      toast({ title: "Deleted", description: "Tournament has been deleted successfully." });
+      fetchMyTournaments();
+    } catch (error: any) {
+      toast({ title: "Failed", description: error.response?.data?.message || "Could not delete tournament.", variant: "destructive" });
+    }
+  }
 
   const getStatusBadgeClasses = (status: string) => {
     switch (status.toUpperCase()) {
@@ -227,7 +242,12 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                     <TableRow key={tournament.id} className="hover:bg-white/5">
                       <TableCell>
                         <div className="font-medium">{tournament.name}</div>
-                        <div className="text-xs text-muted-foreground mt-0.5">{tournament.region || 'APAC'}</div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <div className="text-xs text-muted-foreground">{tournament.region || 'APAC'}</div>
+                          <Badge variant="outline" className={`text-[10px] px-1.5 h-4 shadow-black/50 shadow-sm ${tournament.isCommunityMode ? 'text-orange-400 border-orange-500/50 bg-orange-500/10' : 'text-emerald-400 border-emerald-500/50 bg-emerald-500/10'}`}>
+                            {tournament.isCommunityMode ? 'Community' : 'Escrow'}
+                          </Badge>
+                        </div>
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className={getStatusBadgeClasses(tournament.status)}>
@@ -245,9 +265,23 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                         {new Date(tournament.startTime).toLocaleDateString()}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Link href={`/tournaments/${tournament.id}`}>
-                          <Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button>
-                        </Link>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-8 border-primary/30 bg-primary/10 hover:bg-primary/20 text-primary px-3">
+                              Manage <MoreVertical className="ml-2 h-3.5 w-3.5 opacity-70" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem asChild>
+                              <Link href={`/dashboard/partner/tournaments/${tournament.id}`}>
+                                <Settings className="mr-2 h-4 w-4" /> Manage
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-red-500 hover:text-red-600 focus:text-red-600 focus:bg-red-500/10" onClick={() => handleDeleteTournament(tournament.id)}>
+                              <Trash2 className="mr-2 h-4 w-4" /> Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   )
@@ -259,7 +293,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
       </Card>
 
       {/* Create Tournament Dialog matched with Admin setup */}
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      <Dialog open={createOpen} onOpenChange={setCreateOpen} modal={false}>
         <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create Tournament</DialogTitle>
@@ -274,16 +308,12 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                 <Label>Tournament Name *</Label>
                 <Input placeholder="e.g. Weekly Scrims" value={form.name} onChange={(e) => setForm(p => ({ ...p, name: e.target.value }))} />
               </div>
-              <div className="space-y-2">
-                <Label>Region</Label>
-                <Select value={form.region} onValueChange={(v) => setForm(p => ({ ...p, region: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="AMER">Americas</SelectItem>
-                    <SelectItem value="EMEA">Europe, Middle East, Africa</SelectItem>
-                    <SelectItem value="APAC">Asia Pacific</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="space-y-2 md:col-span-2">
+                <RegionSelector 
+                  label="Region"
+                  value={form.region} 
+                  onChange={(v) => setForm(p => ({ ...p, region: v }))} 
+                />
               </div>
             </div>
             <div className="space-y-2">
@@ -370,6 +400,35 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                 {" "}(When 100% full capacity)
               </div>
             )}
+
+            {/* Config Phases (from admin) */}
+            <div className="border border-white/10 rounded-lg p-0">
+               <div className="p-3 border-b border-white/10 bg-black/20 flex flex-col sm:flex-row items-center justify-between">
+                 <div className="mb-2 sm:mb-0">
+                    <h3 className="font-bold cursor-pointer hover:underline text-orange-400">Escrow / Community Mode</h3>
+                 </div>
+               </div>
+               <div className="p-4 space-y-4">
+                 <div className="flex items-center gap-4 border border-white/10 p-3 bg-white/5 rounded-md">
+                   <div className="flex-1">
+                     <h4 className="font-semibold text-sm">Mode: {form.isCommunityMode ? 'Community Mode' : 'Escrow Secured'}</h4>
+                     <p className="text-xs text-muted-foreground">
+                       {form.isCommunityMode 
+                         ? 'Giải đấu tự do. Không có quỹ Escrow bảo lãnh từ nền tảng. Phù hợp đánh giao hữu.' 
+                         : 'Giải đấu bảo lãnh Escrow. Yêu cầu tạo quỹ tiền thưởng trước khi giải bắt đầu. An toàn, minh bạch.'}
+                     </p>
+                   </div>
+                   <Button 
+                     type="button" 
+                     variant={form.isCommunityMode ? "outline" : "default"} 
+                     className={!form.isCommunityMode ? "bg-emerald-600 hover:bg-emerald-700" : "border-orange-500/50 text-orange-400"}
+                     onClick={() => setForm(p => ({ ...p, isCommunityMode: !p.isCommunityMode }))}
+                   >
+                     {form.isCommunityMode ? 'Switch to Escrow' : 'Switch to Community'}
+                   </Button>
+                 </div>
+               </div>
+            </div>
 
             {/* Config Phases (from admin) */}
             <div className="border border-white/10 rounded-lg p-0">

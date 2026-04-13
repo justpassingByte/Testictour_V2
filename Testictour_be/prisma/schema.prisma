@@ -108,6 +108,14 @@ model Tournament {
   registered              Boolean?
   userTournamentSummaries UserTournamentSummary[]
 
+  // Escrow & Payment
+  isCommunityMode            Boolean @default(false)
+  escrowStatus               String  @default("not_funded")
+  escrowRequiredAmount       Float   @default(0)
+  communityThresholdSnapshot Float   @default(150)
+  escrow                     Escrow?
+  transactions               Transaction[]
+
   // Sync status
   lastSyncTime            DateTime?
   syncStatus              String?                 @default("IDLE") // e.g., IDLE, SYNCING, SUCCESS, FAILED
@@ -146,6 +154,7 @@ model Participant {
   eliminated      Boolean        @default(false)
   checkmateActive Boolean        @default(false)
   paid            Boolean        @default(false)
+  paymentStatus   String         @default("pending")
   rewarded        Boolean        @default(false)
   rewards         Reward[]
   roundOutcomes   RoundOutcome[]
@@ -244,7 +253,22 @@ model Transaction {
   currency  String   @default("usd") // usd, coins
   amount    Float
   status    String // pending, success, failed
-  refId     String?
+  refId              String?
+  tournamentId       String?
+  escrowId           String?
+  paymentMethod      String?
+  externalRefId      String?
+  providerEventId    String?
+  proofUrl           String?
+  payoutDestination  String?
+  reviewedById       String?
+  reviewedAt         DateTime?
+  reviewNotes        String?
+  retryCount         Int       @default(0)
+  lastRetryAt        DateTime?
+  failureReason      String?
+
+  tournament         Tournament? @relation(fields: [tournamentId], references: [id])
   createdAt DateTime @default(now())
 
   @@index([userId])
@@ -459,10 +483,45 @@ model SubscriptionPlanConfig {
   monthlyPrice          Float    @default(0)
   annualPrice           Float    @default(0)
   maxLobbies            Int      @default(1)
-  maxPlayersPerLobby    Int      @default(8)
+  maxTournamentSize     Int      @default(32)
   maxTournamentsPerMonth Int     @default(5)
   features              Json     @default("{}")
   updatedAt             DateTime @updatedAt
   updatedBy             String?
+}
+
+// ─── Escrow Models ───────────────────────────────────────────────
+
+model Escrow {
+  id                    String      @id @default(uuid())
+  tournamentId          String      @unique
+  requiredAmount        Float       @default(0)
+  fundedAmount          Float       @default(0)
+  releasedAmount        Float       @default(0)
+  status                String      // not_funded, partially_funded, funded, locked, released, cancelled, disputed
+  reconciliationStatus  String      @default("pending") // pending, success, failed, stale
+  
+  lockedAt              DateTime?
+  releasedAt            DateTime?
+  cancelledAt           DateTime?
+  cancelReason          String?
+  disputedAt            DateTime?
+  
+  disputeReason         String?
+  disputeResolvedAt     DateTime?
+  disputeResolution     String?
+  
+  latestWebhookEventId  String?
+  lastReviewedById      String?
+  lastReviewedAt        DateTime?
+  
+  retryCount            Int         @default(0)
+  lastRetryAt           DateTime?
+  nextRetryAt           DateTime?
+  
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  
+  tournament            Tournament  @relation(fields: [tournamentId], references: [id])
 }
 

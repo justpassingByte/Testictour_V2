@@ -24,10 +24,36 @@ export default function PlatformSettingsSection() {
     const fetch = async () => {
         try {
             const res = await api.get("/admin/settings");
-            setGrouped(res.data.settings);
+            const excludedKeys = [
+                'maintenance_mode',
+                'maintenance_message',
+                'platform_fee',
+                'escrowCommunityThresholdUsd',
+                'escrowDefaultProvider',
+                'escrowPlatformFeePercent',
+                'escrowEnabled'
+            ];
+            
+            const filteredGrouped: Record<string, Setting[]> = {};
+            Object.entries(res.data.settings as Record<string, Setting[]>).forEach(([group, settings]) => {
+                if (group === 'gateways') return; // Skip gateway settings since they have a dedicated tab
+
+                const filtered = settings.filter(s => {
+                    const k = s.key.toLowerCase();
+                    return !excludedKeys.includes(s.key) && 
+                           !k.includes('platform_fee') && 
+                           !k.includes('escrow');
+                });
+                if (filtered.length > 0) {
+                    filteredGrouped[group] = filtered;
+                }
+            });
+            
+            setGrouped(filteredGrouped);
+
             // Init drafts
             const drafts: Record<string, any> = {};
-            Object.values(res.data.settings as Record<string, Setting[]>).flat().forEach((s: Setting) => {
+            Object.values(filteredGrouped).flat().forEach((s: Setting) => {
                 drafts[s.key] = s.parsedValue;
             });
             setDraftValues(drafts);
