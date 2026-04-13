@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import { useTournamentStore } from "@/app/stores/tournamentStore"
+import { useUserStore } from "@/app/stores/userStore"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { IRound, PlayerRoundStats, ITournament } from "@/app/types/tournament"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -13,7 +14,7 @@ import { Button } from "@/components/ui/button"
 
 import { ResultsTab } from "./tabs/ResultsTab"
 import { LobbiesTab } from "./tabs/LobbiesTab"
-import { StatisticsTab } from "./tabs/StatisticsTab"
+import { TournamentStatisticsTab } from "@/app/[locale]/tournaments/[id]/components/TournamentStatisticsTab"
 import { useTranslations } from "next-intl"
 import { MatchCompPanel, isGrimoireMatchData } from "@/components/match/MatchCompPanel"
 import { GrimoireMatchData } from "@/app/types/riot"
@@ -28,6 +29,7 @@ interface RoundTabsProps {
 export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTabsProps) {
   const t = useTranslations("common")
   const { matchResults, fetchRoundDetails } = useTournamentStore()
+  const { currentUser } = useUserStore()
   const [pollingMessage, setPollingMessage] = useState<string | null>(null);
   const [matchesPage, setMatchesPage] = useState(1);
   const lobbiesPerPage = 4;
@@ -267,12 +269,11 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
                                 .map(r => {
                                   // r.participantId is normalized to userId
                                   const participant = tournament.participants?.find(p => p.userId === r.participantId);
-                                  const puuid = participant?.user?.puuid;
-                                  if (!puuid) return null;
-                                  return [puuid, { placement: r.placement, points: r.points }];
+                                  const key = participant?.user?.puuid || `placement_${r.placement}`;
+                                  return [key, { placement: r.placement, points: r.points }];
                                 })
-                                .filter(Boolean) as [string, { placement: number; points: number }][]
                             )}
+                            highlightPuuid={currentUser?.puuid || undefined}
                           />
                         ) : (
                           // Legacy simple table fallback
@@ -378,7 +379,7 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
         <LobbiesTab round={round} allPlayers={allPlayers} numMatches={numMatches} tournamentId={tournament.id} />
       </TabsContent>
       <TabsContent value="statistics">
-        <StatisticsTab allPlayers={allPlayers} />
+        <TournamentStatisticsTab tournamentId={tournament.id} />
       </TabsContent>
     </Tabs>
   )

@@ -31,13 +31,13 @@ function MiniBar({ data, months, color }: { data: number[]; months: string[]; co
   return (
     <div className="flex items-end gap-2 h-36">
       {data.map((v, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center gap-1 group">
-          <span className="text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity" style={{ color }}>{v}</span>
+        <div key={i} className="flex-1 flex flex-col justify-end items-center gap-1 group h-full">
+          <span className="text-xs flex-shrink-0 font-medium opacity-0 group-hover:opacity-100 transition-opacity" style={{ color }}>{v}</span>
           <div
             className="w-full rounded-t transition-all hover:opacity-90 cursor-default"
             style={{ height: `${Math.max((v / max) * 100, 3)}%`, backgroundColor: color, opacity: 0.65 }}
           />
-          <span className="text-xs text-muted-foreground">{months[i]}</span>
+          <span className="text-xs flex-shrink-0 text-muted-foreground">{months[i]}</span>
         </div>
       ))}
     </div>

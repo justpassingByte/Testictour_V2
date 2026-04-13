@@ -118,22 +118,22 @@ export default class LobbyStateService {
 
     // Side effects per target state
     if (to === LOBBY_STATE.PLAYING) {
-      // matchStartedAt = now + 90s (loading screen offset for TFT loading screen)
+      // matchStartedAt = now (used by the worker to calculate elapsed time)
       await prisma.lobby.update({
         where: { id: lobbyId },
-        data: { matchStartedAt: new Date(Date.now() + 90_000) },
+        data: { matchStartedAt: new Date() },
       });
 
       // ── Critical: enqueue match polling job ──────────────────
-      // Fetches match from Grimoire once the game ends. Region is derived
-      // dynamically inside fetchMatchData from the lobby→round→phase→tournament chain.
+      // TFT matches take ~25-30min. First poll after 20 minutes, then every 30s.
+      // Region is derived dynamically inside fetchMatchData from the lobby→round→phase→tournament chain.
       if (fetchMatchDataQueue) {
         await fetchMatchDataQueue.add('fetchMatchData', { lobbyId, region: '' }, {
-          delay: 90_000, // Start polling after loading screen offset
-          attempts: 60,
+          delay: 1_200_000, // 20 minutes — first poll after game likely ends
+          attempts: 120,
           backoff: { type: 'fixed', delay: 0 }, // Smart polling re-queues itself
         });
-        logger.info(`LobbyStateService: enqueued fetchMatchData job for lobby ${lobbyId}`);
+        logger.info(`LobbyStateService: enqueued fetchMatchData job for lobby ${lobbyId} (first poll in 20min)`);
       } else {
         logger.warn(`LobbyStateService: fetchMatchDataQueue not available — match won't be auto-polled for lobby ${lobbyId}`);
       }

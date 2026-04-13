@@ -184,6 +184,7 @@ router.post('/test-riot-match', async (req: Request, res: Response) => {
 
     return res.json({ success: true, seeded: seededLobbyIds, match: result.match });
   } catch (err: any) {
+    console.error('[DevTools] error:', err.message);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -304,6 +305,7 @@ router.post('/seed-full-tournament', async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     console.error('[seed-full-tournament]', err);
+    console.error('[DevTools] error:', err.message);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -317,44 +319,112 @@ router.get('/tournament-statistics/:id', async (req: Request, res: Response) => 
   try {
     const { id } = req.params;
 
+    // 1. Fetch participants (for region, total players, highest score, etc.)
+    const participants = await prisma.participant.findMany({
+      where: { tournamentId: id },
+      include: { user: true }
+    });
+
+    const activePlayers = participants.filter(p => !p.eliminated).length;
+    const eliminatedPlayers = participants.filter(p => p.eliminated).length;
+    const totalPlayers = participants.length;
+    let highestScore = 0;
+    let highestScorePlayer: string | null = null;
+    let totalScoreAll = 0;
+
+    const regionCounts = new Map<string, { totalScore: number; count: number; advanced: number }>();
+
+    const sortedParticipants = [...participants].sort((a, b) => b.scoreTotal - a.scoreTotal);
+    const topPlayersPoints = sortedParticipants.slice(0, 8).map(p => ({
+      name: p.user?.username || 'Unknown',
+      score: p.scoreTotal
+    }));
+
+    participants.forEach((p) => {
+      totalScoreAll += p.scoreTotal;
+      if (p.scoreTotal > highestScore) {
+        highestScore = p.scoreTotal;
+        highestScorePlayer = p.user?.username || null;
+      }
+      const region = (p.user as any)?.subRegion || p.user?.region || 'Unknown';
+      const rStats = regionCounts.get(region) || { totalScore: 0, count: 0, advanced: 0 };
+      regionCounts.set(region, {
+        totalScore: rStats.totalScore + p.scoreTotal,
+        count: rStats.count + 1,
+        advanced: rStats.advanced + (p.eliminated ? 0 : 1)
+      });
+    });
+
+    const avgScore = totalPlayers > 0 ? (totalScoreAll / totalPlayers).toFixed(1) : 0;
+
+    let bestRegionName = 'None';
+    let bestRegionAvg = 0;
+    const regionStatsArray = [];
+
+    for (const [region, data] of regionCounts.entries()) {
+      const regionAvg = data.count > 0 ? data.totalScore / data.count : 0;
+      regionStatsArray.push({
+        region,
+        avgScore: regionAvg.toFixed(1),
+        players: data.count,
+        advanced: data.advanced
+      });
+      if (regionAvg > bestRegionAvg && data.count > 0) {
+        bestRegionAvg = regionAvg;
+        bestRegionName = region;
+      }
+    }
+    
+    // Sort regions by avgScore descending
+    regionStatsArray.sort((a, b) => parseFloat(b.avgScore) - parseFloat(a.avgScore));
+
+    // 2. Fetch match results
     const matches = await prisma.match.findMany({
       where: { lobby: { round: { phase: { tournamentId: id } } } },
       include: { matchResults: { include: { user: true } } }
     });
 
-    if (!matches.length) {
-      return res.json({ success: true, stats: null, matchCount: 0 });
-    }
+    const unitMap = new Map<string, { count: number; wins: number; iconUrl?: string }>();
+    const traitMap = new Map<string, { name: string; level: string; count: number; iconUrl?: string }>();
+    const placementDensity = [0, 0, 0, 0, 0, 0, 0, 0]; // 1st to 8th
 
-    const unitMap = new Map<string, { count: number; wins: number }>();
-    const traitMap = new Map<string, { name: string; level: string; count: number }>();
     let totalDuration = 0;
     let durationCount = 0;
 
     for (const match of matches) {
+      if (match.matchResults) {
+        match.matchResults.forEach(r => {
+           if (r.placement >= 1 && r.placement <= 8) {
+              placementDensity[r.placement - 1]++;
+            }
+        });
+      }
+
       const data = match.matchData as any;
-      if (!data?.participants) continue;
+      const participants = data?.participants || data?.info?.participants;
+      if (!participants) continue;
 
-      if (data.gameDuration) { totalDuration += data.gameDuration; durationCount++; }
+      if (data.gameDuration || data.info?.gameDuration) { totalDuration += (data.gameDuration || data.info?.gameDuration); durationCount++; }
 
-      for (const p of data.participants) {
+      for (const p of participants) {
         const isWin = p.placement === 1;
 
         if (p.units?.length) {
           for (const unit of p.units) {
-            const name = unit.character_id || unit.name;
+            const name = unit.character_id || unit.characterId || unit.name;
             if (!name) continue;
-            const cur = unitMap.get(name) || { count: 0, wins: 0 };
-            unitMap.set(name, { count: cur.count + 1, wins: cur.wins + (isWin ? 1 : 0) });
+            const cur = unitMap.get(name) || { count: 0, wins: 0, iconUrl: unit.iconUrl };
+            unitMap.set(name, { count: cur.count + 1, wins: cur.wins + (isWin ? 1 : 0), iconUrl: unit.iconUrl || cur.iconUrl });
           }
         }
 
         if (p.traits?.length) {
           for (const trait of p.traits) {
-            if (!trait.name || !trait.num_units) continue;
-            const key = `${trait.name}_${trait.num_units}`;
-            const cur = traitMap.get(key) || { name: trait.name, level: String(trait.num_units), count: 0 };
-            traitMap.set(key, { ...cur, count: cur.count + 1 });
+            const numUnits = trait.num_units || trait.numUnits;
+            if (!trait.name || !numUnits) continue;
+            const key = `${trait.name}_${numUnits}`;
+            const cur = traitMap.get(key) || { name: trait.name, level: String(numUnits), count: 0, iconUrl: trait.iconUrl };
+            traitMap.set(key, { ...cur, count: cur.count + 1, iconUrl: trait.iconUrl || cur.iconUrl });
           }
         }
       }
@@ -363,10 +433,11 @@ router.get('/tournament-statistics/:id', async (req: Request, res: Response) => 
     const topUnits = [...unitMap.entries()]
       .sort((a, b) => b[1].count - a[1].count)
       .slice(0, 8)
-      .map(([name, { count, wins }]) => ({
+      .map(([name, { count, wins, iconUrl }]) => ({
         name: name.replace('TFT14_', '').replace('TFT13_', '').replace(/_/g, ' '),
         count,
         winrate: count > 0 ? Math.round((wins / count) * 100) : 0,
+        iconUrl
       }));
 
     const topTraits = [...traitMap.values()]
@@ -377,8 +448,31 @@ router.get('/tournament-statistics/:id', async (req: Request, res: Response) => 
       ? `${Math.floor(totalDuration / durationCount / 60)}:${String(Math.round((totalDuration / durationCount) % 60)).padStart(2, '0')}`
       : null;
 
-    return res.json({ success: true, matchCount: matches.length, stats: { topUnits, topTraits, avgDuration } });
+    return res.json({ 
+      success: true, 
+      matchCount: matches.length, 
+      stats: { 
+        topUnits, 
+        topTraits, 
+        avgDuration,
+        summary: {
+            totalPlayers,
+            activePlayers,
+            eliminatedPlayers,
+            avgScore,
+            totalScoreAll,
+            highestScore,
+            highestScorePlayer,
+            totalRegions: regionCounts.size,
+            bestRegionName
+        },
+        placementDensity,
+        topPlayersPoints,
+        regionStats: regionStatsArray
+      } 
+    });
   } catch (err: any) {
+    console.error('[DevTools] error:', err.message);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -529,6 +623,10 @@ router.post('/automation/seed-env', async (req: Request, res: Response) => {
         }
       });
 
+      // Bắt buộc khởi tạo Escrow cho giải được tạo từ DevTools để test luồng
+      const EscrowService = require('../services/EscrowService').default;
+      await EscrowService.recalculateTournamentEscrow(tour.id, {});
+
       // Seed requested number of players (use real dbUsers first, pad with dummy users)
       const allUsers = [];
       for (let i = 0; i < numPlayers; i++) {
@@ -574,7 +672,8 @@ router.post('/automation/seed-env', async (req: Request, res: Response) => {
         data: { phaseId: phase1.id, roundNumber: 1, status: 'pending', startTime: new Date(Date.now() + 6 * 60 * 1000) }
       });
 
-      // Automatically seed a Phase 2 (Checkmate Finals)
+      // Automatically seed a Phase 2 (Checkmate Finals) - DISABLED FOR 1 PHASE TESTING
+      /*
       const phase2 = await prisma.phase.create({
         data: {
           tournamentId: tour.id,
@@ -589,6 +688,7 @@ router.post('/automation/seed-env', async (req: Request, res: Response) => {
           pointsMapping: { "1": 8, "2": 7, "3": 6, "4": 5, "5": 4, "6": 3, "7": 2, "8": 1 }
         }
       });
+      */
       // automatically create rounds for the groups
       for (let g = 2; g <= numberOfGroups; g++) {
         await prisma.round.create({
@@ -610,6 +710,7 @@ router.post('/automation/seed-env', async (req: Request, res: Response) => {
       });
     }
   } catch (err: any) {
+    console.error('[DevTools] error:', err.message);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -620,6 +721,13 @@ router.post('/automation/seed-env', async (req: Request, res: Response) => {
 router.post('/automation/clear-env', async (req: Request, res: Response) => {
   try {
     const { prisma } = require('../services/prisma');
+    
+    // Clear new Escrow and Financial records first to prevent foreign key constraint violations
+    await prisma.transaction.deleteMany({});
+    await prisma.reward.deleteMany({});
+    await prisma.escrow.deleteMany({});
+    
+    // Clear Core Tournament logic
     await prisma.playerMatchSummary.deleteMany({});
     await prisma.userTournamentSummary.deleteMany({});
     await prisma.roundOutcome.deleteMany({});
@@ -636,6 +744,7 @@ router.post('/automation/clear-env', async (req: Request, res: Response) => {
     await prisma.tournament.deleteMany({});
     return res.json({ success: true, message: "All Tournaments and MiniTours cleared" });
   } catch (err: any) {
+    console.error('[DevTools] error:', err.message);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -669,6 +778,8 @@ router.post('/automation/ready-toggle', async (req: Request, res: Response) => {
 
     return res.json({ success: true, message: "No WAITING lobby found to ready" });
   } catch (err: any) {
+    console.error('[DevTools] ready-toggle error:', err.message, err.stack);
+    console.error('[DevTools] error:', err.message);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -728,6 +839,14 @@ router.post('/automation/auto-start', async (req: Request, res: Response) => {
       const tournamentIds = new Set<string>();
 
       for (const lobby of targetLobbies) {
+        // Enforce strict Escrow check even in DEV auto-start
+        try {
+          const EscrowService = require('../services/EscrowService').default;
+          await EscrowService.assertTournamentCanStart(lobby.round.phase.tournamentId);
+        } catch (err: any) {
+          throw new Error(`[Escrow Blocked] Không thể start Lobby ${lobby.id}: ${err.message}`);
+        }
+
         await prisma.lobby.update({
           where: { id: lobby.id },
           data: { state: 'PLAYING' }
@@ -774,6 +893,7 @@ router.post('/automation/auto-start', async (req: Request, res: Response) => {
       });
     }
   } catch (err: any) {
+    console.error('[DevTools] error:', err.message);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -1070,6 +1190,8 @@ router.post('/automation/simulate-match', async (req: Request, res: Response) =>
       });
     }
   } catch (err: any) {
+    console.error('[DevTools] simulate-match error:', err.message, err.stack);
+    console.error('[DevTools] error:', err.message);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -1098,6 +1220,7 @@ router.post('/automation/assign-lobby', async (req: Request, res: Response) => {
     await RoundService.autoAdvance(targetRound.id);
     return res.json({ success: true, message: "Lobbies assigned / round advanced for " + targetRound.roundNumber, roundId: targetRound.id });
   } catch (err: any) {
+    console.error('[DevTools] error:', err.message);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -1133,6 +1256,7 @@ router.post('/automation/pre-assign-groups', async (req: Request, res: Response)
 
     return res.json({ success: true, ...result, tournamentId });
   } catch (err: any) {
+    console.error('[DevTools] error:', err.message);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -1161,6 +1285,7 @@ router.post('/automation/advance-round', async (req: Request, res: Response) => 
     await RoundService.autoAdvance(targetRound.id);
     return res.json({ success: true, message: "Auto advance triggered for round " + targetRound.roundNumber });
   } catch (err: any) {
+    console.error('[DevTools] error:', err.message);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -1198,6 +1323,14 @@ router.post('/escrow/simulate-webhook', async (req: Request, res: Response) => {
       include: { escrow: { include: { tournament: { select: { id: true, escrowStatus: true } } } } },
     });
 
+    // Emit real-time update so tournament detail page reflects the webhook result
+    if (tx?.escrow?.tournament?.id) {
+      const io = (global as any).io;
+      if (io) {
+        io.to(`tournament:${tx.escrow.tournament.id}`).emit('tournament_update', { type: 'escrow_webhook' });
+      }
+    }
+
     return res.json({
       success: true,
       message: `Webhook '${eventType}' processed for transaction ${transactionId}`,
@@ -1205,6 +1338,7 @@ router.post('/escrow/simulate-webhook', async (req: Request, res: Response) => {
       escrow: tx?.escrow ? { status: tx.escrow.status, fundedAmount: tx.escrow.fundedAmount, releasedAmount: tx.escrow.releasedAmount } : null,
     });
   } catch (err: any) {
+    console.error('[DevTools] error:', err.message);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -1232,6 +1366,12 @@ router.post('/escrow/assert-start', async (req: Request, res: Response) => {
       where: { tournamentId },
       select: { status: true, fundedAmount: true, requiredAmount: true },
     });
+
+    // Emit real-time update so tournament detail page reflects the lock
+    const io = (global as any).io;
+    if (io) {
+      io.to(`tournament:${tournamentId}`).emit('tournament_update', { type: 'escrow_locked' });
+    }
 
     return res.json({
       success: true,

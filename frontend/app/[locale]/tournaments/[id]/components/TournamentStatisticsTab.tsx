@@ -8,6 +8,7 @@ import api from '@/app/lib/apiConfig';
 import { useSocket } from '@/components/SocketProvider';
 import { Badge } from '@/components/ui/badge';
 import { useTranslations } from "next-intl";
+import { ALL_SUB_REGIONS } from "@/app/config/regions";
 
 const getUnitImgUrl = (name: string, payload?: any) => {
   if (payload?.iconUrl) return payload.iconUrl;
@@ -17,11 +18,15 @@ const getUnitImgUrl = (name: string, payload?: any) => {
 
 const getTraitImgUrl = (name: string, payload?: any) => {
   if (payload?.iconUrl) return payload.iconUrl;
-  const cleanName = name.toLowerCase().replace(/['\s.]/g, '').replace('set14_', '14_').replace('set13_', '13_');
+  const cleanName = name.toLowerCase().replace(/['\s.]/g, '').replace('tft16_', '16_').replace('set16_', '16_').replace('tft14_', '14_').replace('set14_', '14_').replace('tft13_', '13_').replace('set13_', '13_');
   return `https://raw.communitydragon.org/latest/game/assets/traits/trait_icon_${cleanName}.png`;
 };
 
-export function TournamentStatisticsTab({ tournamentId }: { tournamentId: string }) {
+const getSubRegionConfig = (regionStr: string) => {
+  return ALL_SUB_REGIONS.find(sr => sr.id.toUpperCase() === regionStr?.toUpperCase());
+};
+
+export function TournamentStatisticsTab({ tournamentId, hideGeneralStats = false }: { tournamentId: string, hideGeneralStats?: boolean }) {
   const t = useTranslations("Common");
   const [stats, setStats] = useState<any>(null);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -83,6 +88,28 @@ export function TournamentStatisticsTab({ tournamentId }: { tournamentId: string
     );
   };
 
+  const renderCustomizedTraitLabel = (props: any) => {
+    const { cx, cy, midAngle, innerRadius, outerRadius, payload } = props;
+    const RADIAN = Math.PI / 180;
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+    const imgUrl = getTraitImgUrl(payload.name, payload);
+    
+    return (
+      <g>
+        <image 
+          href={imgUrl} 
+          x={x - 8} 
+          y={y - 8} 
+          height="16" 
+          width="16" 
+          style={{ filter: 'invert(1) opacity(0.9) drop-shadow(0px 0px 2px rgba(0,0,0,0.8))' }} 
+        />
+      </g>
+    );
+  };
+
   if (statsLoading) {
     return (
       <Card className="bg-card/40 backdrop-blur-xl border border-primary/10 shadow-2xl h-64 flex flex-col items-center justify-center">
@@ -92,7 +119,7 @@ export function TournamentStatisticsTab({ tournamentId }: { tournamentId: string
     );
   }
 
-  if (!stats || (stats.topUnits.length === 0 && stats.topTraits.length === 0)) {
+  if (!stats) {
     return (
       <Card className="bg-gradient-to-br from-card/60 to-muted/20 backdrop-blur-xl border border-white/5 shadow-2xl relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/5 to-transparent skeleton-shimmer" />
@@ -108,12 +135,169 @@ export function TournamentStatisticsTab({ tournamentId }: { tournamentId: string
   }
 
   return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-      <Card className="bg-gradient-to-br from-card/80 to-card/30 backdrop-blur-xl border-primary/20 shadow-xl lg:col-span-2 overflow-hidden relative group transition-all duration-500 hover:shadow-primary/10">
-        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/30 via-primary to-primary/30 opacity-50" />
-        <CardHeader className="bg-muted/10 pb-4 border-b border-primary/10">
-          <CardTitle className="text-xl flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-primary" />{t("most_played_units")}</CardTitle>
+    <div className="space-y-6">
+      {/* SUMMARY TOP CARDS */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Card 1: Người Chơi */}
+        <Card className="bg-card/40 backdrop-blur-md border border-primary/10 shadow-sm relative overflow-hidden group hover:border-primary/50 transition-colors">
+          <CardContent className="p-4 pt-5">
+            <div className="flex justify-between items-start">
+              <div className="space-y-2 w-full">
+                <p className="text-xs font-bold text-blue-400 uppercase tracking-widest">{t("players") || "NGƯỜI CHƠI"}</p>
+                <p className="text-3xl font-extrabold font-mono tracking-tighter text-white">{stats.summary?.totalPlayers || 0}</p>
+                <div className="flex gap-2 text-[10px] uppercase font-bold tracking-wider pt-2">
+                   <Badge variant="outline" className="text-emerald-400 bg-emerald-500/10 border-emerald-500/20">{stats.summary?.activePlayers || 0} {t("active") || "tiếp"}</Badge>
+                   <Badge variant="outline" className="text-red-400 bg-red-500/10 border-red-500/20">{stats.summary?.eliminatedPlayers || 0} {t("eliminated") || "loại"}</Badge>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Card 2: Điểm Trung Bình */}
+        <Card className="bg-card/40 backdrop-blur-md border border-primary/10 shadow-sm relative overflow-hidden group hover:border-primary/50 transition-colors">
+          <CardContent className="p-4 pt-5">
+            <div className="flex justify-between items-start">
+              <div className="space-y-2 w-full">
+                <p className="text-xs font-bold text-emerald-400 uppercase tracking-widest">{t("avg_score") || "ĐIỂM TRUNG BÌNH"}</p>
+                <p className="text-3xl font-extrabold font-mono tracking-tighter text-white">{stats.summary?.avgScore || 0}</p>
+                <div className="text-[11px] text-muted-foreground pt-2">
+                   <span className="font-semibold text-white/70">{stats.summary?.totalScoreAll || 0}</span> {t("total_points") || "tổng điểm"}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Card 3: Điểm Cao Nhất */}
+        <Card className="bg-card/40 backdrop-blur-md border border-primary/10 shadow-sm relative overflow-hidden group hover:border-primary/50 transition-colors">
+          <CardContent className="p-4 pt-5">
+            <div className="flex justify-between items-start">
+              <div className="space-y-2 w-full">
+                <p className="text-xs font-bold text-yellow-400 uppercase tracking-widest">{t("highest_score") || "ĐIỂM CAO NHẤT"}</p>
+                <p className="text-3xl font-extrabold font-mono tracking-tighter text-white">{stats.summary?.highestScore || 0}</p>
+                <div className="text-[11px] text-muted-foreground pt-2">
+                   {stats.summary?.highestScorePlayer || "N/A"}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Card 4: Khu Vực */}
+        <Card className="bg-card/40 backdrop-blur-md border border-primary/10 shadow-sm relative overflow-hidden group hover:border-primary/50 transition-colors">
+          <CardContent className="p-4 pt-5">
+            <div className="flex justify-between items-start">
+              <div className="space-y-2 w-full">
+                <p className="text-xs font-bold text-purple-400 uppercase tracking-widest">{t("region") || "KHU VỰC"}</p>
+                <p className="text-3xl font-extrabold font-mono tracking-tighter text-white">{stats.summary?.totalRegions || 0}</p>
+                <div className="text-[11px] text-muted-foreground pt-2">
+                   <span className="font-semibold text-white/70">{getSubRegionConfig(stats.summary?.bestRegionName)?.name || stats.summary?.bestRegionName || "N/A"}</span> {t("leading") || "dẫn đầu"}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {stats.topUnits.length === 0 && stats.topTraits.length === 0 ? (
+        <Card className="bg-card/40 border border-white/5 shadow-md mt-6">
+          <CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+            <PieChartIcon className="h-10 w-10 opacity-30 mb-4" />
+            <p>{t("matches_need_to_be_played_in_this_tourna_desc")}</p>
+          </CardContent>
+        </Card>
+      ) : (
+      <>
+      {/* MIDDLE CHARTS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Placement Density */}
+        <Card className="bg-card/40 backdrop-blur-md border border-white/5 shadow-sm">
+          <CardContent className="p-5">
+            <h3 className="font-bold text-sm text-blue-300 mb-1 flex items-center gap-2">
+              <PieChartIcon className="w-4 h-4" /> Mật độ vị trí
+            </h3>
+            <p className="text-xs text-muted-foreground mb-6">Mật độ thường xuyên mỗi vị trí diễn ra trong tất cả các trận</p>
+            <div className="h-[200px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={stats.placementDensity?.map((val: number, idx: number) => ({ name: `#${idx + 1}`, value: val })) || []}>
+                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                   <XAxis dataKey="name" stroke="rgba(255,255,255,0.4)" fontSize={11} tickLine={false} axisLine={false} />
+                   <YAxis stroke="rgba(255,255,255,0.4)" fontSize={11} tickLine={false} axisLine={false} />
+                   <RechartsTooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ backgroundColor: 'rgba(9, 9, 11, 0.95)', borderColor: 'rgba(255,255,255,0.1)' }} />
+                   <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Score Details */}
+        <Card className="bg-card/40 backdrop-blur-md border border-white/5 shadow-sm">
+          <CardContent className="p-5">
+            <h3 className="font-bold text-sm text-emerald-300 mb-1 flex items-center gap-2">
+              <TrendingUp className="w-4 h-4" /> Chi tiết điểm số
+            </h3>
+            <p className="text-xs text-muted-foreground mb-6">Điểm số của các người chơi đứng top</p>
+            <div className="h-[200px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={stats.topPlayersPoints?.map((p: any) => ({ name: p.name.substring(0, 8), value: p.score })) || []}>
+                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                   <XAxis dataKey="name" stroke="rgba(255,255,255,0.4)" fontSize={11} tickLine={false} axisLine={false} />
+                   <YAxis stroke="rgba(255,255,255,0.4)" fontSize={11} tickLine={false} axisLine={false} />
+                   <RechartsTooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ backgroundColor: 'rgba(9, 9, 11, 0.95)', borderColor: 'rgba(255,255,255,0.1)' }} />
+                   <Bar dataKey="value" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* REGION PERFORMANCE (FULL WIDTH) */}
+      {stats.regionStats && stats.regionStats.length > 0 && (
+        <Card className="bg-card/40 backdrop-blur-md border border-white/5 shadow-sm">
+          <CardContent className="p-5">
+            <h3 className="font-bold text-sm text-purple-300 mb-1 flex items-center gap-2">
+              <Sword className="w-4 h-4" /> Hiệu suất khu vực
+            </h3>
+            <p className="text-xs text-muted-foreground mb-6">Điểm trung bình và tỷ lệ đi tiếp theo khu vực</p>
+            <div className="space-y-4">
+              {stats.regionStats.slice(0, 3).map((r: any, idx: number) => {
+                const config = getSubRegionConfig(r.region);
+                return (
+                <div key={idx} className="flex flex-col space-y-2">
+                  <div className="flex justify-between items-center text-xs">
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-center w-5 h-5 rounded-full bg-purple-500/20 text-xs">
+                        {config?.flag || "🌐"}
+                      </div>
+                      <span className="font-bold text-white">{config?.name || r.region}</span>
+                      <span className="text-muted-foreground">{r.players} {t("players")}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="font-bold text-white">{r.avgScore} {t("avg_pts")}</span>
+                      <Badge variant="outline" className="text-emerald-400 bg-emerald-500/10 border-emerald-500/20 text-[10px]">{r.advanced}/{r.players} {t("adv") || "tiếp"}</Badge>
+                    </div>
+                  </div>
+                  <div className="h-2 w-full bg-black/60 rounded-full overflow-hidden border border-white/5">
+                    <div className="h-full bg-purple-500 rounded-full" style={{ width: `${Math.min(100, (r.avgScore / (stats.summary?.highestScore || 10)) * 100)}%` }} />
+                  </div>
+                </div>
+              )})}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* BOTTOM WIDGETS */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <Card className="bg-card/40 backdrop-blur-md border border-white/5 shadow-sm lg:col-span-2 overflow-hidden relative group">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/30 via-primary to-primary/30 opacity-50" />
+          <CardHeader className="bg-black/20 pb-4 border-b border-primary/10">
+            <CardTitle className="text-xl flex items-center gap-2 text-white">
+              <TrendingUp className="h-5 w-5 text-primary" />{t("most_played_units")}
+            </CardTitle>
         </CardHeader>
         <CardContent className="h-[340px] w-full pt-6">
           <ResponsiveContainer width="100%" height="100%">
@@ -149,7 +333,7 @@ export function TournamentStatisticsTab({ tournamentId }: { tournamentId: string
               <ResponsiveContainer width="100%" height="90%">
                 <RechartsPieChart>
                   <Pie
-                    data={stats.topTraits.map((t: any) => ({ ...t, formattedName: t.formattedName || t.name.replace('Set14_', '').replace('Set13_', '').replace(/_/g, ' ') }))}
+                    data={stats.topTraits.map((t: any) => ({ ...t, formattedName: t.formattedName || t.name.replace(/TFT16_|TFT14_|TFT13_|Set16_|Set14_|Set13_/gi, '').replace(/_/g, ' ') }))}
                     cx="50%" 
                     cy="50%" 
                     innerRadius={30} 
@@ -159,6 +343,8 @@ export function TournamentStatisticsTab({ tournamentId }: { tournamentId: string
                     nameKey="formattedName"
                     stroke="rgba(0,0,0,0.5)"
                     strokeWidth={2}
+                    labelLine={false}
+                    label={renderCustomizedTraitLabel}
                   >
                     {stats.topTraits.map((entry: any, index: number) => {
                       const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f43f5e', '#6366f1'];
@@ -177,7 +363,7 @@ export function TournamentStatisticsTab({ tournamentId }: { tournamentId: string
             </div>
             <div className="w-[50%] overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
               {stats.topTraits.slice(0, 8).map((t: any, index: number) => {
-                 const tName = t.formattedName || t.name.replace('Set14_', '').replace('Set13_', '').replace(/_/g, ' ');
+                 const tName = t.formattedName || t.name.replace(/TFT16_|TFT14_|TFT13_|Set16_|Set14_|Set13_/gi, '').replace(/_/g, ' ');
                  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f43f5e', '#6366f1'];
                  const color = COLORS[index % COLORS.length];
                  return (
@@ -212,6 +398,9 @@ export function TournamentStatisticsTab({ tournamentId }: { tournamentId: string
           )}
         </CardContent>
       </Card>
+      </div>
+      </>
+      )}
     </div>
   );
 }

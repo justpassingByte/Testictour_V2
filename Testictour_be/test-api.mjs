@@ -1,16 +1,1 @@
-import fetch from 'node-fetch';
-
-async function test() {
-  try {
-    const res = await fetch('http://localhost:4000/api/dev/test-riot-match', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ gameName: 'Em Chè đi CKTG', tagLine: '3007', region: 'APAC' })
-    });
-    const data = await res.json();
-    console.log(JSON.stringify(data, null, 2));
-  } catch (e) {
-    console.error(e);
-  }
-}
-test();
+import { PrismaClient } from '@prisma/client'; const prisma = new PrismaClient(); async function main() { const m = await prisma.match.findFirst({ orderBy: { fetchedAt: 'desc' }, include: { lobby: { include: { round: { include: { phase: true } } } } } }); if (!m) { console.log('No match'); return; } const tid = m.lobby.round.phase.tournamentId; console.log('Tournament:', tid); const r = await fetch('http://localhost:4000/api/dev/tournament-statistics/' + tid); const j = await r.json(); console.log(JSON.stringify(j.stats, null, 2)); } main().finally(() => prisma.$disconnect());

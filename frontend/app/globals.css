@@ -37,8 +37,8 @@
     --eliminated: 0 84% 60%;
     --advanced: 43 90% 55%;
 
-    --font-heading: var(--font-cinzel), serif;
-    --font-sans: var(--font-space), sans-serif;
+    --font-heading: var(--font-outfit), sans-serif;
+    --font-sans: var(--font-inter), sans-serif;
   }
 
   .dark {

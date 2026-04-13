@@ -16,13 +16,13 @@ function MiniBar({ data, labels, color, maxOverride }: { data: number[]; labels:
   return (
     <div className="flex items-end gap-1 h-24">
       {data.map((v, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center gap-0.5 group">
-          <span className="text-[8px] font-medium opacity-0 group-hover:opacity-100 transition-opacity" style={{ color }}>{v}</span>
+        <div key={i} className="flex-1 flex flex-col justify-end items-center gap-0.5 group h-full">
+          <span className="text-[8px] font-medium opacity-0 flex-shrink-0 group-hover:opacity-100 transition-opacity" style={{ color }}>{v}</span>
           <div
             className="w-full rounded-t transition-all hover:opacity-90 cursor-default"
             style={{ height: `${Math.max((v / max) * 100, 3)}%`, backgroundColor: color, opacity: 0.65 }}
           />
-          <span className="text-[8px] text-muted-foreground truncate max-w-full">{labels[i]}</span>
+          <span className="text-[8px] flex-shrink-0 text-muted-foreground truncate max-w-full">{labels[i]}</span>
         </div>
       ))}
     </div>

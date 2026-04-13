@@ -75,4 +75,25 @@ export class AuthClientService {
       return null;
     }
   }
-} 
+
+  static async forgotPassword(email: string, locale?: string): Promise<{ message: string }> {
+    try {
+      const response = await api.post('/auth/forgot-password', { email, locale });
+      return response.data;
+    } catch (err: any) {
+      if (err.response?.status === 429) {
+        throw new Error('Too many reset requests. Please try again later.');
+      }
+      throw new Error(err.response?.data?.error || 'Failed to send reset email.');
+    }
+  }
+
+  static async resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
+    try {
+      const response = await api.post('/auth/reset-password', { token, newPassword });
+      return response.data;
+    } catch (err: any) {
+      throw new Error(err.response?.data?.error || 'Failed to reset password.');
+    }
+  }
+} 

@@ -42,7 +42,7 @@ import { useTranslations } from "next-intl";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import SubscriptionTab from "./SubscriptionTab"
 import { Save } from "lucide-react"
-
+import { toast } from "@/components/ui/use-toast"
 // --- ASYNC COMPONENTS ---
 
 export function PartnerHeader({ partnerData }: { partnerData: PartnerData | null }) {
@@ -493,12 +493,24 @@ export function SettingsTab({ partnerData }: { partnerData?: PartnerData }) {
       });
 
       if (response.status === 200) {
-        console.log('Settings saved successfully');
+        toast({
+          title: "Settings Saved",
+          description: "Your partner settings have been updated.",
+        });
       } else {
-        console.error('Failed to save settings');
+        toast({
+          title: "Update Failed",
+          description: "Failed to save settings. Please try again.",
+          variant: "destructive"
+        });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving settings:', error);
+      toast({
+        title: "Error",
+        description: error?.response?.data?.message || "An error occurred while saving.",
+        variant: "destructive"
+      });
     }
   };
 

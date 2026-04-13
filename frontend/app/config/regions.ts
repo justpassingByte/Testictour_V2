@@ -92,3 +92,9 @@ export function getMajorRegion(id: string): MajorRegion | undefined {
 export const ALL_SUB_REGIONS: SubRegion[] = GLOBAL_REGIONS.flatMap(
   (r) => r.subRegions
 );
+
+/** Get a SubRegion object by its ID */
+export function getSubRegionConfig(id: string): SubRegion | undefined {
+  const upper = id.toUpperCase();
+  return ALL_SUB_REGIONS.find((sr) => sr.id.toUpperCase() === upper);
+}

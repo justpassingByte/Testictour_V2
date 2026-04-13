@@ -1,0 +1,1 @@
+import { PrismaClient } from '@prisma/client'; const prisma = new PrismaClient(); async function main() { await prisma.user.updateMany({ where: { region: 'sea' }, data: { region: 'vn2' } }); console.log('Fixed regions to vn2'); } main().finally(() => prisma.$disconnect());

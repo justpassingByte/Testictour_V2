@@ -52,7 +52,7 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
             <div className="flex items-center">
               <Wallet className="mr-2 h-4 w-4 text-muted-foreground" />
               <span className="text-muted-foreground">{t("budget")}:</span>
-              <span className="ml-auto font-medium">{formatCurrency(tournament.entryFee * (tournament.registered || 0)*(1-(tournament.hostFeePercent || 0)))}</span>
+              <span className="ml-auto font-medium">{formatCurrency(tournament.budget || 0)}</span>
             </div>
           </div>
 
@@ -83,9 +83,13 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
         </CardHeader>
         <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           {prizeRanks.map(rank => {
-            const totalPrizePool = tournament.entryFee * (tournament.registered || 0) * (1 - (tournament.hostFeePercent || 0));
-            const prizePercentage = tournament.prizeStructure?.[rank];
-            const prizeAmount = prizePercentage !== undefined ? totalPrizePool * prizePercentage : undefined;
+            const totalPrizePool = tournament.budget || 0;
+            const isArray = Array.isArray(tournament.prizeStructure);
+            const prizePercentage = isArray 
+              ? tournament.prizeStructure[parseInt(rank) - 1] 
+              : tournament.prizeStructure?.[rank];
+            const normalizedPercentage = prizePercentage > 1 ? prizePercentage / 100 : prizePercentage;
+            const prizeAmount = prizePercentage !== undefined ? totalPrizePool * normalizedPercentage : undefined;
 
             if (prizeAmount === undefined) return null;
 

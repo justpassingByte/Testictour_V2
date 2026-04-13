@@ -47,7 +47,10 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
     registrationDeadline: "",
     image: "",
     isCommunityMode: false,
+    discordUrl: "",
   })
+  
+  const [sponsors, setSponsors] = useState<{name: string; url: string; file?: File}[]>([])
   
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [imageFile, setImageFile] = useState<File | null>(null)
@@ -141,11 +144,37 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
         roundsTotal: phases.reduce((sum, p) => sum + p.numberOfRounds, 0),
         config: { phases: phaseConfigs },
         isCommunityMode: form.isCommunityMode,
+        discordUrl: form.discordUrl,
+        sponsors: await Promise.all(sponsors.map(async (s) => {
+          if (s.file) {
+            // Simulated upload because we don't have an S3 upload route built here.
+            // Normally this would be a multipart/form-data upload or presigned URL.
+            // We just use a base64 string for simplicity as image upload wasn't explicitly implemented on this tab yet (imagePreview was used directly).
+            return { name: s.name, url: "" }; // Base64 could be used, but since we map `imagePreview` directly for main image, we will just pass the preview-like string below if we wanted to. However, we'll implement simple base64 reading below!
+          }
+          return { name: s.name, url: s.url };
+        })).then(async sList => {
+          // Add real base64 reading loop
+          const resolvedSponsors = [];
+          for (let i = 0; i < sponsors.length; i++) {
+             let finalUrl = sponsors[i].url;
+             if (sponsors[i].file) {
+                const reader = new FileReader();
+                finalUrl = await new Promise<string>((resolve) => {
+                   reader.onloadend = () => resolve(reader.result as string);
+                   reader.readAsDataURL(sponsors[i].file!);
+                });
+             }
+             resolvedSponsors.push({ name: sponsors[i].name, url: finalUrl });
+          }
+          return resolvedSponsors;
+        })
       })
 
       toast({ title: "Tournament Created!", description: `${form.name} has been created successfully.` })
       setCreateOpen(false)
-      setForm({ name: "", description: "", region: "APAC", maxPlayers: 32, entryFee: 0, hostFeePercent: 0.1, startTime: "", registrationDeadline: "", image: "", isCommunityMode: false })
+      setForm({ name: "", description: "", region: "APAC", maxPlayers: 32, entryFee: 0, hostFeePercent: 0.1, startTime: "", registrationDeadline: "", image: "", isCommunityMode: false, discordUrl: "" })
+      setSponsors([])
       setPhases([{ name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "top_n_scores", advancementValue: 4 }])
       setImageFile(null)
       setImagePreview(null)
@@ -389,7 +418,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
               </div>
               <div className="space-y-2">
                 <Label>Host Fee (%)</Label>
-                <Input type="number" min={0} max={1} step={0.01} value={form.hostFeePercent} onChange={(e) => setForm(p => ({ ...p, hostFeePercent: parseFloat(e.target.value) }))} />
+                <Input type="number" min={0} max={10} step={0.1} value={(form.hostFeePercent * 100).toFixed(1).replace(/\.0$/, '')} onChange={(e) => setForm(p => ({ ...p, hostFeePercent: parseFloat(e.target.value) / 100 }))} />
               </div>
             </div>
             {form.entryFee > 0 && (
@@ -400,6 +429,83 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                 {" "}(When 100% full capacity)
               </div>
             )}
+
+            {/* Dynamic Community & Sponsors Config */}
+            <div className="border border-white/10 rounded-lg p-0">
+               <div className="p-3 border-b border-white/10 bg-black/20 flex flex-col sm:flex-row items-center justify-between">
+                 <div className="mb-2 sm:mb-0">
+                    <h3 className="font-bold text-violet-400">Community & Sponsors</h3>
+                    <p className="text-xs text-muted-foreground">Discord server and dynamic sponsor branding shown on banner.</p>
+                 </div>
+               </div>
+               <div className="p-4 space-y-4">
+                 <div className="space-y-2">
+                   <Label>Discord Server URL</Label>
+                   <Input placeholder="https://discord.gg/yourserver" value={form.discordUrl} onChange={(e) => setForm(p => ({ ...p, discordUrl: e.target.value }))} />
+                 </div>
+
+                 <div className="space-y-2 pt-2">
+                   <div className="flex items-center justify-between">
+                      <Label>Sponsor Logos</Label>
+                      <Button type="button" variant="secondary" size="sm" onClick={() => setSponsors(s => [...s, {name: '', url: ''}])}>
+                        <Plus className="mr-1 h-3 w-3" /> Add Sponsor
+                      </Button>
+                   </div>
+                   {sponsors.map((sponsor, index) => (
+                     <div key={index} className="flex gap-2 items-center p-3 border border-white/10 bg-white/5 rounded-md">
+                        <div className="flex-1 space-y-3">
+                          <Input 
+                            placeholder="Sponsor Name (e.g. VNG, NVIDIA)" 
+                            value={sponsor.name} 
+                            onChange={(e) => {
+                              const newS = [...sponsors];
+                              newS[index].name = e.target.value;
+                              setSponsors(newS);
+                            }} 
+                            className="bg-black/40 h-8" 
+                          />
+                          <div className="flex gap-2">
+                             <Input 
+                               placeholder="External URL (or upload ->)" 
+                               value={sponsor.url} 
+                               disabled={!!sponsor.file}
+                               onChange={(e) => {
+                                 const newS = [...sponsors];
+                                 newS[index].url = e.target.value;
+                                 setSponsors(newS);
+                               }} 
+                               className="bg-black/40 h-8 text-xs flex-1" 
+                             />
+                             <div className="relative overflow-hidden w-24 shrink-0 rounded border border-white/10 bg-white/5 hover:bg-white/10 transition-colors flex items-center justify-center cursor-pointer h-8">
+                                <span className="text-[10px] font-bold text-violet-300">
+                                  {sponsor.file ? 'FILE ADDED' : 'UPLOAD'}
+                                </span>
+                                <input 
+                                  type="file" 
+                                  accept="image/*" 
+                                  className="absolute inset-0 opacity-0 cursor-pointer"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      const newS = [...sponsors];
+                                      newS[index].file = file;
+                                      newS[index].url = file.name;
+                                      setSponsors(newS);
+                                    }
+                                  }}
+                                />
+                             </div>
+                          </div>
+                        </div>
+                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-500 hover:bg-red-500/10" onClick={() => setSponsors(s => s.filter((_, i) => i !== index))}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                     </div>
+                   ))}
+                   {sponsors.length === 0 && <div className="text-xs text-muted-foreground italic px-1">No custom sponsors added.</div>}
+                 </div>
+               </div>
+            </div>
 
             {/* Config Phases (from admin) */}
             <div className="border border-white/10 rounded-lg p-0">

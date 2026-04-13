@@ -11,8 +11,9 @@ import registerNotificationSocket from './sockets/notifications';
 import attachUser from './middlewares/attachUser';
 // Redis/BullMQ cron jobs disabled — re-enable when Redis is available
 // import './jobs/autoTournamentCron';
-// import './jobs/autoRoundAdvanceCron';
-import { REDIS_ENABLED } from './lib/queues';
+import './jobs/autoRoundAdvanceCron';
+import { REDIS_ENABLED, lobbyTimerQueue } from './lib/queues';
+import { initLobbyTimerQueue } from './services/LobbyTimerService';
 import { prisma } from './services/prisma';
 import logger from './utils/logger';
 import path from 'path';
@@ -33,6 +34,66 @@ const io = new SocketIOServer(server, {
 });
 
 (global as any).io = io;
+
+// Initialize LobbyTimerService queue in main process (needed for forceStart, toggleReady)
+if (REDIS_ENABLED && lobbyTimerQueue) {
+  initLobbyTimerQueue(lobbyTimerQueue);
+  logger.info('LobbyTimerService queue initialized in main process.');
+
+  // ── Inline BullMQ workers for dev (no separate worker process needed) ────
+  const { Worker } = require('bullmq');
+  const { redisConnectionOptions, autoAdvanceRoundQueue, fetchMatchDataQueue } = require('./lib/queues');
+  const LobbyStateService = require('./services/LobbyStateService').default;
+  const RoundService = require('./services/RoundService').default;
+
+  // Lobby Timer Worker — drives all lobby phase transitions
+  const lobbyTimerWorker = new Worker(
+    'lobbyTimerQueue',
+    async (job: any) => {
+      const { lobbyId, targetState, fromState, jobType } = job.data;
+      if (jobType === 'autoResolve') {
+        logger.info(`LobbyTimerWorker: auto-resolving ADMIN_INTERVENTION for lobby ${lobbyId}`);
+        await LobbyStateService.autoResolveIntervention(lobbyId);
+      } else {
+        logger.info(`LobbyTimerWorker: transitioning lobby ${lobbyId} ${fromState} → ${targetState}`);
+        await LobbyStateService.transitionPhase(lobbyId, fromState, targetState);
+      }
+      // Emit updated state
+      try {
+        const snapshot = await LobbyStateService.getLobbyState(lobbyId).catch(() => null);
+        if (snapshot) io.to(`lobby:${lobbyId}`).emit('lobby:state_update', snapshot);
+      } catch (_) {}
+    },
+    { connection: redisConnectionOptions, concurrency: 20 }
+  );
+  lobbyTimerWorker.on('failed', (job: any, err: any) => logger.error(`LobbyTimerWorker failed: ${err.message}`));
+  logger.info('LobbyTimerWorker started inline.');
+
+  // Auto Advance Round Worker
+  const autoAdvanceWorker = new Worker(
+    'autoAdvanceRoundQueue',
+    async (job: any) => {
+      const { roundId } = job.data;
+      logger.info(`AutoAdvanceRoundWorker: Processing round ${roundId}`);
+      return RoundService.autoAdvance(roundId);
+    },
+    { connection: redisConnectionOptions, concurrency: 5 }
+  );
+  autoAdvanceWorker.on('failed', (job: any, err: any) => logger.error(`AutoAdvanceRoundWorker failed: ${err.message}`));
+  logger.info('AutoAdvanceRoundWorker started inline.');
+
+  // Fetch Match Data Worker
+  const { io: ClientIO } = require('socket.io-client');
+  const ioClient = ClientIO(process.env.BACKEND_SERVICE_URL || `http://localhost:${process.env.PORT || 4000}`);
+  const fetchMatchDataFn = require('./jobs/fetchMatchData').default;
+  const matchDataWorker = new Worker(
+    'fetchMatchDataQueue',
+    async (job: any) => fetchMatchDataFn(job, ioClient),
+    { connection: redisConnectionOptions, concurrency: 5 }
+  );
+  matchDataWorker.on('failed', (job: any, err: any) => logger.error(`MatchDataWorker failed: ${err.message}`));
+  logger.info('MatchDataWorker started inline.');
+}
 
 registerTournamentSocket(io);
 registerNotificationSocket(io);
@@ -98,7 +159,8 @@ app.use(cors({
   credentials: true,
 }));
 app.use('/api/webhooks/payments/stripe', express.raw({ type: 'application/json' }));
-app.use(express.json()); // Re-enable JSON body parsing
+app.use(express.json({ limit: '50mb' })); // Re-enable JSON body parsing
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, '..', 'public'))); // Serve static files from the 'public' directory
 
 // Attach user info to request if logged in (must be after cookieParser)

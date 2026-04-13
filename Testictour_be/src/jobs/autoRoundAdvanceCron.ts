@@ -94,4 +94,43 @@ cron.schedule('* * * * *', async () => {
   } catch (error) {
     logger.error(`[PreAssignCron] Error: ${error instanceof Error ? error.message : String(error)}`);
   }
-}); 
+});
+
+// Auto-cancel cron: Runs every minute, checks for tournaments that have passed their start time
+// If they are escrow-backed and not fully funded, cancel them automatically.
+cron.schedule('* * * * *', async () => {
+  try {
+    const now = new Date();
+    
+    const tournamentsToCancel = await prisma.tournament.findMany({
+      where: {
+        status: { in: ['pending', 'UPCOMING', 'REGISTRATION'] },
+        isCommunityMode: false,
+        startTime: {
+          lte: now,
+        },
+        escrowStatus: { notIn: ['funded', 'locked', 'released', 'cancelled', 'disputed'] },
+      },
+    });
+
+    if (tournamentsToCancel.length > 0) {
+      logger.info(`[AutoCancelCron] Found ${tournamentsToCancel.length} unfunded tournaments that passed their start time.`);
+      const EscrowService = (await import('../services/EscrowService')).default;
+
+      for (const tournament of tournamentsToCancel) {
+        try {
+          logger.info(`[AutoCancelCron] Canceling tournament ${tournament.id} due to insufficient escrow funding at start time.`);
+          await EscrowService.markTournamentCancelled(
+            tournament.id, 
+            'Giải đấu đã bị hủy tự động do không được nạp đủ quỹ Escrow khi đến giờ thi đấu.'
+          );
+        } catch (error) {
+          logger.error(`[AutoCancelCron] Failed to cancel tournament ${tournament.id}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+    }
+  } catch (error) {
+    logger.error(`[AutoCancelCron] Error: ${error instanceof Error ? error.message : String(error)}`);
+  }
+});
+ 

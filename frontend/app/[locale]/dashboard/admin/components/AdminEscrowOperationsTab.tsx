@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   ShieldAlert, Clock, CheckCircle2, XCircle, AlertTriangle,
   RefreshCw, Loader2, Ban, PlayCircle, ChevronDown, ChevronUp,
-  FileText, Eye, RotateCcw, DollarSign, Siren
+  FileText, Eye, RotateCcw, DollarSign, Siren, Copy
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import {
   DialogHeader, DialogTitle, DialogFooter
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { toast } from "@/components/ui/use-toast";
 import api from "@/app/lib/apiConfig";
 
 // ---------- types ----------
@@ -30,7 +31,7 @@ interface PendingProof {
   createdAt: string;
   proofUrl?: string | null;
   reviewedAt?: string | null;
-  reviewNote?: string | null;
+  reviewNotes?: string | null;
 }
 
 interface UnreconciledWebhook {
@@ -54,7 +55,16 @@ interface PendingPayout {
   tournamentId: string;
   tournamentName?: string;
   createdAt: string;
+  proofUrl?: string | null;
   payoutMeta?: any;
+  user?: {
+    id: string;
+    gameName?: string;
+    displayName?: string;
+    email?: string;
+    discordId?: string;
+    puuid?: string;
+  };
 }
 
 interface DisputedEscrow {
@@ -72,6 +82,7 @@ interface OperationQueues {
   unreconciled: UnreconciledWebhook[];
   pendingPayouts: PendingPayout[];
   disputed: DisputedEscrow[];
+  history: PendingProof[];
 }
 
 // ---------- helpers ----------
@@ -98,9 +109,10 @@ type ReviewAction = "approved" | "rejected";
 
 function ReviewModal({
   tx, open, onClose, onDone
-}: { tx: PendingProof | null; open: boolean; onClose: () => void; onDone: () => void }) {
+}: { tx: PendingProof | PendingPayout | null; open: boolean; onClose: () => void; onDone: () => void }) {
   const [action, setAction] = useState<ReviewAction>("approved");
   const [note, setNote] = useState("");
+  const [proofUrl, setProofUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -108,7 +120,7 @@ function ReviewModal({
     if (!tx) return;
     try {
       setLoading(true); setError(null);
-      await api.post(`/admin/escrow/transactions/${tx.id}/review`, { action, note });
+      await api.post(`/admin/escrow/transactions/${tx.id}/review`, { approved: action === "approved", note, proofUrl });
       onDone();
       onClose();
     } catch (e: any) {
@@ -132,7 +144,7 @@ function ReviewModal({
         </DialogHeader>
         {tx?.proofUrl && (
           <div className="rounded-lg border border-white/10 overflow-hidden">
-            <a href={tx.proofUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 bg-white/5 hover:bg-white/10 text-sm text-blue-400 transition-colors">
+            <a href={tx.proofUrl.startsWith('http') ? tx.proofUrl : `${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:4000'}${tx.proofUrl}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 bg-white/5 hover:bg-white/10 text-sm text-blue-400 transition-colors">
               <Eye className="h-4 w-4" /> View Proof Document
             </a>
           </div>
@@ -153,6 +165,18 @@ function ReviewModal({
             </button>
           ))}
         </div>
+        {action === "approved" && (
+          <div className="space-y-1">
+            <span className="text-xs text-muted-foreground font-medium">Proof of Payment URL (Optional)</span>
+            <input
+              type="text"
+              placeholder="https://.../receipt.jpg"
+              value={proofUrl}
+              onChange={e => setProofUrl(e.target.value)}
+              className="w-full bg-zinc-900/80 border border-zinc-700/60 rounded-md p-2 text-sm focus:outline-none focus:border-emerald-500/50"
+            />
+          </div>
+        )}
         <Textarea
           placeholder="Internal review note (optional)…"
           value={note}
@@ -179,7 +203,7 @@ export default function AdminEscrowOperationsTab() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
-  const [reviewTx, setReviewTx] = useState<PendingProof | null>(null);
+  const [reviewTx, setReviewTx] = useState<PendingProof | PendingPayout | null>(null);
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
 
   const fetchQueues = useCallback(async () => {
@@ -241,6 +265,7 @@ export default function AdminEscrowOperationsTab() {
   const unreconciled = queues?.unreconciled ?? [];
   const payouts = queues?.pendingPayouts ?? [];
   const disputed = queues?.disputed ?? [];
+  const history = queues?.history ?? [];
   const totalIssues = proofs.length + unreconciled.length + payouts.length + disputed.length;
 
   return (
@@ -312,6 +337,9 @@ export default function AdminEscrowOperationsTab() {
           <TabsTrigger value="disputes" className="gap-2 data-[state=active]:bg-primary/20">
             <ShieldAlert className="h-3.5 w-3.5" /> Disputes
             {disputed.length > 0 && <Badge className="h-4 text-[10px] bg-red-500/30 text-red-300 ml-1">{disputed.length}</Badge>}
+          </TabsTrigger>
+          <TabsTrigger value="history" className="gap-2 data-[state=active]:bg-primary/20">
+            <Clock className="h-3.5 w-3.5" /> History
           </TabsTrigger>
         </TabsList>
 
@@ -435,6 +463,7 @@ export default function AdminEscrowOperationsTab() {
                   <TableHeader>
                     <TableRow className="border-zinc-800/60">
                       <TableHead className="text-xs">Tournament</TableHead>
+                      <TableHead className="text-xs">Recipient</TableHead>
                       <TableHead className="text-xs">Amount</TableHead>
                       <TableHead className="text-xs">Status</TableHead>
                       <TableHead className="text-xs">Submitted</TableHead>
@@ -445,17 +474,53 @@ export default function AdminEscrowOperationsTab() {
                     {payouts.map(tx => (
                       <TableRow key={tx.id} className="border-zinc-800/40">
                         <TableCell className="text-sm">{tx.tournamentName || tx.tournamentId.slice(0,8)+"…"}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-1">
+                            <span className="text-sm text-zinc-300 font-medium">
+                              {tx.user?.gameName || tx.user?.displayName || "Unknown Player"}
+                            </span>
+                            <span className="text-xs text-muted-foreground">{tx.user?.email || "—"}</span>
+                            <div className="flex items-center gap-3 mt-1">
+                              {tx.user?.discordId && (
+                                <div className="flex items-center gap-1 cursor-pointer group" onClick={() => {
+                                  navigator.clipboard.writeText(tx.user!.discordId!);
+                                  toast({ description: "Đã copy Discord ID" });
+                                }}>
+                                  <span className="font-mono text-[10px] text-[#5865F2] px-1.5 py-0.5 rounded bg-[#5865F2]/10 border border-[#5865F2]/20">Discord: {tx.user.discordId}</span>
+                                  <Copy className="h-3 w-3 text-muted-foreground opacity-50 group-hover:opacity-100 transition-opacity" />
+                                </div>
+                              )}
+                              {tx.user?.puuid && (
+                                <div className="flex items-center gap-1 cursor-pointer group" onClick={() => {
+                                  navigator.clipboard.writeText(tx.user!.puuid!);
+                                  toast({ description: "Đã copy PUUID" });
+                                }}>
+                                  <span className="font-mono text-[10px] text-red-400 px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20">PUUID: {tx.user.puuid.slice(0, 4)}...{tx.user.puuid.slice(-4)}</span>
+                                  <Copy className="h-3 w-3 text-muted-foreground opacity-50 group-hover:opacity-100 transition-opacity" />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </TableCell>
                         <TableCell className="font-mono text-sm font-semibold text-blue-400">{fmt(tx.amount)}</TableCell>
                         <TableCell>{statusBadge(tx.status)}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">{relTime(tx.createdAt)}</TableCell>
                         <TableCell className="text-right flex gap-2 justify-end">
                           <Button
                             size="sm" className="gap-1 h-7 text-xs bg-emerald-600 hover:bg-emerald-700"
-                            disabled={!!actionLoading[tx.id]}
-                            onClick={() => releasePayout(tx.id, tx.tournamentId)}
+                            onClick={() => setReviewTx(tx)}
                           >
-                            {actionLoading[tx.id] ? <Loader2 className="h-3 w-3 animate-spin" /> : <PlayCircle className="h-3 w-3" />}
-                            Release Payout
+                            <PlayCircle className="h-3 w-3" />
+                            Manual Review
+                          </Button>
+                          <Button
+                            title="Release ALL payouts for this tournament via API/Gateway"
+                            size="sm" variant="outline" className="gap-1 h-7 text-xs border border-blue-500/30 text-blue-400 bg-blue-500/10 hover:bg-blue-500/20"
+                            disabled={!!actionLoading["release_"+tx.tournamentId]}
+                            onClick={() => releasePayout("release_"+tx.tournamentId, tx.tournamentId)}
+                          >
+                            <Loader2 className={`h-3 w-3 ${actionLoading["release_"+tx.tournamentId] ? 'animate-spin' : 'hidden'}`} />
+                            Release All (API)
                           </Button>
                           <Button
                             size="sm" variant="outline" className="gap-1 h-7 text-xs border-red-500/30 text-red-400 hover:bg-red-500/10"
@@ -527,6 +592,48 @@ export default function AdminEscrowOperationsTab() {
                             <Ban className="h-3 w-3" /> Cancel Escrow
                           </Button>
                         </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── History ──────────────────────────────────────────── */}
+        <TabsContent value="history" className="mt-4">
+          <Card className="bg-card/60 border-white/10">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">Transaction History</CardTitle>
+              <CardDescription className="text-xs">Recently resolved, approved, and rejected escrow transactions.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {history.length === 0 ? (
+                <p className="text-center py-10 text-sm text-muted-foreground flex flex-col items-center gap-2">
+                  <CheckCircle2 className="h-8 w-8 text-emerald-400 opacity-50" /> No history available.
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-zinc-800/60">
+                      <TableHead className="text-xs">Tournament</TableHead>
+                      <TableHead className="text-xs">Type</TableHead>
+                      <TableHead className="text-xs">Amount</TableHead>
+                      <TableHead className="text-xs">Status</TableHead>
+                      <TableHead className="text-xs">Reviewed Note</TableHead>
+                      <TableHead className="text-xs text-right">Age</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {history.map(tx => (
+                      <TableRow key={tx.id} className="border-zinc-800/40 opacity-70">
+                        <TableCell className="text-sm">{tx.tournamentName || tx.tournamentId.slice(0,8)+"…"}</TableCell>
+                        <TableCell className="text-xs capitalize text-muted-foreground">{tx.type.replace(/_/g," ")}</TableCell>
+                        <TableCell className="font-mono text-sm">{fmt(tx.amount)}</TableCell>
+                        <TableCell>{statusBadge(tx.status)}</TableCell>
+                        <TableCell className="text-xs max-w-xs truncate" title={tx.reviewNotes || "—"}>{tx.reviewNotes || "—"}</TableCell>
+                        <TableCell className="text-xs text-right text-muted-foreground">{relTime(tx.reviewedAt || tx.createdAt)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

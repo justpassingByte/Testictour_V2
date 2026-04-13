@@ -23,6 +23,32 @@ export default function RoundResultsPage({ params }: { params: { id: string; rou
     }
   }, [params.id, params.round, fetchRoundDetails])
 
+  // Real-time: re-fetch round data on any relevant socket event
+  useEffect(() => {
+    if (!params.id || !params.round) return
+
+    const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL
+      || (process.env.NEXT_PUBLIC_API_URL?.replace('/api', ''))
+      || 'http://localhost:4000'
+
+    let socketInstance: any = null
+
+    import('socket.io-client').then(({ io }) => {
+      socketInstance = io(SOCKET_URL, { transports: ['websocket'] })
+      socketInstance.emit('join_tournament', params.id)
+
+      const refetch = () => fetchRoundDetails(params.id, params.round)
+      socketInstance.on('tournament_update', refetch)
+      socketInstance.on('bracket_update', refetch)
+      socketInstance.on('round_started', refetch)
+    })
+
+    return () => {
+      if (socketInstance) socketInstance.disconnect()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.id, params.round])
+
   const allPlayers: PlayerRoundStats[] = useMemo(() => {
     if (!roundData || !currentTournament?.participants) {
       return []

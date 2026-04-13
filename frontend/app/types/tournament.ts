@@ -133,6 +133,8 @@ export interface IParticipant {
   eliminated?: boolean;
   roundOutcomes?: IRoundOutcome[];
   scoreTotal?: number;
+  rewarded?: boolean;
+  referralSource?: string;
 }
 
 export interface PlayerRoundStats {
@@ -188,7 +190,7 @@ export interface ITournamentTemplate {
   rules?: string;
   image?: string;
   region: string;
-  status: 'DRAFT' | 'UPCOMING' | 'REGISTRATION' | 'in_progress' | 'COMPLETED' | 'CANCELLED';
+  status: 'DRAFT' | 'UPCOMING' | 'REGISTRATION' | 'in_progress' | 'COMPLETED' | 'CANCELLED' | 'pending' | 'completed';
   startTime: string;
   endTime?: string;
   maxPlayers: number;
@@ -216,4 +218,7 @@ export interface ITournament extends ITournamentTemplate {
   escrowStatus?: string | null;
   escrowRequiredAmount?: number;
   communityThresholdSnapshot?: number | null;
+  adjustedPrizeStructure?: any;
+  discordUrl?: string;
+  sponsors?: Array<{ name: string; url: string }>;
 } 

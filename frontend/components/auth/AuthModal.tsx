@@ -1,4 +1,5 @@
 import { useState } from "react"
+import Link from "next/link"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
@@ -140,7 +141,7 @@ export function AuthModal() {
                 <div className="grid gap-2">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="password-login" className="text-zinc-300">Password</Label>
-                    <a href="#" className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">Forgot password?</a>
+                    <Link href="/forgot-password" onClick={closeModal} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">Forgot password?</Link>
                   </div>
                   <Input
                     id="password-login"

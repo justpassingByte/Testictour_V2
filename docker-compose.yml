@@ -23,10 +23,13 @@ services:
       - MOMO_PARTNER_CODE=${MOMO_PARTNER_CODE}
       - MOMO_ACCESS_KEY=${MOMO_ACCESS_KEY}
       - MOMO_SECRET_KEY=${MOMO_SECRET_KEY}
+      # Email (Resend)
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - EMAIL_FROM_ADDRESS=${EMAIL_FROM_ADDRESS:-noreply@testictour.com}
       # Uncomment when Redis is available:
-      # - REDIS_URL=redis://redis:6379
-    # depends_on:
-    #   - redis
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
     networks:
       - vps-net
 
@@ -53,39 +56,39 @@ services:
       - vps-net
 
   # ─── Redis (Optional – uncomment when needed) ───
-  # redis:
-  #   image: redis:7-alpine
-  #   container_name: testictour-redis
-  #   restart: unless-stopped
-  #   ports:
-  #     - "6379:6379"
-  #   volumes:
-  #     - redis-data:/data
-  #   networks:
-  #     - vps-net
+  redis:
+    image: redis:7-alpine
+    container_name: testictour-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - vps-net
 
   # ─── Worker (Optional – uncomment when Redis is enabled) ───
-  # worker:
-  #   build:
-  #     context: ./Testictour_be
-  #     dockerfile: Dockerfile.backend
-  #   container_name: testictour-worker
-  #   restart: unless-stopped
-  #   command: ["node", "dist/worker.js"]
-  #   environment:
-  #     - NODE_ENV=production
-  #     - DATABASE_URL=${DATABASE_URL}
-  #     - REDIS_URL=redis://redis:6379
-  #     - BACKEND_SERVICE_URL=http://testictour-backend:4000
-  #   depends_on:
-  #     - backend
-  #     - redis
-  #   networks:
-  #     - vps-net
+  worker:
+    build:
+      context: ./Testictour_be
+      dockerfile: Dockerfile.backend
+    container_name: testictour-worker
+    restart: unless-stopped
+    command: ["node", "dist/worker.js"]
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis:6379
+      - BACKEND_SERVICE_URL=http://testictour-backend:4000
+    depends_on:
+      - backend
+      - redis
+    networks:
+      - vps-net
 
 networks:
   vps-net:
     external: true
 
-# volumes:
-#   redis-data:
+volumes:
+  redis-data:

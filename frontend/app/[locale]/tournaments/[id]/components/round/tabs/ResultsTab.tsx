@@ -150,8 +150,10 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
             <TableBody>
               {sortedPlayers.map((player, index) => {
                 const rank = index + 1
-                const isRewarded = isCheckmate && rank <= 4 && tournament.status === 'COMPLETED'
-                const displayStatus = isRewarded ? "rewarded" : player.status
+                const isTournamentCompleted = tournament.status === 'COMPLETED'
+                const prizeStructure = tournament.prizeStructure as number[] | null
+                const hasPrize = isTournamentCompleted && prizeStructure && rank <= prizeStructure.length && (prizeStructure[rank - 1] || 0) > 0
+                const displayStatus = hasPrize ? "rewarded" : (isTournamentCompleted && player.status === "advanced" ? "completed" : player.status)
 
                 return (
                 <TableRow key={player.id} className="hover:bg-muted/50">
@@ -196,17 +198,25 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
                     </TableCell>
                   ))}
                   <TableCell className="text-center">
-                    <Badge
-                      variant="outline"
-                      className={`
-                            ${displayStatus === "advanced" ? "bg-green-500/20 text-green-500" : ""}
-                            ${displayStatus === "eliminated" ? "bg-red-500/20 text-red-500" : ""}
-                            ${displayStatus === "rewarded" ? "bg-purple-500/20 text-purple-500" : ""}
-                            ${displayStatus === "pending" ? "bg-slate-500/20 text-slate-400" : ""}
-                          `}
-                    >
-                      {displayStatus === "pending" ? t("awaiting") : t(displayStatus as any)}
-                    </Badge>
+                    <div className="flex flex-col items-center gap-1">
+                      <Badge
+                        variant="outline"
+                        className={`
+                              ${displayStatus === "advanced" ? "bg-green-500/20 text-green-500" : ""}
+                              ${displayStatus === "eliminated" ? "bg-red-500/20 text-red-500" : ""}
+                              ${displayStatus === "rewarded" ? "bg-purple-500/20 text-purple-500" : ""}
+                              ${displayStatus === "completed" ? "bg-blue-500/20 text-blue-400" : ""}
+                              ${displayStatus === "pending" ? "bg-slate-500/20 text-slate-400" : ""}
+                            `}
+                      >
+                        {displayStatus === "pending" ? t("awaiting") : displayStatus === "completed" ? t("finished") : t(displayStatus as any)}
+                      </Badge>
+                      {hasPrize && prizeStructure && (
+                        <span className="text-xs font-bold text-amber-400">
+                          🏆 ${((prizeStructure[rank - 1] / 100) * (tournament.budget || tournament.entryFee * (tournament.registered || tournament.maxPlayers))).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
                     <Link href={`/players/${player.id}`}>

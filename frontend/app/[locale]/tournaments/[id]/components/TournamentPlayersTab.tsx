@@ -23,10 +23,15 @@ interface TournamentPlayersTabProps {
   loading: boolean;
 }
 
+import { getSubRegionConfig } from "@/app/config/regions";
+
 function ParticipantRow({ participant, index, t }: { participant: IParticipant, index: number, t: any }) {
   const name = participant.user?.riotGameName || participant.user?.username || participant.inGameName;
   const tag = participant.user?.riotGameTag || participant.gameSpecificId;
   const rank = participant.rank || "UNRANKED";
+  const regionCode = participant.user?.subRegion || participant.user?.region || participant.region || 'VN';
+  const regionConfig = getSubRegionConfig(regionCode);
+  const regionName = regionConfig ? `${regionConfig.flag} ${regionConfig.id}` : regionCode.toUpperCase();
 
   return (
     <TableRow className="group hover:bg-muted/30 transition-colors">
@@ -35,7 +40,7 @@ function ParticipantRow({ participant, index, t }: { participant: IParticipant, 
           <div className="w-6 text-center text-muted-foreground font-semibold">#{index + 1}</div>
           <div className="flex flex-col">
             <span className="font-bold text-base text-primary/90 group-hover:text-primary transition-colors">{name}</span>
-            <span className="text-[10px] text-muted-foreground">#{tag} ({(participant.region || 'VN').toUpperCase()})</span>
+            <span className="text-[10px] text-muted-foreground">#{tag} ({regionName})</span>
           </div>
         </div>
       </TableCell>

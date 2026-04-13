@@ -1,8 +1,10 @@
 import bcrypt from 'bcrypt';
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { prisma } from './prisma';
 import ApiError from '../utils/ApiError';
 import GrimoireService from './GrimoireService';
+import EmailService from './EmailService';
 import { getRegionalRoutingValue, getPlatformIdentifier } from '../utils/RegionMapper';
 
 const SALT_ROUNDS = 10;
@@ -225,5 +227,79 @@ export default class UserService {
     }));
 
     return usersWithWonAmount;
+  }
+
+  /**
+   * Request a password reset email.
+   * NEVER throws for "user not found" — always succeeds silently to prevent email enumeration.
+   */
+  static async requestPasswordReset(email: string, locale?: string): Promise<void> {
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+      select: { id: true, username: true, email: true, role: true },
+    });
+
+    // Silently return if user not found or is an admin (admins use separate flow)
+    if (!user || user.role === 'admin') {
+      return;
+    }
+
+    // Generate a 256-bit random token
+    const plainToken = crypto.randomBytes(32).toString('hex');
+
+    // SHA-256 hash the token for DB storage
+    const hashedToken = crypto.createHash('sha256').update(plainToken).digest('hex');
+
+    // Store hash + expiry (30 minutes)
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        resetToken: hashedToken,
+        resetTokenExpiry: new Date(Date.now() + 30 * 60 * 1000),
+      },
+    });
+
+    // Send email (never throws — EmailService handles errors internally)
+    await EmailService.sendPasswordReset({
+      to: user.email,
+      username: user.username,
+      token: plainToken, // plaintext token goes in the email link
+      locale,
+    });
+  }
+
+  /**
+   * Verify a reset token and set a new password.
+   * Throws ApiError if the token is invalid or expired.
+   */
+  static async resetPassword(token: string, newPassword: string): Promise<void> {
+    // Hash the submitted token to compare with DB
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    // Find user with matching token that hasn't expired
+    const user = await prisma.user.findFirst({
+      where: {
+        resetToken: hashedToken,
+        resetTokenExpiry: { gt: new Date() },
+      },
+      select: { id: true },
+    });
+
+    if (!user) {
+      throw new ApiError(400, 'Invalid or expired reset link. Please request a new one.');
+    }
+
+    // Hash the new password
+    const hashedPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
+
+    // Update password and clear reset fields (single-use token)
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        resetToken: null,
+        resetTokenExpiry: null,
+      },
+    });
   }
 } 

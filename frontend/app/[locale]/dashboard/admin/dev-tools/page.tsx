@@ -7,7 +7,7 @@ import {
   PlaySquare, Bot, Key, ExternalLink, ShieldCheck, ArrowRight,
   CheckCircle2, XCircle, Clock, DollarSign, Lock, Unlock,
   AlertTriangle, RefreshCw, Activity, ChevronRight, Terminal,
-  Banknote, Send
+  Banknote, Send, ShieldAlert
 } from "lucide-react";
 import { useMiniTourLobbyStore } from "@/app/stores/miniTourLobbyStore";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { RegionSelector } from "@/components/ui/RegionSelector";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MatchCompPanel } from "@/components/match/MatchCompPanel";
 import { GrimoireMatchData } from "@/app/types/riot";
@@ -28,14 +29,19 @@ const REGIONS = ["sea", "asia", "europe", "americas"];
 type EscrowStep =
   | "idle"
   | "init"
+  | "not_funded"
+  | "partially_funded"
   | "funding_submitted"
   | "webhook_funded"
+  | "funded"
   | "locked"
   | "payout_requested"
   | "payout_released"
+  | "released"
   | "disputed"
   | "dispute_resolved"
-  | "cancelled";
+  | "cancelled"
+  | string;
 
 interface LogEntry {
   time: string;
@@ -58,19 +64,24 @@ interface EscrowState {
 // ─── Status badge helper ──────────────────────────────────────────────────────
 
 function StatusBadge({ step }: { step: EscrowStep }) {
-  const config: Record<EscrowStep, { label: string; color: string; icon: React.ReactNode }> = {
+  const config: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
     idle:               { label: "Chưa bắt đầu",     color: "border-white/20 text-muted-foreground bg-white/5",          icon: <Clock className="w-3 h-3" /> },
     init:               { label: "Đã khởi tạo",      color: "border-blue-500/40 text-blue-400 bg-blue-500/10",           icon: <ShieldCheck className="w-3 h-3" /> },
+    not_funded:         { label: "Chưa nạp tiền",    color: "border-orange-500/40 text-orange-400 bg-orange-500/10",     icon: <ShieldCheck className="w-3 h-3" /> },
+    partially_funded:   { label: "Nạp thiếu",        color: "border-yellow-500/40 text-yellow-400 bg-yellow-500/10",     icon: <ShieldAlert className="w-3 h-3" /> },
     funding_submitted:  { label: "Đang chờ thanh toán", color: "border-yellow-500/40 text-yellow-400 bg-yellow-500/10",   icon: <Clock className="w-3 h-3" /> },
-    webhook_funded:     { label: "Đã nạp tiền",       color: "border-emerald-500/40 text-emerald-400 bg-emerald-500/10", icon: <CheckCircle2 className="w-3 h-3" /> },
+    webhook_funded:     { label: "Đã nạp tiền (Sim)", color: "border-emerald-500/40 text-emerald-400 bg-emerald-500/10", icon: <CheckCircle2 className="w-3 h-3" /> },
+    funded:             { label: "Đã đủ tiền",       color: "border-emerald-500/40 text-emerald-400 bg-emerald-500/10", icon: <CheckCircle2 className="w-3 h-3" /> },
     locked:             { label: "Đã khóa (Đang thi đấu)", color: "border-cyan-500/40 text-cyan-400 bg-cyan-500/10",     icon: <Lock className="w-3 h-3" /> },
-    payout_requested:   { label: "Chờ duyệt chi thưởng", color: "border-violet-500/40 text-violet-400 bg-violet-500/10", icon: <DollarSign className="w-3 h-3" /> },
-    payout_released:    { label: "Đã phát thưởng",    color: "border-emerald-500/40 text-emerald-400 bg-emerald-500/10", icon: <CheckCircle2 className="w-3 h-3" /> },
+    payout_requested:   { label: "Chờ duyệt chi",    color: "border-violet-500/40 text-violet-400 bg-violet-500/10", icon: <DollarSign className="w-3 h-3" /> },
+    payout_released:    { label: "Đã duyệt thưởng",   color: "border-emerald-500/40 text-emerald-400 bg-emerald-500/10", icon: <CheckCircle2 className="w-3 h-3" /> },
+    released:           { label: "Đã giải ngân",      color: "border-emerald-500/40 text-emerald-400 bg-emerald-500/10", icon: <CheckCircle2 className="w-3 h-3" /> },
     disputed:           { label: "Đang tranh chấp",   color: "border-red-500/40 text-red-400 bg-red-500/10",             icon: <AlertTriangle className="w-3 h-3" /> },
     dispute_resolved:   { label: "Đã giải quyết",     color: "border-emerald-500/40 text-emerald-400 bg-emerald-500/10", icon: <CheckCircle2 className="w-3 h-3" /> },
-    cancelled:          { label: "Đã hủy",             color: "border-red-500/40 text-red-400 bg-red-500/10",             icon: <XCircle className="w-3 h-3" /> },
+    cancelled:          { label: "Đã hủy",           color: "border-red-500/40 text-red-400 bg-red-500/10",             icon: <XCircle className="w-3 h-3" /> },
   };
-  const c = config[step];
+  
+  const c = config[step] || { label: step || "Unknown", color: "border-slate-500/40 text-slate-400 bg-slate-500/10", icon: <Clock className="w-3 h-3" /> };
   return (
     <Badge variant="outline" className={`flex items-center gap-1.5 px-2 py-1 text-xs font-medium ${c.color}`}>
       {c.icon} {c.label}
@@ -180,6 +191,14 @@ export default function DevToolsPage() {
   const [simRegion, setSimRegion] = useState("sea");
   const [simTourPlayers, setSimTourPlayers] = useState("16");
 
+  const getRiotRegion = (r: string) => {
+    const rLower = r.toLowerCase();
+    if (rLower === 'amer') return 'americas';
+    if (rLower === 'emea') return 'europe';
+    if (rLower === 'apac') return 'asia';
+    return rLower;
+  };
+
   // ─── Escrow Simulator State ─────────────────────────────────────────────────
   const [escrowState, setEscrowState] = useState<EscrowState>({
     tournamentId: null, escrowId: null, transactionId: null,
@@ -235,7 +254,7 @@ export default function DevToolsPage() {
     if (!tid) { addLog("error", "⚠️ Nhập Tournament ID trước"); return; }
 
     const result = await escrowCall("Lấy thông tin Escrow", () =>
-      api.get(`/api/v1/tournaments/${tid}/escrow`).then(r => r.data)
+      api.get(`/tournaments/${tid}/escrow`).then(r => r.data)
     );
     if (!result) return;
 
@@ -260,7 +279,7 @@ export default function DevToolsPage() {
     if (!tid) { addLog("error", "⚠️ Nhập Tournament ID trước"); return; }
 
     const result = await escrowCall("Gửi yêu cầu nạp tiền Escrow", () =>
-      api.post(`/api/v1/tournaments/${tid}/escrow/funding`, {
+      api.post(`/tournaments/${tid}/escrow/funding`, {
         amount: parseFloat(escrowAmount),
         method: escrowProvider,
         provider: escrowProvider === "manual_proof" ? "manual" : escrowProvider,
@@ -289,7 +308,7 @@ export default function DevToolsPage() {
     if (!txId) { addLog("error", "⚠️ Cần Transaction ID. Thực hiện bước Submit Funding trước"); return; }
 
     const result = await escrowCall("Admin duyệt manual proof", () =>
-      api.post(`/api/v1/admin/escrow/transactions/${txId}/review`, {
+      api.post(`/admin/escrow/transactions/${txId}/review`, {
         approved: true,
         proofUrl: escrowProofUrl,
         note: "Đã xác minh qua Escrow Simulator (dev)",
@@ -312,7 +331,7 @@ export default function DevToolsPage() {
     if (!txId) { addLog("error", "⚠️ Cần Transaction ID"); return; }
 
     const result = await escrowCall(`Giả lập Webhook (${eventType})`, () =>
-      api.post(`/api/v1/dev/escrow/simulate-webhook`, {
+      api.post(`/dev/escrow/simulate-webhook`, {
         transactionId: txId,
         eventType,
         providerEventId: `sim_${Date.now()}`,
@@ -335,7 +354,7 @@ export default function DevToolsPage() {
     if (!tid) { addLog("error", "⚠️ Cần Tournament ID"); return; }
 
     const result = await escrowCall("Khóa Escrow khi tournament bắt đầu", () =>
-      api.post(`/api/v1/dev/escrow/assert-start`, { tournamentId: tid }).then(r => r.data)
+      api.post(`/dev/escrow/assert-start`, { tournamentId: tid }).then(r => r.data)
     );
     if (!result) return;
 
@@ -359,7 +378,7 @@ export default function DevToolsPage() {
     }
 
     const result = await escrowCall("Organizer yêu cầu phát thưởng", () =>
-      api.post(`/api/v1/tournaments/${tid}/payouts/request-release`, {
+      api.post(`/tournaments/${tid}/payouts/request-release`, {
         recipients,
         note: "Phát thưởng từ Escrow Simulator",
       }).then(r => r.data)
@@ -378,7 +397,7 @@ export default function DevToolsPage() {
     if (!tid) { addLog("error", "⚠️ Cần Tournament ID"); return; }
 
     const result = await escrowCall("Admin duyệt và phát thưởng", () =>
-      api.post(`/api/v1/admin/tournaments/${tid}/payouts/release`, {
+      api.post(`/admin/tournaments/${tid}/payouts/release`, {
         paymentMethod: "gateway",
         note: "Admin duyệt qua Escrow Simulator (dev)",
       }).then(r => r.data)
@@ -396,7 +415,7 @@ export default function DevToolsPage() {
     if (!tid) { addLog("error", "⚠️ Cần Tournament ID"); return; }
 
     const result = await escrowCall("Admin đánh dấu tranh chấp (Freeze)", () =>
-      api.post(`/api/v1/admin/tournaments/${tid}/dispute`, { reason: escrowDisputeReason }).then(r => r.data)
+      api.post(`/admin/tournaments/${tid}/dispute`, { reason: escrowDisputeReason }).then(r => r.data)
     );
     if (!result) return;
 
@@ -411,7 +430,7 @@ export default function DevToolsPage() {
     if (!tid) { addLog("error", "⚠️ Cần Tournament ID"); return; }
 
     const result = await escrowCall(`Giải quyết tranh chấp (${escrowResolution})`, () =>
-      api.post(`/api/v1/admin/tournaments/${tid}/dispute/resolve`, {
+      api.post(`/admin/tournaments/${tid}/dispute/resolve`, {
         resolution: escrowResolution,
         note: escrowNote || `Giải quyết qua Escrow Simulator\nChiến lược: ${escrowResolution}`,
       }).then(r => r.data)
@@ -426,7 +445,7 @@ export default function DevToolsPage() {
   // Get health
   async function stepGetHealth() {
     const result = await escrowCall("Lấy Reconciliation Health", () =>
-      api.get(`/api/v1/admin/escrow/health`).then(r => r.data)
+      api.get(`/admin/escrow/health`).then(r => r.data)
     );
     if (!result) return;
     const h = result.health;
@@ -438,7 +457,7 @@ export default function DevToolsPage() {
   // Bulk retry
   async function stepBulkRetry() {
     const result = await escrowCall("Bulk Retry stale transactions", () =>
-      api.post(`/api/v1/admin/escrow/bulk-retry`, {}).then(r => r.data)
+      api.post(`/admin/escrow/bulk-retry`, {}).then(r => r.data)
     );
     if (!result) return;
     addLog("success", `✅ Đã retry ${result.processed} transactions`);
@@ -471,7 +490,7 @@ export default function DevToolsPage() {
   async function fetchSingleMatch() {
     setLoading1(true); setError1(null); setMatchData(null);
     try {
-      const body: Record<string, string> = { region };
+      const body: Record<string, string> = { region: getRiotRegion(region) };
       if (gameName) body.gameName = gameName;
       if (tagLine) body.tagLine = tagLine;
       const res = await api.post("/dev/test-riot-match", body);
@@ -483,7 +502,7 @@ export default function DevToolsPage() {
   async function seedFullTournament() {
     setLoading2(true); setError2(null); setSeedResult(null);
     try {
-      const body: Record<string, any> = { region, matchCount: parseInt(matchCount) };
+      const body: Record<string, any> = { region: getRiotRegion(region), matchCount: parseInt(matchCount) };
       if (gameName) body.gameName = gameName;
       if (tagLine) body.tagLine = tagLine;
       const res = await api.post("/dev/seed-full-tournament", body);
@@ -567,6 +586,24 @@ export default function DevToolsPage() {
             </CardHeader>
             <CardContent className="pt-0">
               <FlowDiagram current={escrowState.status} />
+            </CardContent>
+          </Card>
+
+          {/* Activity Log - Moved higher up */}
+          <Card className="border-white/10 bg-black/40">
+            <CardHeader className="py-3 px-4 border-b border-white/10 flex flex-row items-center justify-between">
+              <CardTitle className="text-xs tracking-wider uppercase text-muted-foreground flex items-center gap-2">
+                <Loader2 className={`w-3 h-3 ${escrowLoading ? 'animate-spin text-blue-400' : 'opacity-0'}`} />
+                Nhật ký hoạt động (Activity Log)
+              </CardTitle>
+              <Button size="sm" variant="ghost" className="h-6 text-[10px] text-muted-foreground hover:bg-white/10"
+                onClick={() => setEscrowLogs([])}>
+                <RefreshCw className="w-3 h-3" />
+                Xóa log
+              </Button>
+            </CardHeader>
+            <CardContent className="p-4 overflow-auto max-h-48 scrollbar-thin scrollbar-thumb-white/10">
+              <LogViewer logs={escrowLogs} />
             </CardContent>
           </Card>
 
@@ -819,22 +856,7 @@ export default function DevToolsPage() {
             </div>
           </div>
 
-          {/* Activity Log */}
-          <Card className="border-white/10 bg-black/40">
-            <CardHeader className="py-3 px-4 border-b border-white/10 flex flex-row items-center justify-between">
-              <CardTitle className="text-xs tracking-wider uppercase text-muted-foreground flex items-center gap-2">
-                <Loader2 className={`w-3 h-3 ${escrowLoading ? 'animate-spin text-blue-400' : 'opacity-0'}`} />
-                Nhật ký hoạt động (Activity Log)
-              </CardTitle>
-              <Button size="sm" variant="ghost" className="h-6 text-[10px] text-muted-foreground"
-                onClick={() => setEscrowLogs([])}>
-                Xóa log
-              </Button>
-            </CardHeader>
-            <CardContent className="p-4 overflow-auto max-h-72">
-              <LogViewer logs={escrowLogs} />
-            </CardContent>
-          </Card>
+
         </TabsContent>
 
         {/* ═══════════════════════════════════════════════════════════════════
@@ -856,12 +878,8 @@ export default function DevToolsPage() {
                   <Label>Tag Line</Label>
                   <Input placeholder="e.g. KR1" value={tagLine} onChange={e => setTagLine(e.target.value)} className="bg-black/30 border-white/10" />
                 </div>
-                <div className="space-y-1.5">
-                  <Label>Region</Label>
-                  <Select value={region} onValueChange={setRegion}>
-                    <SelectTrigger className="bg-black/30 border-white/10"><SelectValue /></SelectTrigger>
-                    <SelectContent>{REGIONS.map(r => <SelectItem key={r} value={r}>{r.toUpperCase()}</SelectItem>)}</SelectContent>
-                  </Select>
+                <div className="space-y-0 relative top-0.5 max-w-[200px]">
+                  <RegionSelector label="Region" value={region} onChange={setRegion} allowSubRegion />
                 </div>
                 <Button onClick={fetchSingleMatch} disabled={loading1} className="bg-primary hover:bg-primary/90 gap-2">
                   {loading1 ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
@@ -923,12 +941,8 @@ export default function DevToolsPage() {
                   <Label>Tag Line</Label>
                   <Input placeholder="e.g. KR1" value={tagLine} onChange={e => setTagLine(e.target.value)} className="bg-black/30 border-white/10" />
                 </div>
-                <div className="space-y-1.5 lg:col-span-1">
-                  <Label>Region</Label>
-                  <Select value={region} onValueChange={setRegion}>
-                    <SelectTrigger className="bg-black/30 border-white/10"><SelectValue /></SelectTrigger>
-                    <SelectContent>{REGIONS.map(r => <SelectItem key={r} value={r}>{r.toUpperCase()}</SelectItem>)}</SelectContent>
-                  </Select>
+                <div className="space-y-0 lg:col-span-1 relative top-0.5">
+                  <RegionSelector label="Region" value={region} onChange={setRegion} allowSubRegion />
                 </div>
                 <div className="space-y-1.5 lg:col-span-1">
                   <Label>Matches (Max 4)</Label>
@@ -971,6 +985,49 @@ export default function DevToolsPage() {
             TAB: AUTOMATION FLOW (unchanged content, same as before)
             ═══════════════════════════════════════════════════════════════════ */}
         <TabsContent value="automation" className="space-y-6 animate-in slide-in-from-bottom-2 duration-300">
+          {/* Real Players PUUID Seeding */}
+          <div className="flex flex-col gap-4 p-4 bg-background/40 border border-white/10 rounded-xl">
+            <h3 className="text-sm font-semibold text-muted-foreground border-b border-white/5 pb-2">Real Players (Used for Seeding & Simulating Matches)</h3>
+            <div className="grid md:grid-cols-4 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Player 1</Label>
+                <div className="flex gap-2">
+                  <Input placeholder="Name" value={simGameName} onChange={e => setSimGameName(e.target.value)} className="bg-black/30 border-white/10 h-8 text-xs" />
+                  <Input placeholder="Tag" value={simTagLine} onChange={e => setSimTagLine(e.target.value)} className="w-16 bg-black/30 border-white/10 h-8 text-xs" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Player 2</Label>
+                <div className="flex gap-2">
+                  <Input placeholder="Name" value={simGameName2} onChange={e => setSimGameName2(e.target.value)} className="bg-black/30 border-white/10 h-8 text-xs" />
+                  <Input placeholder="Tag" value={simTagLine2} onChange={e => setSimTagLine2(e.target.value)} className="w-16 bg-black/30 border-white/10 h-8 text-xs" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Player 3</Label>
+                <div className="flex gap-2">
+                  <Input placeholder="Name" value={simGameName3} onChange={e => setSimGameName3(e.target.value)} className="bg-black/30 border-white/10 h-8 text-xs" />
+                  <Input placeholder="Tag" value={simTagLine3} onChange={e => setSimTagLine3(e.target.value)} className="w-16 bg-black/30 border-white/10 h-8 text-xs" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Player 4</Label>
+                <div className="flex gap-2">
+                  <Input placeholder="Name" value={simGameName4} onChange={e => setSimGameName4(e.target.value)} className="bg-black/30 border-white/10 h-8 text-xs" />
+                  <Input placeholder="Tag" value={simTagLine4} onChange={e => setSimTagLine4(e.target.value)} className="w-16 bg-black/30 border-white/10 h-8 text-xs" />
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 mt-2">
+               <div className="w-[180px]">
+                 <RegionSelector value={simRegion} onChange={setSimRegion} allowSubRegion />
+               </div>
+               <p className="text-[10px] text-muted-foreground flex-1">
+                 Mỗi player sẽ được dùng để lấy 1 trận gần nhất (gồm 8 người chơi thật). 4 players = 4 trận = 32 PUUID thật rải vào tournament.
+               </p>
+            </div>
+          </div>
+
           <div className="flex flex-col gap-4 p-4 bg-background/40 border border-white/10 rounded-xl">
             <div className="flex flex-wrap gap-4 items-center justify-between border-b border-white/5 pb-4">
               <div className="flex items-center gap-3">
@@ -1017,9 +1074,9 @@ export default function DevToolsPage() {
                   </CardHeader>
                   <CardContent className="space-y-3 pt-2">
                     {[
-                      { label: "1. Seed Users + MiniTour Lobby (7/8)", color: "emerald", payload: { type: 'minitour', gameName: simGameName||undefined, tagLine: simTagLine||undefined, gameName2: simGameName2||undefined, tagLine2: simTagLine2||undefined, gameName3: simGameName3||undefined, tagLine3: simTagLine3||undefined, gameName4: simGameName4||undefined, tagLine4: simTagLine4||undefined, region: simRegion }, ep: 'seed-env' },
+                      { label: "1. Seed Users + MiniTour Lobby (7/8)", color: "emerald", payload: { type: 'minitour', gameName: simGameName||undefined, tagLine: simTagLine||undefined, gameName2: simGameName2||undefined, tagLine2: simTagLine2||undefined, gameName3: simGameName3||undefined, tagLine3: simTagLine3||undefined, gameName4: simGameName4||undefined, tagLine4: simTagLine4||undefined, region: getRiotRegion(simRegion) }, ep: 'seed-env' },
                       { label: "2. Force Start (WAITING → IN_PROGRESS)", color: "white", payload: { type: 'minitour', lobbyId: lobbyId||undefined }, ep: 'auto-start' },
-                      { label: "3. Simulate Match Results (Riot Data)", color: "blue", payload: { type: 'minitour', lobbyId: lobbyId||undefined, gameName: simGameName||undefined, tagLine: simTagLine||undefined, region: simRegion }, ep: 'simulate-match' },
+                      { label: "3. Simulate Match Results (Riot Data)", color: "blue", payload: { type: 'minitour', lobbyId: lobbyId||undefined, gameName: simGameName||undefined, tagLine: simTagLine||undefined, region: getRiotRegion(simRegion) }, ep: 'simulate-match' },
                     ].map(a => (
                       <Button key={a.label} size="sm" variant="outline"
                         className={`w-full justify-start border-${a.color}-500/30 text-${a.color}-400 bg-${a.color}-500/10 hover:bg-${a.color}-500/20`}
@@ -1042,7 +1099,7 @@ export default function DevToolsPage() {
                         <SelectContent>{["8","16","24","32","64"].map(v => <SelectItem key={v} value={v}>{v} Players</SelectItem>)}</SelectContent>
                       </Select>
                       <Button size="sm" variant="outline" className="flex-1 justify-start border-purple-500/30 text-purple-400 bg-purple-500/10 hover:bg-purple-500/20"
-                        onClick={() => handleAutomation('seed-env', { type:'tournament', gameName:simGameName||undefined, tagLine:simTagLine||undefined, gameName2:simGameName2||undefined, tagLine2:simTagLine2||undefined, gameName3:simGameName3||undefined, tagLine3:simTagLine3||undefined, gameName4:simGameName4||undefined, tagLine4:simTagLine4||undefined, region:simRegion, numPlayers:parseInt(simTourPlayers) })}>
+                        onClick={() => handleAutomation('seed-env', { type:'tournament', gameName:simGameName||undefined, tagLine:simTagLine||undefined, gameName2:simGameName2||undefined, tagLine2:simTagLine2||undefined, gameName3:simGameName3||undefined, tagLine3:simTagLine3||undefined, gameName4:simGameName4||undefined, tagLine4:simTagLine4||undefined, region:getRiotRegion(simRegion), numPlayers:parseInt(simTourPlayers) })}>
                         1. Seed Tournament (Pending)
                       </Button>
                     </div>
@@ -1051,7 +1108,7 @@ export default function DevToolsPage() {
                       { label: "3. Start Tournament", color: "green", onClick: () => handleAutomation('assign-lobby', { tournamentId: seededTournamentId, lobbyId }) },
                       { label: "4. Toggle Ready", color: "white", onClick: () => handleAutomation('ready-toggle', { lobbyId }) },
                       { label: "5. Auto Advance & Reshuffle", color: "pink", onClick: () => handleAutomation('advance-round', { roundId }) },
-                      { label: "6. Simulate Match", color: "blue", onClick: () => handleAutomation('simulate-match', { type:'tournament', gameName:simGameName||undefined, tagLine:simTagLine||undefined, region:simRegion, lobbyId:lobbyId||undefined }) },
+                      { label: "6. Simulate Match", color: "blue", onClick: () => handleAutomation('simulate-match', { type:'tournament', gameName:simGameName||undefined, tagLine:simTagLine||undefined, region:getRiotRegion(simRegion), lobbyId:lobbyId||undefined }) },
                     ].map(a => (
                       <Button key={a.label} size="sm" variant="outline" className={`w-full justify-start border-${a.color}-500/30 text-${a.color}-400 bg-${a.color}-500/10 hover:bg-${a.color}-500/20`} onClick={a.onClick}>{a.label}</Button>
                     ))}

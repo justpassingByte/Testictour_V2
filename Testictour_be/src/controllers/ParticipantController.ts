@@ -12,7 +12,8 @@ export const ParticipantController = {
     getHistory,
     async join(req: Request, res: Response, next: NextFunction) {
       try {
-        const participant = await ParticipantService.join(req.params.tournamentId, (req as any).user.id);
+        const { discordId, referralSource } = req.body || {};
+        const participant = await ParticipantService.join(req.params.tournamentId, (req as any).user.id, discordId, referralSource);
         res.json({ participant });
       } catch (err) {
         next(err);

@@ -71,7 +71,7 @@ export function TournamentRecentResultsTab({ tournamentId }: { tournamentId: str
           <CardHeader className="p-4 py-3 bg-muted/50 border-b border-border/50 flex flex-row items-center justify-between">
             <div className="flex items-center gap-2">
               <Swords className="w-4 h-4 text-primary" />
-              <CardTitle className="text-sm font-semibold text-foreground">Round {match.lobby.round?.roundNumber || '?'} - {match.lobby.name}</CardTitle>
+              <CardTitle className="text-sm font-semibold text-foreground">{t('round_prefix')} {match.lobby.round?.roundNumber || '?'} - {match.lobby.name}</CardTitle>
             </div>
             <div className="flex items-center text-xs text-muted-foreground">
               <Clock className="w-3.5 h-3.5 mr-1" />
@@ -84,7 +84,7 @@ export function TournamentRecentResultsTab({ tournamentId }: { tournamentId: str
                 <div key={result.id} className="p-4 flex items-center justify-between group hover:bg-white/5 transition-colors">
                   <div className="flex flex-col min-w-0">
                     <span className="text-[10px] uppercase font-bold text-muted-foreground mb-1">
-                      {result.placement === 1 ? 'Winner' : `${result.placement}nd / rd / th`.replace(/.(?=nd|rd|th)/, '')}
+                      {result.placement === 1 ? t('winner') : `${result.placement}nd / rd / th`.replace(/.(?=nd|rd|th)/, '')}
                     </span>
                     <span className="font-semibold text-sm truncate pr-2 group-hover:text-primary transition-colors">
                       {result.user.riotGameName || result.user.username}

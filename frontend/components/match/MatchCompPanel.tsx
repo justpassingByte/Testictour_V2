@@ -201,8 +201,10 @@ function ParticipantRow({ p, points, prize, highlightPuuid }: {
   const sortedUnits = [...(p.units ?? [])].sort((a, b) => b.cost - a.cost || b.tier - a.tier);
 
   return (
-    <div className={`grid gap-3 md:gap-4 p-3 rounded-lg border transition-colors items-center ${
-      isHighlight ? 'bg-primary/5 border-primary/30' : 'bg-zinc-900/40 border-zinc-800/60'
+    <div className={`relative grid gap-3 md:gap-4 p-3 rounded-lg border transition-colors items-center ${
+      isHighlight 
+        ? 'bg-primary/10 border-primary/50 shadow-[0_0_15px_rgba(var(--primary),0.15)] ring-1 ring-primary/20' 
+        : 'bg-zinc-900/40 border-zinc-800/60 hover:bg-zinc-800/40'
     }`}
       style={{ gridTemplateColumns: 'minmax(30px, auto) minmax(100px, 140px) minmax(60px, 80px) 1fr minmax(60px, auto)' }}
     >
@@ -213,8 +215,13 @@ function ParticipantRow({ p, points, prize, highlightPuuid }: {
 
       {/* 2. Player Info & Tournament Points */}
       <div className="flex flex-col justify-center min-w-0">
-        <div className="truncate font-semibold text-sm text-zinc-200" title={p.gameName}>
-          {p.gameName}
+        <div className="flex items-center gap-1.5">
+          <div className="truncate font-semibold text-sm text-zinc-200" title={p.gameName}>
+            {p.gameName}
+          </div>
+          {isHighlight && (
+            <span className="px-1.5 py-0.5 rounded-sm bg-primary text-primary-foreground text-[9px] font-bold tracking-wider leading-none uppercase">You</span>
+          )}
         </div>
         <div className="text-[10px] text-zinc-500 mb-1">
           #{p.tagLine}
@@ -314,7 +321,7 @@ export function MatchCompPanel({ matchData, resultMap, highlightPuuid }: MatchCo
       {/* Participant rows */}
       <div className="space-y-1.5">
         {sorted.map((p, index) => {
-          const mapped = resultMap?.[p.puuid];
+          const mapped = resultMap?.[p.puuid] || resultMap?.[`placement_${p.placement}`];
           const points = mapped?.points;
           const prize = mapped?.prize;
 

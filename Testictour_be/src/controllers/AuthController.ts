@@ -16,6 +16,16 @@ const loginSchema = z.object({
   password: z.string(),
 });
 
+const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+  locale: z.string().max(5).optional(),
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  newPassword: z.string().min(8),
+});
+
 const isProduction = process.env.NODE_ENV === 'production';
 // Detect if actually running behind HTTPS (check FRONTEND_URL for https://)
 const isHttps = (process.env.FRONTEND_URL || '').startsWith('https://');
@@ -74,5 +84,30 @@ export default {
   async logout(req: Request, res: Response) {
     res.cookie('authToken', '', { ...cookieOptions, expires: new Date(0), maxAge: undefined });
     res.status(200).json({ message: 'Logged out successfully' });
+  },
+
+  async forgotPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { email, locale } = forgotPasswordSchema.parse(req.body);
+      // Always returns 200 regardless of whether the email exists (prevents enumeration)
+      await UserService.requestPasswordReset(email, locale);
+      res.status(200).json({
+        message: 'If an account with that email exists, a password reset link has been sent.',
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async resetPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { token, newPassword } = resetPasswordSchema.parse(req.body);
+      await UserService.resetPassword(token, newPassword);
+      res.status(200).json({
+        message: 'Password has been reset successfully. Please log in with your new password.',
+      });
+    } catch (err) {
+      next(err);
+    }
   }
 }; 

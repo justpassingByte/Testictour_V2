@@ -6,10 +6,18 @@ import PrizeCalculationService from './PrizeCalculationService';
 import { getMajorRegion } from '../utils/RegionMapper';
 
 export default class ParticipantService {
-  static async join(tournamentId: string, userId: string) {
+  static async join(tournamentId: string, userId: string, discordId?: string, referralSource?: string) {
     return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const tournament = await tx.tournament.findUnique({ where: { id: tournamentId } });
       if (!tournament) throw new ApiError(404, 'Tournament not found');
+
+      // Update discordId if provided
+      if (discordId) {
+        await tx.user.update({
+          where: { id: userId },
+          data: { discordId }
+        });
+      }
 
       // Validate region if tournament has one
       if (tournament.region) {
@@ -47,7 +55,7 @@ export default class ParticipantService {
         await TransactionService.entryFee(userId, tournamentId, entryFee, tx, (tournament as any).entryType || 'usd');
       }
 
-      const participant = await tx.participant.create({ data: { tournamentId, userId, paid: entryFee > 0 } });
+      const participant = await tx.participant.create({ data: { tournamentId, userId, paid: entryFee > 0, referralSource } });
 
       // Update tournament's actualParticipantsCount and adjustedPrizeStructure
       const updatedActualCount = (tournament.actualParticipantsCount || 0) + 1;

@@ -20,22 +20,24 @@ export default function TabsContentClientWrapper({ tournament: initialTournament
   const tournament = currentTournament?.id === initialTournament.id ? currentTournament : initialTournament;
 
   useEffect(() => {
-    // Instead of heavy 10-second polling, use WebSockets to listen for state changes.
-    // This saves massive server load while keeping UI perfectly synchronized.
+    // Primary: WebSocket for instant real-time updates
     const socket = io(process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000', {
       transports: ['websocket', 'polling'],
       withCredentials: true,
     });
     
     socket.on('connect', () => {
-      // Join the tournament room to receive tailored updates
+      console.log('[Socket] Connected, joining tournament:', initialTournament.id);
       socket.emit('join', { tournamentId: initialTournament.id });
     });
+
+    socket.on('connect_error', (err: any) => {
+      console.error('[Socket] Connection error:', err.message);
+    });
     
-    socket.on('tournament_update', () => {
-      // Fetch heavyweight tournament details
+    socket.on('tournament_update', (data: any) => {
+      console.log('[Socket] Received tournament_update:', data);
       fetchTournamentDetail(initialTournament.id);
-      // Also notify bracket tab to fetch lobby changes since tournament_update often comes from lobby finishes
       window.dispatchEvent(new CustomEvent('bracket_update'));
     });
 
@@ -44,16 +46,24 @@ export default function TabsContentClientWrapper({ tournament: initialTournament
       window.dispatchEvent(new CustomEvent('bracket_update'));
     });
 
-    // Listen for explicit bracket_update to notify the TournamentBracketTab to re-fetch
     socket.on('bracket_update', () => {
-      // Dispatch custom window event so TournamentBracketTab can re-fetch bracket data
       window.dispatchEvent(new CustomEvent('bracket_update'));
     });
 
+    // Fallback: lightweight 30s poll in case socket events are missed
+    // Only polls when the tab is visible and the tournament is active
+    const activeStatuses = ['UPCOMING', 'pending', 'in_progress', 'REGISTRATION'];
+    const pollInterval = setInterval(() => {
+      if (document.visibilityState === 'visible' && activeStatuses.includes(initialTournament.status)) {
+        fetchTournamentDetail(initialTournament.id);
+      }
+    }, 30_000);
+
     return () => {
       socket.disconnect();
+      clearInterval(pollInterval);
     };
-  }, [fetchTournamentDetail, initialTournament.id]);
+  }, [fetchTournamentDetail, initialTournament.id, initialTournament.status]);
 
   // Mock function for fetchMoreParticipants since we're already loading all participants server-side
   const fetchMoreParticipants = async () => {

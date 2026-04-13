@@ -75,10 +75,14 @@ export default class PrizeCalculationService {
       previousScore = participant.scoreTotal;
       
       // Check if this rank gets a prize according to structure
-      const rankKey = currentRank.toString();
-      if (rankKey in prizeStructure) {
-        const prizePercentage = prizeStructure[rankKey];
-        const amount = prizePool * prizePercentage;
+      const isArray = Array.isArray(prizeStructure);
+      const prizePercentage = isArray 
+        ? (prizeStructure as any)[currentRank - 1] 
+        : prizeStructure[currentRank.toString()];
+
+      if (prizePercentage !== undefined) {
+        const normalizedPercentage = prizePercentage > 1 ? prizePercentage / 100 : prizePercentage;
+        const amount = prizePool * normalizedPercentage;
         
         if (amount > 0) {
           distribution.push({

@@ -1,0 +1,92 @@
+"use client"
+
+import { ITournament } from '@/app/types/tournament'
+import { useTournamentStore } from '@/app/stores/tournamentStore'
+import { Badge } from "@/components/ui/badge"
+import { AlertTriangle, ShieldCheck, Lock } from "lucide-react"
+import { useTranslations } from "next-intl"
+
+interface TournamentInfoClientProps {
+  initialTournament: ITournament;
+}
+
+export default function TournamentInfoClient({ initialTournament }: TournamentInfoClientProps) {
+  const t = useTranslations("common")
+  const currentTournament = useTournamentStore(state => state.currentTournament)
+  
+  const tournament = currentTournament?.id === initialTournament.id ? currentTournament : initialTournament
+
+  const statusMapping: Record<string, { text: string; color: string }> = {
+    pending:     { text: t("upcoming"),   color: "bg-yellow-500/20 text-yellow-500" },
+    UPCOMING:    { text: t("upcoming"),   color: "bg-yellow-500/20 text-yellow-500" },
+    in_progress: { text: t("ongoing"),    color: "bg-primary/20 text-primary animate-pulse-subtle" },
+    completed:   { text: t("finished"),   color: "bg-muted text-muted-foreground" },
+    COMPLETED:   { text: t("finished"),   color: "bg-muted text-muted-foreground" },
+  }
+  const currentStatus = statusMapping[tournament.status] || { text: tournament.status, color: "" }
+
+  return (
+    <div className="flex flex-col space-y-2">
+      <div className="flex items-center space-x-2">
+        <h1 className="text-3xl font-bold">{tournament.name}</h1>
+        <Badge variant="outline" className={`${currentStatus.color} capitalize`}>
+          {currentStatus.text}
+        </Badge>
+        {tournament.isCommunityMode ? (
+          <Badge variant="outline" className="bg-orange-500/10 text-orange-500 border-orange-500/30">
+            <AlertTriangle className="mr-1 h-3 w-3 inline mb-0.5" />
+            {t("community_mode") || "Community Mode"}
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30">
+            <ShieldCheck className="mr-1 h-3 w-3 inline mb-0.5" />
+            {t("escrow_secured") || "Escrow Secured"}
+          </Badge>
+        )}
+      </div>
+      <p className="text-muted-foreground">{tournament.description}</p>
+      
+      {tournament.isCommunityMode ? (
+        <div className="bg-orange-500/10 border border-orange-500/20 rounded-md p-4 mt-2 mb-4">
+          <div className="flex items-start">
+            <AlertTriangle className="h-5 w-5 text-orange-500 mt-0.5 mr-3 flex-shrink-0" />
+            <div>
+              <h4 className="text-orange-500 font-medium mb-1">{t("community_tournament_notice")}</h4>
+              <p className="text-sm text-orange-500/80">{t("this_tournament_is_operating_in_communit_desc")}</p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className={`border rounded-xl p-4 mt-2 mb-6 flex items-start shadow-sm transition-colors ${
+          tournament.escrowStatus === 'locked' || tournament.escrowStatus === 'payout_released' 
+            ? 'bg-emerald-500/10 border-emerald-500/30 shadow-emerald-500/10'
+            : 'bg-yellow-500/10 border-yellow-500/30 shadow-yellow-500/10'
+        }`}>
+          {tournament.escrowStatus === 'locked' || tournament.escrowStatus === 'payout_released' ? (
+            <Lock className="h-6 w-6 text-emerald-400 mt-0.5 mr-3 flex-shrink-0" />
+          ) : (
+            <ShieldCheck className="h-6 w-6 text-yellow-500 mt-0.5 mr-3 flex-shrink-0" />
+          )}
+          <div>
+            <h4 className={`font-semibold text-base mb-1 ${
+              tournament.escrowStatus === 'locked' || tournament.escrowStatus === 'payout_released' 
+                ? 'text-emerald-400' : 'text-yellow-500'
+            }`}>
+              {tournament.escrowStatus === 'locked' || tournament.escrowStatus === 'payout_released' 
+                ? (t("prize_pool_locked") || "Prize Pool Fully Locked")
+                : (t("prize_pool_pending") || "Funding Pending")}
+            </h4>
+            <p className={`text-sm ${
+              tournament.escrowStatus === 'locked' || tournament.escrowStatus === 'payout_released' 
+                ? 'text-emerald-500/80' : 'text-yellow-500/80'
+            }`}>
+              {tournament.escrowStatus === 'locked' || tournament.escrowStatus === 'payout_released'
+                ? (t("prize_pool_locked_desc") || "The total prize pool has been deposited into Escrow and successfully locked by the platform.")
+                : (t("prize_pool_pending_desc") || "The tournament organizer is currently in the process of funding the Escrow requirements.")}
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

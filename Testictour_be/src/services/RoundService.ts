@@ -450,7 +450,7 @@ export default class RoundService {
           }
 
           // If this is the first round of the first phase, update tournament status
-          if (currentRound.phase.phaseNumber === 1 && tournament.status === 'pending') {
+          if (currentRound.phase.phaseNumber === 1 && (tournament.status === 'pending' || tournament.status === 'UPCOMING')) {
             await EscrowService.assertTournamentCanStart(tournament.id, tx);
             await tx.tournament.update({
               where: { id: tournament.id },
@@ -539,9 +539,9 @@ export default class RoundService {
           if (!currentPhase) throw new ApiError(404, 'Current phase not found');
 
           // Apply advancement/elimination logic
-          const continueToFinalize = await this._applyAdvancementCondition(tx, currentRound, currentPhase);
+          const advancementResult = await this._applyAdvancementCondition(tx, currentRound, currentPhase);
 
-          if (!continueToFinalize) {
+          if (!advancementResult.continue) {
               logger.debug(`Round ${currentRound.id}: Advancement logic prevented immediate finalization (e.g., Checkmate created new round).`);
               return { message: `Round ${currentRound.id} completed. Waiting for next round in Checkmate phase.` };
           }
@@ -595,6 +595,9 @@ export default class RoundService {
               logger.info(`Round ${currentRound.id}: Scores reset for new phase ${nextPhase.id} due to carryOverScores=false.`);
             }
             
+            await tx.phase.update({ where: { id: currentPhase.id }, data: { status: 'completed' } });
+            logger.info(`Phase ${currentPhase.id} status updated to 'completed'.`);
+
             await tx.phase.update({ where: { id: nextPhase.id }, data: { status: 'in_progress' } });
             logger.info(`Phase ${nextPhase.id} status updated to 'in_progress'.`);
 
@@ -626,7 +629,7 @@ export default class RoundService {
           // Cập nhật trạng thái tournament
           await tx.tournament.update({ 
               where: { id: currentRound.phase.tournament.id }, 
-              data: { status: 'completed' } 
+              data: { status: 'COMPLETED' } 
           });
           
           // Phát thưởng trong transaction
@@ -707,6 +710,12 @@ export default class RoundService {
 
       // Process tournament summary after transaction if tournament was completed
       if (result && result.tournamentId) {
+        // Emit tournament completed event to all connected clients
+        if ((global as any).io) {
+          (global as any).io.to(`tournament:${result.tournamentId}`).emit('tournament_update', { type: 'tournament_completed' });
+          (global as any).io.to(`tournament:${result.tournamentId}`).emit('bracket_update', { tournamentId: result.tournamentId });
+        }
+
         // Log để biết rằng xử lý async đã được lên lịch
         logger.info(`Scheduling async processing for tournament ${result.tournamentId}`);
         
@@ -1412,27 +1421,45 @@ export default class RoundService {
     const tournament = await tx.tournament.findUnique({
       where: { id: tournamentId },
       include: {
+        escrow: true,
         _count: {
           select: { participants: true }
         }
       }
     });
 
-    if (!tournament || !tournament.prizeStructure) {
+    if (!tournament) {
       logger.warn(`Tournament ${tournamentId} has no prize structure to pay out.`);
       return;
     }
 
     const participantCount = tournament._count.participants;
     const totalPot = participantCount * tournament.entryFee;
-    const prizePool = totalPot * (1 - tournament.hostFeePercent);
+    const computedPrizePool = totalPot * (1 - (tournament.hostFeePercent || 0));
+    
+    let prizePool = computedPrizePool;
+    if (!tournament.isCommunityMode && tournament.escrow) {
+      if (tournament.escrow.fundedAmount > computedPrizePool) {
+        prizePool = tournament.escrow.fundedAmount;
+      } else if (tournament.escrow.fundedAmount > 0) {
+        prizePool = Math.max(computedPrizePool, tournament.escrow.fundedAmount);
+      }
+    }
     
     logger.debug(`Calculating prizes for tournament ${tournamentId}. Total pot: ${totalPot}, Prize pool: ${prizePool}`);
 
-    const dynamicPrizeStructure = PrizeCalculationService.getDynamicPrizeDistribution(participantCount);
+    const customStructure = tournament.prizeStructure;
+    const hasCustomStructure = customStructure && (
+      (Array.isArray(customStructure) && customStructure.length > 0) ||
+      (typeof customStructure === 'object' && !Array.isArray(customStructure) && Object.keys(customStructure as object).length > 0)
+    );
+
+    const structureToUse = hasCustomStructure 
+      ? customStructure 
+      : PrizeCalculationService.getDynamicPrizeDistribution(participantCount);
 
     // Use the PrizeCalculationService to get the optimized distribution
-    const prizeDistribution = PrizeCalculationService.getFinalPrizeDistribution(winners, dynamicPrizeStructure, prizePool);
+    const prizeDistribution = PrizeCalculationService.getFinalPrizeDistribution(winners, structureToUse as any, prizePool);
     logger.info(`Prize distribution calculated with ${prizeDistribution.length} winners`);
 
     // Process each winner and create reward records

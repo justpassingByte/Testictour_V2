@@ -7,6 +7,7 @@ import TournamentSummaryService from './TournamentSummaryService';
 import SummaryManagerService from './SummaryManagerService';
 import { fetchMatchDataQueue, flowProducer, syncCompletionQueue } from '../lib/queues';
 import EscrowService from './EscrowService';
+import RoundService from './RoundService';
 
 export default class TournamentService {
   /**
@@ -107,7 +108,8 @@ export default class TournamentService {
     const tournament = await prisma.tournament.findUnique({ 
       where: { id }, 
       include: { 
-        organizer: true, 
+        organizer: true,
+        escrow: true,
         phases: { 
           include: { 
             rounds: {
@@ -160,11 +162,21 @@ export default class TournamentService {
     const platformFee = Math.floor(totalCollected * (tournament.hostFeePercent || 0.1));
     const finalPrizePool = totalCollected - platformFee;
 
+    let finalBudget = finalPrizePool;
+    if (!tournament.isCommunityMode && (tournament as any).escrow) {
+      const escrow = (tournament as any).escrow;
+      if (escrow.fundedAmount > finalPrizePool) {
+        finalBudget = escrow.fundedAmount;
+      } else if (escrow.fundedAmount > 0) {
+        finalBudget = Math.max(finalPrizePool, escrow.fundedAmount);
+      }
+    }
+
     const result = {
       ...tournament,
       participants: participants,
       registered: registeredCount,
-      budget: finalPrizePool
+      budget: finalBudget
     };
 
     return result as any;
@@ -186,6 +198,8 @@ export default class TournamentService {
     templateId?: string;
     phases?: any[];
     isCommunityMode?: boolean;
+    discordUrl?: string;
+    sponsors?: any;
   }) {
     let templateData: any = {};
     let finalStartTime = data.startTime;
@@ -302,6 +316,46 @@ export default class TournamentService {
   }
 
   static async update(id: string, data: any) {
+    // Handle phase deletions: cascade delete child records first to avoid FK violations
+    if (data.phases?.delete) {
+      const phaseDeletes = Array.isArray(data.phases.delete) ? data.phases.delete : [data.phases.delete];
+      const phaseIds = phaseDeletes.map((d: any) => d.id).filter(Boolean);
+      
+      if (phaseIds.length > 0) {
+        logger.info(`TournamentService.update: cascading delete for phases ${phaseIds.join(', ')}`);
+        // Delete in correct order: matchResults → matches → lobbies → roundOutcomes → rounds → phases
+        const rounds = await prisma.round.findMany({ where: { phaseId: { in: phaseIds } } });
+        const roundIds = rounds.map(r => r.id);
+        
+        if (roundIds.length > 0) {
+          const lobbies = await prisma.lobby.findMany({ where: { roundId: { in: roundIds } } });
+          const lobbyIds = lobbies.map(l => l.id);
+          
+          if (lobbyIds.length > 0) {
+            const matches = await prisma.match.findMany({ where: { lobbyId: { in: lobbyIds } } });
+            const matchIds = matches.map(m => m.id);
+            if (matchIds.length > 0) {
+              await prisma.matchResult.deleteMany({ where: { matchId: { in: matchIds } } });
+              await prisma.match.deleteMany({ where: { id: { in: matchIds } } });
+            }
+            await prisma.lobby.deleteMany({ where: { id: { in: lobbyIds } } });
+          }
+          
+          await prisma.roundOutcome.deleteMany({ where: { roundId: { in: roundIds } } });
+          await prisma.round.deleteMany({ where: { id: { in: roundIds } } });
+        }
+        
+        await prisma.phase.deleteMany({ where: { id: { in: phaseIds } } });
+        
+        // Remove the delete from data since we already handled it
+        delete data.phases.delete;
+        // If phases object is now empty, remove it
+        if (Object.keys(data.phases).length === 0) {
+          delete data.phases;
+        }
+      }
+    }
+
     const tournament = await prisma.tournament.update({ 
       where: { id }, 
       data, 
@@ -311,6 +365,30 @@ export default class TournamentService {
     // Nếu trạng thái giải đấu thay đổi hoặc có thay đổi về cấu trúc giải thưởng, cập nhật summaries
     if (data.status || data.prizeStructure || data.adjustedPrizeStructure) {
       await SummaryManagerService.queueTournamentSummary(id);
+    }
+
+    // NEW LOGIC: Check if tournament is in_progress but all its phases are now completed
+    // This happens if an admin/partner deletes remaining in_progress phases.
+    if (tournament.status === 'in_progress' && tournament.phases && tournament.phases.length > 0) {
+      const allCompleted = tournament.phases.every(p => p.status === 'completed');
+      if (allCompleted) {
+        logger.info(`Tournament ${id} has all phases completed after an update. Finalizing tournament.`);
+        await prisma.$transaction(async (tx) => {
+          await tx.tournament.update({ where: { id }, data: { status: 'completed' } });
+          const finalParticipants = await tx.participant.findMany({
+            where: { tournamentId: id, eliminated: false },
+            orderBy: { scoreTotal: 'desc' }
+          });
+          await RoundService.payoutPrizes(tx, id, finalParticipants);
+        });
+        tournament.status = 'completed';
+      }
+    }
+
+    // Emit real-time update so all clients see the change immediately
+    const io = (global as any).io;
+    if (io) {
+      io.to(`tournament:${id}`).emit('tournament_update', { type: 'tournament_updated' });
     }
 
     return tournament;
@@ -385,6 +463,10 @@ export default class TournamentService {
       await tx.reward.deleteMany({ where: { tournamentId: id } });
 
       await tx.userTournamentSummary.deleteMany({ where: { tournamentId: id } });
+
+      // Clean up escrow and financial records before dropping the tournament
+      await tx.transaction.deleteMany({ where: { tournamentId: id } });
+      await tx.escrow.deleteMany({ where: { tournamentId: id } });
 
       return tx.tournament.delete({ where: { id } });
     });

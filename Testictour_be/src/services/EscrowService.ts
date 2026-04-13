@@ -31,6 +31,7 @@ type PayoutRecipient = {
   userId?: string;
   amount: number;
   payoutDestination?: string;
+  isHostFee?: boolean;
 };
 
 type PayoutRequest = {
@@ -57,12 +58,22 @@ const PRE_START_TOURNAMENT_STATUSES = new Set(['pending', 'UPCOMING', 'REGISTRAT
 const PRESERVED_ESCROW_STATUSES = new Set(['locked', 'released', 'cancelled', 'disputed']);
 
 export default class EscrowService {
+  /**
+   * Emit a real-time socket event so frontends update escrow status without F5.
+   * Safe to call from inside or outside transactions (uses global io).
+   */
+  private static emitEscrowUpdate(tournamentId: string, extra?: Record<string, any>) {
+    const io = (global as any).io;
+    if (io && tournamentId) {
+      io.to(`tournament:${tournamentId}`).emit('tournament_update', { type: 'escrow_updated', ...extra });
+      logger.info(`EscrowService: emitted tournament_update (escrow_updated) for tournament ${tournamentId}`);
+    }
+  }
+
   static calculateGuaranteedPrizePool(input: EscrowComputationInput) {
     const entrantCount = Math.max(input.expectedParticipants || 0, input.maxPlayers || 0);
     const grossPool = entrantCount * (input.entryFee || 0);
-    const hostFeePercent = input.hostFeePercent ?? 0.1;
-    const feeAmount = grossPool * hostFeePercent;
-    return Math.max(0, grossPool - feeAmount);
+    return Math.max(0, grossPool);
   }
 
   static buildInitialEscrowState(input: EscrowComputationInput, thresholdUsd: number) {
@@ -285,6 +296,10 @@ export default class EscrowService {
       return tournament;
     }
 
+    if (tournament.escrow.status === 'locked' && tournament.escrow.fundedAmount >= tournament.escrow.requiredAmount) {
+      return tournament;
+    }
+
     if (tournament.escrow.status !== 'funded' || tournament.escrow.fundedAmount < tournament.escrow.requiredAmount) {
       throw new ApiError(400, 'Escrow-backed tournaments must be fully funded before they can start.');
     }
@@ -321,6 +336,9 @@ export default class EscrowService {
       where: { id: tournamentId },
       data: { escrowStatus: updated.status, status: 'CANCELLED' },
     });
+
+    // Real-time push to frontends
+    this.emitEscrowUpdate(tournamentId, { escrowStatus: updated.status, tournamentStatus: 'CANCELLED' });
 
     return updated;
   }
@@ -470,6 +488,9 @@ export default class EscrowService {
       data: { escrowStatus: escrow.status },
     });
 
+    // Real-time push to frontends
+    this.emitEscrowUpdate(transaction.tournamentId, { escrowStatus: escrow.status });
+
     return { transaction, escrow };
   }
 
@@ -515,6 +536,9 @@ export default class EscrowService {
       where: { id: transaction.tournamentId },
       data: { escrowStatus: escrow.status },
     });
+
+    // Real-time push to frontends
+    this.emitEscrowUpdate(transaction.tournamentId, { escrowStatus: escrow.status });
 
     return { transaction, escrow };
   }
@@ -658,6 +682,26 @@ export default class EscrowService {
       const createdTransactions = [];
 
       for (const recipient of request.recipients) {
+        if (recipient.isHostFee) {
+          const payoutTransaction = await tx.transaction.create({
+            data: {
+              userId: tournament.organizerId,
+              tournamentId: tournament.id,
+              escrowId: tournament.escrow.id,
+              type: 'payout',
+              amount: recipient.amount,
+              currency: 'usd',
+              status: 'pending',
+              reviewNotes: (request.note || '') + ' [Partner Host Fee]',
+              externalRefId: `hostfee_${tournament.id}_${Date.now()}`,
+              payoutDestination: recipient.payoutDestination,
+              paymentMethod: 'pending_release',
+            },
+          });
+          createdTransactions.push(payoutTransaction);
+          continue;
+        }
+
         const participant = await tx.participant.findFirst({
           where: {
             tournamentId: tournament.id,
@@ -774,7 +818,7 @@ export default class EscrowService {
   }
 
   static async reviewTransaction(transactionId: string, adminId: string, request: ManualReviewRequest) {
-    return prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const transaction = await tx.transaction.findUnique({ where: { id: transactionId } });
       if (!transaction) {
         throw new ApiError(404, 'Escrow transaction not found.');
@@ -788,18 +832,28 @@ export default class EscrowService {
         providerEventId: this.buildProviderEventId('manual_review', transaction.id),
       };
 
+      let reviewResult;
       if (request.approved) {
         if (transaction.type === 'escrow_deposit') {
-          return this.markFundingTransactionSuccessful(transaction.id, tx, reviewData);
-        }
-
-        if (transaction.type === 'payout') {
-          return this.markPayoutTransactionSuccessful(transaction.id, tx, reviewData);
+          reviewResult = await this.markFundingTransactionSuccessful(transaction.id, tx, reviewData);
+        } else if (transaction.type === 'payout') {
+          reviewResult = await this.markPayoutTransactionSuccessful(transaction.id, tx, reviewData);
         }
       }
 
-      return this.markTransactionFailed(transaction.id, tx, reviewData);
+      if (!reviewResult) {
+        reviewResult = await this.markTransactionFailed(transaction.id, tx, reviewData);
+      }
+
+      return { ...reviewResult, _tournamentId: transaction.tournamentId };
     });
+
+    // Emit AFTER transaction commits so frontends see committed data
+    if (result._tournamentId) {
+      this.emitEscrowUpdate(result._tournamentId, { type: 'escrow_reviewed' });
+    }
+
+    return result;
   }
 
   static async retryTransaction(transactionId: string, adminId: string) {
@@ -879,7 +933,7 @@ export default class EscrowService {
     const settings = await SettingsService.getEscrowSettings();
     const alertCutoff = new Date(Date.now() - settings.escrowReconciliationAlertMinutes * 60_000);
 
-    const [pendingProofs, pendingReconciliation, disputedEscrows, pendingPayouts] = await Promise.all([
+    const [pendingProofs, pendingReconciliation, disputedEscrows, pendingPayouts, history] = await Promise.all([
       prisma.transaction.findMany({
         where: {
           status: 'pending',
@@ -907,9 +961,18 @@ export default class EscrowService {
       }),
       prisma.transaction.findMany({
         where: { status: 'pending', type: 'payout' },
-        include: { tournament: true },
+        include: { tournament: true, user: true },
         orderBy: { createdAt: 'asc' },
         take: 20,
+      }),
+      prisma.transaction.findMany({
+        where: {
+          status: { in: ['success', 'failed'] },
+          type: { in: ['escrow_deposit', 'payout'] }
+        },
+        include: { tournament: true },
+        orderBy: { createdAt: 'desc' },
+        take: 30, // Get top 30 most recent history items
       }),
     ]);
 
@@ -922,9 +985,10 @@ export default class EscrowService {
       },
       queues: {
         pendingProofs,
-        unreconciledWebhooks: pendingReconciliation,
-        disputedTournaments: disputedEscrows,
-        payoutApprovals: pendingPayouts,
+        unreconciled: pendingReconciliation,
+        disputed: disputedEscrows,
+        pendingPayouts: pendingPayouts,
+        history: history,
       },
       generatedAt: new Date().toISOString(),
     };

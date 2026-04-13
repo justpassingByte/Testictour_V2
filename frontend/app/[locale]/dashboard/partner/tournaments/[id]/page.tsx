@@ -6,7 +6,7 @@ import {
   ArrowLeft, Loader2, Save, Trophy, RefreshCw, Users, Play,
   Square, CheckCircle2, XCircle, Clock, AlertTriangle, Settings2,
   ChevronRight, MoreVertical, UserMinus, Crown, Skull, Image as ImageIcon,
-  ShieldAlert, ShieldCheck, Wrench, GitBranch, FastForward, SkipForward
+  ShieldAlert, ShieldCheck, Wrench, GitBranch, FastForward, SkipForward, Trash2, Copy
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -30,9 +30,10 @@ import { PieChart, TrendingUp, Medal, Sword } from "lucide-react"
 import api from "@/app/lib/apiConfig"
 import { BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid, Cell, Pie, PieChart as RechartsPieChart } from 'recharts'
 import { useTranslations } from "next-intl"
-import { TournamentAnalyticsDash } from "@/app/[locale]/components/TournamentAnalyticsDash"
 import { TournamentQuickStats } from "@/app/[locale]/components/TournamentQuickStats"
 import { EscrowManagementTab } from "@/app/[locale]/dashboard/partner/components/EscrowManagementTab"
+import { TournamentStatisticsTab } from "@/app/[locale]/tournaments/[id]/components/TournamentStatisticsTab"
+import { io, Socket } from "socket.io-client"
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   pending:      { label: "pending",      color: "slate",  icon: Clock },
@@ -67,6 +68,8 @@ export default function TournamentManagePage() {
     hostFeePercent: 0.1,
     status: "",
   })
+  const [editPhases, setEditPhases] = useState<any[]>([])
+  const [deletedPhaseIds, setDeletedPhaseIds] = useState<string[]>([])
   const [selectedImage, setSelectedImage] = useState<File | null>(null)
 
   const refresh = async () => {
@@ -86,6 +89,16 @@ export default function TournamentManagePage() {
         hostFeePercent: t.hostFeePercent || 0.1,
         status: t.status,
       })
+      setEditPhases(t.phases?.map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        type: p.type,
+        lobbySize: p.lobbySize || 8,
+        numberOfRounds: p.numberOfRounds || 1,
+        advancementType: p.advancementCondition?.type || "top_n_scores",
+        advancementValue: p.advancementCondition?.value || 4,
+      })) || [])
+      setDeletedPhaseIds([])
     } catch (error) {
       toast({ title: "Error", description: "Failed to load tournament data.", variant: "destructive" })
     }
@@ -97,6 +110,19 @@ export default function TournamentManagePage() {
       setLoading(false)
     }
     init()
+
+    // Real-time: subscribe to tournament socket events
+    const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:4000'
+    const socket: Socket = io(SOCKET_URL, { transports: ['websocket'] })
+    socket.emit('join_tournament', tournamentId)
+    const handleUpdate = () => { refresh() }
+    socket.on('tournament_update', handleUpdate)
+    socket.on('bracket_update', handleUpdate)
+    return () => {
+      socket.off('tournament_update', handleUpdate)
+      socket.off('bracket_update', handleUpdate)
+      socket.disconnect()
+    }
   }, [tournamentId])
 
   const handleSave = async () => {
@@ -117,7 +143,33 @@ export default function TournamentManagePage() {
           }]
         })
       }
-      await TournamentService.update(tournamentId, editForm as any)
+      
+      const { budget, ...restForm } = editForm
+      const payload: any = { ...restForm }
+      const phasePayload: any = {}
+      
+      if (editPhases.length > 0) {
+        phasePayload.update = editPhases.map(p => ({
+          where: { id: p.id },
+          data: {
+            name: p.name,
+            type: p.type,
+            lobbySize: p.lobbySize,
+            numberOfRounds: p.numberOfRounds,
+            advancementCondition: { type: p.advancementType, value: p.advancementValue }
+          }
+        }))
+      }
+      
+      if (deletedPhaseIds.length > 0) {
+        phasePayload.delete = deletedPhaseIds.map(id => ({ id }))
+      }
+      
+      if (Object.keys(phasePayload).length > 0) {
+        payload.phases = phasePayload
+      }
+      
+      await TournamentService.update(tournamentId, payload)
       toast({ title: "Saved", description: "Tournament updated successfully." })
       setSelectedImage(null)
       await refresh()
@@ -328,6 +380,36 @@ export default function TournamentManagePage() {
         </Card>
       )}
 
+      {/* ─── Winner Banner (shown when COMPLETED) ─── */}
+      {tournament.status === 'COMPLETED' && (() => {
+        const sortedByScore = [...participants].sort((a, b) => (b.scoreTotal || 0) - (a.scoreTotal || 0));
+        const winner = sortedByScore[0];
+        const prizeStructure = tournament.prizeStructure as number[] | null;
+        const totalPot = tournament.budget || (participants.length * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)));
+        const winnerPrize = prizeStructure && prizeStructure.length > 0 ? ((prizeStructure[0] / 100) * totalPot) : null;
+        return winner ? (
+          <div className="relative overflow-hidden rounded-xl border border-yellow-500/30 bg-gradient-to-r from-yellow-500/10 via-amber-500/5 to-yellow-500/10 p-5">
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-yellow-400/5 via-transparent to-transparent pointer-events-none" />
+            <div className="flex items-center gap-4">
+              <div className="h-14 w-14 rounded-full bg-yellow-500/20 border-2 border-yellow-500/40 flex items-center justify-center shrink-0">
+                <Crown className="h-7 w-7 text-yellow-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-yellow-400/70 font-semibold uppercase tracking-wider mb-0.5">🏆 Tournament Champion</p>
+                <p className="text-xl font-bold text-yellow-300 truncate">{winner.inGameName || winner.user?.username || 'Unknown'}</p>
+                <p className="text-sm text-muted-foreground mt-0.5">Score: <span className="font-semibold text-white">{winner.scoreTotal || 0} pts</span></p>
+              </div>
+              {winnerPrize && (
+                <div className="shrink-0 text-right">
+                  <p className="text-xs text-emerald-400/70 font-semibold uppercase tracking-wider">Prize Won</p>
+                  <p className="text-2xl font-bold text-emerald-400">${winnerPrize.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null;
+      })()}
+
       {/* Management Tabs */}
       {/* Emergency warning banner when tournament is live */}
       {tournament.status === 'in_progress' && (
@@ -362,10 +444,52 @@ export default function TournamentManagePage() {
             <Settings2 className="mr-1.5 h-4 w-4" />
             {t("settings")}
           </TabsTrigger>
+          {tournament.status === 'COMPLETED' && (
+            <TabsTrigger value="results" className="relative">
+              <Trophy className="mr-1.5 h-4 w-4 text-yellow-400" />
+              <span className="text-yellow-400">Kết quả &amp; Thưởng</span>
+              <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-yellow-400" />
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* ─── PARTICIPANTS TAB ─── */}
         <TabsContent value="participants">
+          {participants.length > 0 && (() => {
+            const stats = { facebook: 0, discord: 0, friend: 0, other: 0, unknown: 0 };
+            participants.forEach(p => {
+              if (p.referralSource === "facebook") stats.facebook++;
+              else if (p.referralSource === "discord") stats.discord++;
+              else if (p.referralSource === "friend") stats.friend++;
+              else if (p.referralSource === "other") stats.other++;
+              else stats.unknown++;
+            });
+            const referralData = [
+              { name: 'Facebook', value: stats.facebook, color: '#1877F2' },
+              { name: 'Discord', value: stats.discord, color: '#5865F2' },
+              { name: 'Bạn bè giới thiệu', value: stats.friend, color: '#10b981' },
+              { name: 'Khác', value: stats.other, color: '#f59e0b' },
+              { name: 'Tự tìm kiếm / Không rõ', value: stats.unknown, color: '#64748b' }
+            ].filter(s => s.value > 0).sort((a, b) => b.value - a.value);
+
+            return (
+              <div className="mb-4">
+                <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2"><TrendingUp className="h-4 w-4" /> Nguồn truy cập (Referral Sources)</h3>
+                <div className="grid gap-3 grid-cols-2 lg:grid-cols-5">
+                  {referralData.map(stat => (
+                    <Card key={stat.name} className="bg-card/40 border-white/5 py-3 px-4 flex flex-col justify-center">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: stat.color }} />
+                        <span className="text-xs font-medium text-muted-foreground truncate">{stat.name}</span>
+                      </div>
+                      <span className="text-2xl font-bold font-mono pl-4.5">{stat.value}</span>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
           <Card className="bg-card/60 border-white/10">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
@@ -382,8 +506,9 @@ export default function TournamentManagePage() {
                     <TableRow>
                       <TableHead>#</TableHead>
                       <TableHead>{t("player")}</TableHead>
-                      <TableHead>{t("riot_id")}</TableHead>
+                      <TableHead>PUUID</TableHead>
                       <TableHead>{t("region")}</TableHead>
+                      <TableHead>Nguồn</TableHead>
                       <TableHead>{t("total_score")}</TableHead>
                       <TableHead>{t("status")}</TableHead>
                       <TableHead className="text-right">{t("action")}</TableHead>
@@ -404,8 +529,21 @@ export default function TournamentManagePage() {
                             {i === 0 && <Crown className="h-3.5 w-3.5 text-yellow-400" />}
                           </div>
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{p.gameSpecificId || 'N/A'}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {p.user?.puuid ? (
+                            <div className="flex items-center gap-1.5 cursor-pointer group" onClick={() => {
+                              navigator.clipboard.writeText(p.user!.puuid!);
+                              toast({ description: "Đã copy PUUID" });
+                            }}>
+                              <span className="font-mono text-xs text-muted-foreground">{p.user.puuid.slice(0, 4)}...{p.user.puuid.slice(-4)}</span>
+                              <Copy className="h-3 w-3 text-muted-foreground opacity-50 group-hover:opacity-100 transition-opacity" />
+                            </div>
+                          ) : (
+                            <span className="text-xs">N/A</span>
+                          )}
+                        </TableCell>
                         <TableCell><Badge variant="outline" className="text-[10px]">{p.region || 'VN'}</Badge></TableCell>
+                        <TableCell className="text-xs text-muted-foreground capitalize">{p.referralSource || 'Unknown'}</TableCell>
                         <TableCell className="font-semibold">{p.scoreTotal || 0}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className={p.eliminated ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-green-500/10 text-green-400 border-green-500/20'}>
@@ -561,9 +699,7 @@ export default function TournamentManagePage() {
 
         {/* ─── STATISTICS TAB ─── */}
         <TabsContent value="stats">
-          <Suspense fallback={<div className="flex justify-center items-center h-48"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
-            <TournamentAnalyticsDash tournamentId={tournamentId} />
-          </Suspense>
+          <TournamentStatisticsTab tournamentId={tournamentId} />
         </TabsContent>
 
         {/* ─── ESCROW TAB ─── */}
@@ -657,6 +793,76 @@ export default function TournamentManagePage() {
                 </div>
               </div>
 
+              {editPhases.length > 0 && (
+                <div className="border border-white/10 rounded-lg p-0 mt-6">
+                  <div className="p-3 border-b border-white/10 bg-black/20 flex flex-col sm:flex-row items-center justify-between">
+                    <div>
+                        <h3 className="font-bold">Phase Configuration</h3>
+                        <p className="text-xs text-muted-foreground">Modify phase settings. Avoid changing if tournament has started.</p>
+                    </div>
+                  </div>
+                  <div className="p-4 space-y-4">
+                    {editPhases.map((phase, index) => (
+                      <Card key={phase.id} className="bg-black/30 border-white/5">
+                        <CardContent className="p-4 space-y-4">
+                          <div className="flex justify-between items-center">
+                            <h4 className="font-medium text-sm text-violet-300">Phase {index + 1}</h4>
+                            <Button variant="ghost" size="sm" className="h-6 px-2.5 text-red-400/70 hover:text-red-300 hover:bg-red-400/10" onClick={() => {
+                              setEditPhases(prev => prev.filter(p => p.id !== phase.id));
+                              setDeletedPhaseIds(prev => [...prev, phase.id]);
+                            }}>
+                              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                              <span className="text-[10px] font-medium tracking-wide uppercase">Remove</span>
+                            </Button>
+                          </div>
+                          <div className="grid gap-3 md:grid-cols-3">
+                            <div className="space-y-1.5">
+                              <Label className="text-[11px] uppercase tracking-wide">Name</Label>
+                              <Input value={phase.name} onChange={(e) => setEditPhases(prev => prev.map((p, i) => i === index ? { ...p, name: e.target.value } : p))} placeholder="Phase name" className="bg-black/40" />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-[11px] uppercase tracking-wide">Type</Label>
+                              <Select value={phase.type} onValueChange={(v) => setEditPhases(prev => prev.map((p, i) => i === index ? { ...p, type: v } : p))}>
+                                <SelectTrigger className="bg-black/40"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="elimination">Elimination</SelectItem>
+                                  <SelectItem value="points">Points</SelectItem>
+                                  <SelectItem value="swiss">Swiss</SelectItem>
+                                  <SelectItem value="round_robin">Round Robin</SelectItem>
+                                  <SelectItem value="checkmate">Checkmate</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-[11px] uppercase tracking-wide">Lobby Size</Label>
+                              <Input type="number" min={2} max={8} value={phase.lobbySize} onChange={(e) => setEditPhases(prev => prev.map((p, i) => i === index ? { ...p, lobbySize: parseInt(e.target.value) || 8 } : p))} className="bg-black/40" />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-[11px] uppercase tracking-wide">Total Rounds</Label>
+                              <Input type="number" min={1} value={phase.numberOfRounds} onChange={(e) => setEditPhases(prev => prev.map((p, i) => i === index ? { ...p, numberOfRounds: parseInt(e.target.value) || 1 } : p))} className="bg-black/40" />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-[11px] uppercase tracking-wide">Advancement Mechanism</Label>
+                              <Select value={phase.advancementType} onValueChange={(v) => setEditPhases(prev => prev.map((p, i) => i === index ? { ...p, advancementType: v } : p))}>
+                                <SelectTrigger className="bg-black/40"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="top_n_scores">Top N Scores</SelectItem>
+                                  <SelectItem value="placement">By Placement</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-[11px] uppercase tracking-wide">Advance Target</Label>
+                              <Input type="number" min={1} value={phase.advancementValue} onChange={(e) => setEditPhases(prev => prev.map((p, i) => i === index ? { ...p, advancementValue: parseInt(e.target.value) || 4 } : p))} className="bg-black/40" />
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <Separator className="bg-white/10" />
 
               <div className="flex items-center justify-between">
@@ -680,6 +886,147 @@ export default function TournamentManagePage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* ─── RESULTS & PRIZE DISTRIBUTION TAB ─── */}
+        {tournament.status === 'COMPLETED' && (
+          <TabsContent value="results">
+            <div className="space-y-4">
+              {/* Podium */}
+              {(() => {
+                const sorted = [...participants].sort((a, b) => (b.scoreTotal || 0) - (a.scoreTotal || 0));
+                const prizeStructure = tournament.prizeStructure as number[] | null;
+                const totalPot = tournament.budget || (participants.length * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)));
+                const getPrize = (rank: number) => prizeStructure && prizeStructure[rank] ? ((prizeStructure[rank] / 100) * totalPot) : 0;
+                const podium = [sorted[1], sorted[0], sorted[2]];
+                const podiumHeights = ['h-20', 'h-28', 'h-16'];
+                const podiumColors = ['bg-gray-400/20 border-gray-400/40', 'bg-yellow-500/20 border-yellow-500/40', 'bg-amber-700/20 border-amber-700/40'];
+                const medals = ['🥈', '🥇', '🥉'];
+                const podiumRanks = [2, 1, 3];
+                return (
+                  <Card className="bg-card/60 border-white/10">
+                    <CardHeader>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Trophy className="h-4 w-4 text-yellow-400" />
+                        Bục thưởng
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-end justify-center gap-4 pt-4 pb-2">
+                        {podium.map((p, i) => p ? (
+                          <div key={p.id} className="flex flex-col items-center gap-2">
+                            <div className="text-center">
+                              <p className="text-sm font-bold">{p.inGameName || p.user?.username || '?'}</p>
+                              {p.user?.puuid && (
+                                <div className="flex items-center gap-1 mt-0.5 cursor-pointer opacity-70 hover:opacity-100 transition-opacity" onClick={() => {
+                                  navigator.clipboard.writeText(p.user!.puuid!);
+                                  toast({ description: "Đã copy PUUID" });
+                                }}>
+                                  <span className="font-mono text-[10px]">{p.user.puuid.slice(0, 4)}...{p.user.puuid.slice(-4)}</span>
+                                  <Copy className="h-2.5 w-2.5" />
+                                </div>
+                              )}
+                              <p className="text-xs text-muted-foreground mt-0.5">{p.scoreTotal || 0} pts</p>
+                              {getPrize(podiumRanks[i] - 1) > 0 && (
+                                <p className="text-xs font-bold text-emerald-400">${getPrize(podiumRanks[i] - 1).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                              )}
+                            </div>
+                            <div className={`w-24 ${podiumHeights[i]} rounded-t-lg border-2 ${podiumColors[i]} flex items-center justify-center`}>
+                              <span className="text-3xl">{medals[i]}</span>
+                            </div>
+                          </div>
+                        ) : <div key={i} className="w-24" />)}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
+
+              {/* Full Prize Table */}
+              <Card className="bg-card/60 border-white/10">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Medal className="h-4 w-4 text-violet-400" />
+                    Bảng phân phối thưởng
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12">#</TableHead>
+                        <TableHead>Người chơi</TableHead>
+                        <TableHead>PUUID</TableHead>
+                        <TableHead className="text-center">Điểm</TableHead>
+                        <TableHead className="text-center">% Thưởng</TableHead>
+                        <TableHead className="text-right">Số tiền thưởng</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {[...participants]
+                        .sort((a, b) => (b.scoreTotal || 0) - (a.scoreTotal || 0))
+                        .map((p, i) => {
+                          const rank = i + 1;
+                          const prizeStructure = tournament.prizeStructure as number[] | null;
+                          const totalPot = tournament.budget || (participants.length * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)));
+                          const prizePercent = prizeStructure && prizeStructure[i] ? prizeStructure[i] : 0;
+                          const prizeAmount = (prizePercent / 100) * totalPot;
+                          const hasPrize = prizeAmount > 0;
+                          return (
+                            <TableRow key={p.id} className={hasPrize ? 'bg-yellow-500/5' : ''}>
+                              <TableCell>
+                                <span className={`font-bold ${rank === 1 ? 'text-yellow-400' : rank === 2 ? 'text-gray-300' : rank === 3 ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                                  {rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <Avatar className="h-7 w-7">
+                                    <AvatarFallback className="text-[10px]">
+                                      {(p.inGameName || p.user?.username || '?').slice(0, 2).toUpperCase()}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <span className="font-medium text-sm">{p.inGameName || p.user?.username || 'Unknown'}</span>
+                                  {rank === 1 && <Crown className="h-3.5 w-3.5 text-yellow-400" />}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {p.user?.puuid ? (
+                                  <div className="flex items-center gap-1.5 cursor-pointer group" onClick={() => {
+                                    navigator.clipboard.writeText(p.user!.puuid!);
+                                    toast({ description: "Đã copy PUUID" });
+                                  }}>
+                                    <span className="font-mono text-xs">{p.user.puuid.slice(0, 4)}...{p.user.puuid.slice(-4)}</span>
+                                    <Copy className="h-3 w-3 opacity-50 group-hover:opacity-100 transition-opacity" />
+                                  </div>
+                                ) : (
+                                  <span className="text-xs">N/A</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-center font-bold">{p.scoreTotal || 0}</TableCell>
+                              <TableCell className="text-center">
+                                {hasPrize ? (
+                                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">{prizePercent}%</Badge>
+                                ) : (
+                                  <span className="text-muted-foreground text-xs">—</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {hasPrize ? (
+                                  <span className="font-bold text-emerald-400">${prizeAmount.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                                ) : (
+                                  <span className="text-muted-foreground text-xs">—</span>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Remove Participant Dialog */}

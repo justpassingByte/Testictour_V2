@@ -1,16 +1,15 @@
-import { Space_Grotesk, Cinzel_Decorative } from 'next/font/google';
+import { Inter, Outfit } from 'next/font/google';
 import './globals.css';
 import { Metadata } from 'next';
 
-const spaceGrotesk = Space_Grotesk({ 
+const inter = Inter({ 
   subsets: ['latin'],
-  variable: '--font-space',
+  variable: '--font-inter',
 });
 
-const cinzel = Cinzel_Decorative({
-  weight: ['400', '700', '900'],
+const outfit = Outfit({
   subsets: ['latin'],
-  variable: '--font-cinzel',
+  variable: '--font-outfit',
 });
 
 export const metadata: Metadata = {
@@ -24,7 +23,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${spaceGrotesk.variable} ${cinzel.variable}`}>
+    <html lang="en" className={`${inter.variable} ${outfit.variable}`}>
       <body className="font-sans">
         {children}
       </body>

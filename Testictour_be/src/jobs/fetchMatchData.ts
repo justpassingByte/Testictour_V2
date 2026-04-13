@@ -97,7 +97,7 @@ export default async function fetchMatchData(job: Job<FetchMatchDataJobData>, io
       retryDelay = (20 - elapsedMin) * 60_000;
       logger.info(`MatchDataWorker: lobby ${lobbyId} — waiting 20 minutes before polling. Re-queuing in ${Math.round(retryDelay / 1000)}s`);
     } else {
-      logger.info(`MatchDataWorker: lobby ${lobbyId} — no match yet. Re-queuing in 15s`);
+      logger.info(`MatchDataWorker: lobby ${lobbyId} — no match yet. Re-queuing in 30s`);
     }
 
     await fetchMatchDataQueue.add('fetchMatchData', job.data, { delay: retryDelay });
@@ -145,4 +145,4 @@ export default async function fetchMatchData(job: Job<FetchMatchDataJobData>, io
 
   logger.info(`MatchDataWorker: job ${job.id} completed — lobby ${lobbyId} → FINISHED`);
 }
-
+

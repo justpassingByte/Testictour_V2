@@ -1,25 +1,13 @@
 import { Suspense } from "react"
 import { notFound } from "next/navigation"
-import Link from "next/link"
-import Image from "next/image"
-import { format } from "date-fns"
 import { TournamentService } from "@/app/services/TournamentService"
 import { TournamentHeader } from "@/app/[locale]/tournaments/[id]/components/TournamentHeader"
 import { TournamentScheduleCard } from "@/app/[locale]/tournaments/[id]/components/TournamentScheduleCard"
 import { TournamentFormatCard } from "@/app/[locale]/tournaments/[id]/components/TournamentFormatCard"
 import { PointSystemCard } from "@/app/[locale]/tournaments/[id]/components/PointSystemCard"
 import TabsContentClientWrapper from "@/app/[locale]/tournaments/[id]/components/TabsContentClientWrapper"
-import { TournamentLobbyButton } from "@/app/[locale]/tournaments/[id]/components/TournamentLobbyButton"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { getTranslations } from "next-intl/server"
-import { 
-  Globe, Users, Calendar, 
-  DollarSign, Clock, Download, Loader2,
-  AlertTriangle, ShieldCheck
-} from "lucide-react"
+import TournamentInfoClient from "@/app/[locale]/tournaments/[id]/components/TournamentInfoClient"
+import TournamentSidebarClient from "@/app/[locale]/tournaments/[id]/components/TournamentSidebarClient"
 
 // Server-side data fetching
 async function getTournamentDetail(id: string) {
@@ -43,7 +31,6 @@ async function getTournamentParticipants(tournamentId: string) {
 }
 
 export default async function TournamentPage({ params }: { params: { id: string } }) {
-  const t = await getTranslations("common")
   const resolvedParams = await Promise.resolve(params)
   const [tournament, participants] = await Promise.all([
     getTournamentDetail(resolvedParams.id),
@@ -54,20 +41,6 @@ export default async function TournamentPage({ params }: { params: { id: string 
     notFound()
   }
 
-  const statusMapping = {
-    pending:     { text: t("upcoming"),   color: "bg-yellow-500/20 text-yellow-500" },
-    in_progress: { text: t("ongoing"),    color: "bg-primary/20 text-primary animate-pulse-subtle" },
-    completed:   { text: t("finished"),   color: "bg-muted text-muted-foreground" },
-  }
-  const currentStatus = statusMapping[tournament.status as keyof typeof statusMapping] || 
-    { text: tournament.status, color: "" }
-
-  const regionSubRegions: Record<string, string> = {
-    AMERICAS: "North America (NA1), Brazil (BR1), LATAM North (LA1), LATAM South (LA2)",
-    EUROPE: "Europe West (EUW1), Europe Nordic & East (EUN1), Turkey (TR1), Russia (RU)",
-    ASIA: "Vietnam (VN2), Taiwan (TW2), Singapore/Malaysia (SG2), Thailand (TH2), Philippines (PH2), Korea (KR), Japan (JP1)"
-  };
-
   return (
     <div className="container py-8">
       <TournamentHeader tournament={tournament} />
@@ -75,38 +48,8 @@ export default async function TournamentPage({ params }: { params: { id: string 
       <div className="mt-8 grid gap-8 md:grid-cols-3">
         <div className="col-span-3 md:col-span-2">
           <div className="flex flex-col space-y-8">
-            <div className="flex flex-col space-y-2">
-              <div className="flex items-center space-x-2">
-                <h1 className="text-3xl font-bold">{tournament.name}</h1>
-                <Badge variant="outline" className={`${currentStatus.color} capitalize`}>
-                  {currentStatus.text}
-                </Badge>
-                {tournament.isCommunityMode ? (
-                  <Badge variant="outline" className="bg-orange-500/10 text-orange-500 border-orange-500/30">
-                    <AlertTriangle className="mr-1 h-3 w-3 inline mb-0.5" />
-                    {t("community_mode") || "Community Mode"}
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30">
-                    <ShieldCheck className="mr-1 h-3 w-3 inline mb-0.5" />
-                    {t("escrow_secured") || "Escrow Secured"}
-                  </Badge>
-                )}
-              </div>
-              <p className="text-muted-foreground">{tournament.description}</p>
-              
-              {tournament.isCommunityMode && (
-                <div className="bg-orange-500/10 border border-orange-500/20 rounded-md p-4 mt-2 mb-4">
-                  <div className="flex items-start">
-                    <AlertTriangle className="h-5 w-5 text-orange-500 mt-0.5 mr-3 flex-shrink-0" />
-                    <div>
-                      <h4 className="text-orange-500 font-medium mb-1">{t("community_tournament_notice")}</h4>
-                      <p className="text-sm text-orange-500/80">{t("this_tournament_is_operating_in_communit_desc")}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* Client component: title, status badge, escrow banner — updates in real-time */}
+            <TournamentInfoClient initialTournament={tournament} />
 
             <div className="grid gap-4 md:grid-cols-2">
               <TournamentScheduleCard tournament={tournament} />
@@ -127,101 +70,8 @@ export default async function TournamentPage({ params }: { params: { id: string 
         </div>
 
         <div className="col-span-3 md:col-span-1">
-          <div className="flex flex-col space-y-8">
-            <Card className="overflow-hidden bg-card/80 dark:bg-card/60 backdrop-blur-xl border border-primary/20 shadow-xl shadow-primary/5 transition-all duration-300 hover:shadow-2xl hover:shadow-primary/10">
-              <CardHeader className="p-0">
-                <Image
-                  width={1000}
-                  height={1000}
-                  src={tournament.image || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80'}
-                  alt={tournament.name}
-                  className="object-cover w-full h-full"
-                  priority
-                  sizes="(max-width: 768px) 100vw, 33vw"
-                />
-              </CardHeader>
-              <CardContent className="p-6 space-y-4">
-                <ul className="space-y-3">
-                  <li className="flex items-center justify-between">
-                    <span className="text-muted-foreground flex items-center"><Users className="mr-2 h-4 w-4" /> {t("participants") || "Participants"}:</span>
-                    <span className="font-medium">{tournament.registered || 0} / {tournament.maxPlayers}</span>
-                  </li>
-                  <li className="flex items-center justify-between">
-                    <span className="text-muted-foreground flex items-center"><Globe className="mr-2 h-4 w-4" /> {t("region")}:</span>
-                    {tournament.region && regionSubRegions[tournament.region] ? (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger>
-                            <span className="font-medium underline decoration-dashed underline-offset-4 decoration-muted-foreground cursor-help hover:text-primary transition-colors">
-                              {tournament.region}
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent className="max-w-[200px] text-center border-white/10 bg-black/80 backdrop-blur-md">
-                            <p className="font-semibold text-xs mb-1">{t("included_sub_regions")}</p>
-                            <p className="text-xs text-muted-foreground leading-relaxed">
-                              {regionSubRegions[tournament.region]}
-                            </p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    ) : (
-                      <span className="font-medium">{tournament.region || t("n_a")}</span>
-                    )}
-                  </li>
-                  <li className="flex items-center justify-between">
-                    <span className="text-muted-foreground flex items-center"><Calendar className="mr-2 h-4 w-4" /> {t("registration_deadline")}:</span>
-                    <span className="font-medium">
-                      {tournament.endTime && !isNaN(new Date(tournament.endTime).getTime())
-                        ? format(new Date(tournament.endTime), "yyyy-MM-dd")
-                        : t("n_a")}
-                    </span>
-                  </li>
-                  <li className="flex items-center justify-between">
-                    <span className="text-muted-foreground flex items-center">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 h-4 w-4"><circle cx="8" cy="8" r="7"/><polyline points="8 4 8 12 11.5 15.5"/><circle cx="16" cy="16" r="7"/><line x1="16" y1="12" x2="16" y2="20"/><line x1="12" y1="16" x2="20" y2="16"/></svg> {t("registration_fee")}:
-                    </span>
-                    <span className="font-medium text-amber-400 font-mono">{tournament.entryFee.toLocaleString()}</span>
-                  </li>
-                  <li className="flex items-center justify-between">
-                    <span className="text-muted-foreground flex items-center"><Clock className="mr-2 h-4 w-4" /> {t("status")}:</span>
-                    <Badge variant="outline" className={`${currentStatus.color} capitalize`}>{currentStatus.text}</Badge>
-                  </li>
-                </ul>
-                <div className="grid gap-3">
-                  {tournament.status === "in_progress" && (
-                    <>
-                      <TournamentLobbyButton tournamentId={tournament.id} />
-                      <Button asChild variant="secondary" className="w-full">
-                        <Link href={`/tournaments/${tournament.id}/live`}>{t("view_live_scoreboard")}</Link>
-                      </Button>
-                    </>
-                  )}
-                  {tournament.status === "UPCOMING" && (
-                    <Button asChild className="w-full">
-                      <Link href={`/tournaments/${tournament.id}/register`}>{t("register_now")}</Link>
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-card/80 dark:bg-card/60 backdrop-blur-xl border border-primary/20 shadow-xl shadow-primary/5 transition-all duration-300 hover:shadow-2xl hover:shadow-primary/10">
-              <CardHeader>
-                <CardTitle className="text-lg">{t("quick_links")}</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-3">
-                <Link href="#" className="flex items-center text-sm font-medium text-muted-foreground hover:text-primary transition-all duration-200 hover:translate-x-1 p-2 hover:bg-primary/5 rounded-md -mx-2">
-                  <Download className="mr-2 h-4 w-4" /> {t("bracket")}
-                </Link>
-                <Link href="#" className="flex items-center text-sm font-medium text-muted-foreground hover:text-primary transition-all duration-200 hover:translate-x-1 p-2 hover:bg-primary/5 rounded-md -mx-2">
-                  <Download className="mr-2 h-4 w-4" /> {t("export_scoreboard")}
-                </Link>
-                <Link href="#" className="flex items-center text-sm font-medium text-muted-foreground hover:text-primary transition-all duration-200 hover:translate-x-1 p-2 hover:bg-primary/5 rounded-md -mx-2">
-                  <Download className="mr-2 h-4 w-4" /> {t("player_list")}
-                </Link>
-              </CardContent>
-            </Card>
-          </div>
+          {/* Client component: sidebar with status, funding, buttons — updates in real-time */}
+          <TournamentSidebarClient initialTournament={tournament} />
         </div>
       </div>
     </div>

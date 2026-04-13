@@ -27,12 +27,12 @@ export const TournamentTabsContent = memo(({
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab}>
-      <TabsList className="grid grid-cols-5 mb-4 bg-muted/30 p-1 rounded-xl">
-        <TabsTrigger value="phase" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm">{t("phases")}</TabsTrigger>
-        <TabsTrigger value="bracket" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm">{t("bracket")}</TabsTrigger>
-        <TabsTrigger value="players" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm">{t("participants")}</TabsTrigger>
-        <TabsTrigger value="rules" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm">{t("rules")}</TabsTrigger>
-        <TabsTrigger value="details" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm">{t("details")}</TabsTrigger>
+      <TabsList className="grid grid-cols-3 sm:grid-cols-5 mb-4 bg-muted/30 p-1 rounded-xl h-auto flex-wrap">
+        <TabsTrigger value="phase" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm py-2">{t("phases")}</TabsTrigger>
+        <TabsTrigger value="bracket" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm py-2">{t("bracket")}</TabsTrigger>
+        <TabsTrigger value="players" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm py-2">{t("participants")}</TabsTrigger>
+        <TabsTrigger value="rules" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm py-2">{t("rules")}</TabsTrigger>
+        <TabsTrigger value="details" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm py-2">{t("details")}</TabsTrigger>
       </TabsList>
       <TabsContent value="bracket" className="space-y-4">
         <TournamentBracketTab tournamentId={tournament.id} />

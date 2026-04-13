@@ -23,6 +23,7 @@ model User {
   riotGameName               String
   riotGameTag                String
   region                     String
+  discordId                  String?
   referrer                   String? // Optional referrer code or username
   isActive                   Boolean                 @default(true)
   createdAt                  DateTime                @default(now())
@@ -43,6 +44,10 @@ model User {
 
   // Admin settings relations
   sentNotifications         Notification[]
+
+  // Password Reset
+  resetToken        String?   // SHA-256 hash of the reset token
+  resetTokenExpiry  DateTime? // Token expiry (30 min from creation)
 
   // Stats cache fields
   rank               String?
@@ -108,6 +113,10 @@ model Tournament {
   registered              Boolean?
   userTournamentSummaries UserTournamentSummary[]
 
+  // Dynamic Content & Branding
+  discordUrl              String?                 @db.Text
+  sponsors                Json?                   @default("[]") // Array of { name: string, url: string } or raw objects
+
   // Escrow & Payment
   isCommunityMode            Boolean @default(false)
   escrowStatus               String  @default("not_funded")
@@ -156,6 +165,7 @@ model Participant {
   paid            Boolean        @default(false)
   paymentStatus   String         @default("pending")
   rewarded        Boolean        @default(false)
+  referralSource  String?        // New: How did they hear about the tournament
   rewards         Reward[]
   roundOutcomes   RoundOutcome[]
 

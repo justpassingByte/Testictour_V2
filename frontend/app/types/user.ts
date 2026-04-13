@@ -7,6 +7,8 @@ export interface IUser {
   riotGameName?: string;
   riotGameTag?: string;
   region: string;
+  subRegion?: string;
+  discordId?: string;
   createdAt: Date;
   level?: number;
   balance?: {
