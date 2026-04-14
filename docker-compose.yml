@@ -13,7 +13,7 @@ services:
       - NODE_ENV=production
       - DATABASE_URL=${DATABASE_URL}
       - JWT_SECRET=${JWT_SECRET}
-      - FRONTEND_URL=https://testictour.com
+      - FRONTEND_URL=http://16.176.11.53
       - BACKEND_SERVICE_URL=http://testictour-backend:4000
       - GRIMOIRE_API_URL=http://grimoire-backend:3001
       # Gateway Variables
@@ -40,8 +40,8 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.frontend
       args:
-        - NEXT_PUBLIC_API_URL=https://api.testictour.com
-        - NEXT_PUBLIC_BACKEND_URL=https://api.testictour.com
+        - NEXT_PUBLIC_API_URL=http://16.176.11.53:4000
+        - NEXT_PUBLIC_BACKEND_URL=http://16.176.11.53:4000
     container_name: testictour-frontend
     restart: unless-stopped
     # Đưa lại về port 80 để truy cập IP là vào web luôn
@@ -49,8 +49,8 @@ services:
       - "80:3000" 
     environment:
       - INTERNAL_BACKEND_URL=http://testictour-backend:4000/api
-      - NEXT_PUBLIC_API_URL=https://api.testictour.com
-      - NEXT_PUBLIC_BACKEND_URL=https://api.testictour.com
+      - NEXT_PUBLIC_API_URL=http://16.176.11.53:4000
+      - NEXT_PUBLIC_BACKEND_URL=http://16.176.11.53:4000
     depends_on:
       - backend
     networks:
