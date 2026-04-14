@@ -134,16 +134,27 @@ export default function TournamentRegistration({ params }: { params: { id: strin
     setErrorMessage("")
 
     try {
-      await ParticipantService.join(tournament.id, discordId.trim(), referralSource)
-      setStatus("success")
-      toast({
-        title: "Registration Successful",
-        description: "You have successfully registered for the tournament.",
-      })
-      window.location.href = `/tournaments/${params.id}`
-    } catch {
+      const result = await ParticipantService.join(tournament.id, discordId.trim(), referralSource)
+
+      if (result.requiresPayment && result.checkoutUrl) {
+        // Paid tournament — redirect to payment gateway (Stripe / MoMo)
+        toast({
+          title: "Redirecting to payment...",
+          description: `Your slot is reserved. Complete payment to confirm registration.`,
+        })
+        window.location.href = result.checkoutUrl
+      } else {
+        // Free tournament — registration complete
+        setStatus("success")
+        toast({
+          title: "Registration Successful!",
+          description: "You have successfully registered for the tournament.",
+        })
+        window.location.href = `/tournaments/${params.id}`
+      }
+    } catch (err: any) {
       setStatus("error")
-      setErrorMessage("An error occurred during registration.")
+      setErrorMessage(err?.message || "An error occurred during registration. Please try again.")
     }
   }
 
@@ -512,6 +523,26 @@ export default function TournamentRegistration({ params }: { params: { id: strin
                     )}
                   </div>
 
+                  {/* Entry fee payment info */}
+                  {tournament.entryFee > 0 && (
+                    <div className="mt-1 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <DollarSign className="h-4 w-4 text-amber-400" />
+                        <span className="text-sm font-bold text-amber-400 uppercase tracking-wide">Entry Fee Required</span>
+                      </div>
+                      <p className="text-xs text-amber-300/80">
+                        This tournament requires an entry fee of{" "}
+                        <strong className="text-amber-300">
+                          ${tournament.entryFee.toLocaleString()} USD
+                        </strong>.
+                        After clicking Register, you will be redirected to the payment gateway to complete your registration.
+                      </p>
+                      <div className="flex items-center gap-2 pt-1">
+                        <span className="text-xs text-muted-foreground">Your slot is reserved until payment is completed.</span>
+                      </div>
+                    </div>
+                  )}
+
                   {status === "error" && (
                     <Alert variant="destructive" className="animate-fade-in py-2">
                       <AlertCircle className="h-4 w-4" />
@@ -540,11 +571,11 @@ export default function TournamentRegistration({ params }: { params: { id: strin
               </Button>
               <Button size="lg" onClick={handleSubmit} disabled={!currentUser?.riotGameName || !discordId.trim() || status === "loading" || (!tournament.isCommunityMode && tournament.escrowStatus === "not_funded")}>
                 {status === "loading" ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />{t("registering")}</>
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{tournament.entryFee > 0 ? "Reserving slot..." : t("registering")}</>
+                ) : tournament.entryFee > 0 ? (
+                  <><DollarSign className="mr-2 h-4 w-4" />Register & Pay ${tournament.entryFee} USD<ArrowRight className="ml-2 h-4 w-4" /></>
                 ) : (
-                  <>{t("register")}<ArrowRight className="ml-2 h-4 w-4" />
-                  </>
+                  <>{t("register")}<ArrowRight className="ml-2 h-4 w-4" /></>
                 )}
               </Button>
             </CardFooter>

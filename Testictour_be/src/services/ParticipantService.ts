@@ -1,25 +1,32 @@
 import { prisma } from './prisma';
 import ApiError from '../utils/ApiError';
-import TransactionService from './TransactionService';
 import { Prisma } from '@prisma/client';
 import PrizeCalculationService from './PrizeCalculationService';
 import { getMajorRegion } from '../utils/RegionMapper';
+import StripeService from './StripeService';
+import MomoService from './MomoService';
+import CurrencyService from './CurrencyService';
+import SettingsService from './SettingsService';
+import crypto from 'crypto';
+import logger from '../utils/logger';
 
 export default class ParticipantService {
   static async join(tournamentId: string, userId: string, discordId?: string, referralSource?: string) {
-    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    // ── Phase 1: validate + reserve slot + create participant (in transaction) ──
+    const { participant, tournament } = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const tournament = await tx.tournament.findUnique({ where: { id: tournamentId } });
       if (!tournament) throw new ApiError(404, 'Tournament not found');
 
-      // Update discordId if provided
-      if (discordId) {
-        await tx.user.update({
-          where: { id: userId },
-          data: { discordId }
-        });
+      if (tournament.status !== 'UPCOMING') {
+        throw new ApiError(400, 'Tournament is no longer accepting registrations');
       }
 
-      // Validate region if tournament has one
+      // Update discordId if provided
+      if (discordId) {
+        await tx.user.update({ where: { id: userId }, data: { discordId } });
+      }
+
+      // Region check
       if (tournament.region) {
         const user = await tx.user.findUnique({ where: { id: userId } });
         if (user?.region) {
@@ -30,43 +37,113 @@ export default class ParticipantService {
         }
       }
 
-      // Check if user is already a participant
-      const existingParticipant = await tx.participant.findFirst({
-        where: { tournamentId, userId },
-      });
-      if (existingParticipant) throw new ApiError(409, 'User already joined this tournament');
+      // Duplicate check
+      const existing = await tx.participant.findFirst({ where: { tournamentId, userId } });
+      if (existing) throw new ApiError(409, 'User already joined this tournament');
 
-      // Check maxPlayers restriction
-      const currentParticipants = tournament.actualParticipantsCount || 0;
-      if (currentParticipants >= tournament.maxPlayers) {
+      // ── ATOMIC slot reservation ─────────────────────────────────────────────
+      // Uses conditional UPDATE — only succeeds if count < maxPlayers.
+      // If 2 concurrent requests race, only 1 gets count=1; the other gets 0 → reject.
+      const slotReserved = await tx.tournament.updateMany({
+        where: {
+          id: tournamentId,
+          status: 'UPCOMING',
+          actualParticipantsCount: { lt: tournament.maxPlayers },
+        },
+        data: { actualParticipantsCount: { increment: 1 } },
+      });
+
+      if (slotReserved.count === 0) {
         throw new ApiError(400, 'Tournament is full');
       }
 
-      // Check if tournament is upcoming
-      if (tournament.status !== 'UPCOMING') {
-        throw new ApiError(400, 'Tournament is no longer accepting registrations');
-      }
+      const entryFee = tournament.entryFee || 0;
 
-      const entryFee = (tournament as any).entryFee || 0;
-
-      // Deduct entry fee AND create Transaction record atomically via TransactionService
-      // Previously this only called balance.decrement without creating a transaction record
-      if (entryFee > 0) {
-        await TransactionService.entryFee(userId, tournamentId, entryFee, tx, (tournament as any).entryType || 'usd');
-      }
-
-      const participant = await tx.participant.create({ data: { tournamentId, userId, paid: entryFee > 0, referralSource } });
-
-      // Update tournament's actualParticipantsCount and adjustedPrizeStructure
-      const updatedActualCount = (tournament.actualParticipantsCount || 0) + 1;
-      await tx.tournament.update({
-        where: { id: tournamentId },
-        data: { actualParticipantsCount: updatedActualCount },
+      // Create participant — paid=true for free tournaments, paid=false until payment confirmed
+      const participant = await tx.participant.create({
+        data: { tournamentId, userId, paid: entryFee === 0, referralSource },
       });
 
-      return participant;
+      return { participant, tournament };
     });
+
+    // ── Phase 2: if paid tournament, generate payment checkout URL ─────────────
+    const entryFee = tournament.entryFee || 0;
+    if (entryFee === 0) {
+      // Free tournament — done immediately
+      return { participant, checkoutUrl: null, requiresPayment: false };
+    }
+
+    // Determine payment provider from settings
+    const settings = await SettingsService.getEscrowSettings();
+    const provider = settings.escrowDefaultProvider || 'stripe';
+    const feUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const apiUrl = process.env.API_URL || 'http://localhost:3001/api/v1';
+
+    const externalRefId = `entryfee_${participant.id}_${crypto.randomBytes(8).toString('hex')}`;
+    const successUrl = `${feUrl}/tournaments/${tournamentId}?paymentSuccess=true&participantId=${participant.id}`;
+    const cancelUrl  = `${feUrl}/tournaments/${tournamentId}/register?paymentCancelled=true`;
+
+    // Create pending transaction record
+    const transaction = await prisma.transaction.create({
+      data: {
+        userId,
+        tournamentId,
+        type: 'entry_fee',
+        amount: entryFee,
+        currency: 'usd',
+        status: 'pending',
+        refId: participant.id,       // link back to participant
+        externalRefId,
+        paymentMethod: provider,
+        reviewNotes: `Entry fee for tournament ${tournamentId}`,
+      },
+    });
+
+    let checkoutUrl = '';
+    try {
+      if (provider === 'stripe') {
+        checkoutUrl = await StripeService.createEntryFeeCheckout({
+          tournamentId,
+          participantId: participant.id,
+          transactionId: transaction.id,
+          amountUsd: entryFee,
+          successUrl,
+          cancelUrl,
+        });
+      } else if (provider === 'momo') {
+        const usdToVndRate = await CurrencyService.getUsdToVndRate();
+        const amountVnd = Math.round(entryFee * usdToVndRate);
+        checkoutUrl = await MomoService.createEntryFeePayment({
+          tournamentId,
+          participantId: participant.id,
+          transactionId: transaction.id,
+          amountVnd,
+          returnUrl: successUrl,
+          notifyUrl: `${apiUrl}/webhooks/payments/momo`,
+        });
+      }
+    } catch (err: any) {
+      // Payment URL generation failed — clean up: remove participant + decrement slot
+      logger.error(`[EntryFee] Checkout URL generation failed for participant ${participant.id}: ${err.message}`);
+      await prisma.$transaction(async (tx) => {
+        await tx.participant.delete({ where: { id: participant.id } });
+        await tx.tournament.update({
+          where: { id: tournamentId },
+          data: { actualParticipantsCount: { decrement: 1 } },
+        });
+        await tx.transaction.update({
+          where: { id: transaction.id },
+          data: { status: 'failed', reviewNotes: `Checkout URL generation failed: ${err.message}` },
+        });
+      });
+      throw new ApiError(502, 'Payment gateway unavailable. Please try again.');
+    }
+
+    logger.info(`[EntryFee] Participant ${participant.id} registered. Awaiting payment via ${provider}.`);
+    return { participant, checkoutUrl, requiresPayment: true, transactionId: transaction.id };
   }
+
 
   static async list(tournamentId: string, page: number = 1, limit: number = 10) {
     const skip = (page - 1) * limit;
@@ -193,24 +270,39 @@ export default class ParticipantService {
       if (!participant) throw new ApiError(404, 'Participant not found');
       const tournament = await tx.tournament.findUnique({ where: { id: participant.tournamentId } });
       if (!tournament) throw new ApiError(404, 'Tournament not found');
-      // Only refund if tournament hasn't started
-      if (tournament.status === 'pending' && participant.paid) {
+
+      // If participant paid, create a pending refund transaction for admin to process via gateway
+      // (Entry fees are paid via Stripe/MoMo, so refund must be handled externally)
+      if (tournament.status === 'UPCOMING' && participant.paid) {
         const entryFee = (tournament as any).entryFee || 0;
-        await TransactionService.refund(participant.userId, tournament.id, entryFee, tx, (tournament as any).entryType || 'usd');
+        if (entryFee > 0) {
+          await tx.transaction.create({
+            data: {
+              userId: participant.userId,
+              tournamentId: participant.tournamentId,
+              type: 'refund',
+              amount: entryFee,
+              currency: 'usd',
+              status: 'pending', // Admin processes gateway refund manually
+              refId: participant.id,
+              reviewNotes: 'Entry fee refund — participant removed before tournament start',
+            },
+          });
+        }
       }
+
       await tx.participant.delete({ where: { id: participantId } });
 
-      // Update tournament's actualParticipantsCount
-      const updatedActualCount = Math.max(0, (tournament.actualParticipantsCount || 1) - 1);
-
+      // Atomic decrement — prevents going below 0 if counts are somehow stale
       await tx.tournament.update({
         where: { id: tournament.id },
-        data: { actualParticipantsCount: updatedActualCount },
+        data: { actualParticipantsCount: { decrement: 1 } },
       });
 
       return;
     });
   }
+
 
   /**
    * Get participant's round history

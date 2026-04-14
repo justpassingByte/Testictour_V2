@@ -18,9 +18,11 @@ import { ITournament } from "@/app/types/tournament"
 import { formatCurrency } from "@/lib/utils"
 import { TournamentService } from "@/app/services/TournamentService"
 import { useTranslations } from "next-intl"
+import { useCurrencyRate } from "@/app/hooks/useCurrencyRate"
 
 export default function AdminTournamentsPage() {
   const t = useTranslations("common")
+  const { formatVndText } = useCurrencyRate()
   const [tournaments, setTournaments] = useState<ITournament[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
@@ -190,7 +192,10 @@ export default function AdminTournamentsPage() {
                         </div>
                       </TableCell>
                       <TableCell className="font-medium">
-                        {formatCurrency(prizePool, 'VND')}
+                        <div className="flex flex-col">
+                          <span>${prizePool.toLocaleString()} <span className="text-xs text-muted-foreground font-normal">USD</span></span>
+                          <span className="text-[10px] text-muted-foreground opacity-80">{formatVndText(prizePool)}</span>
+                        </div>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {new Date(tournament.startTime).toLocaleDateString()}

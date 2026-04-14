@@ -373,7 +373,7 @@ export default class EscrowService {
           refId: tournament.id,
           proofUrl: request.proofUrl,
           reviewNotes: request.note,
-          externalRefId: `funding_${tournament.id}_${Date.now()}`,
+          externalRefId: `funding_${tournament.id}_${crypto.randomBytes(8).toString('hex')}`,
           paymentMethod,
         },
       });
@@ -693,7 +693,7 @@ export default class EscrowService {
               currency: 'usd',
               status: 'pending',
               reviewNotes: (request.note || '') + ' [Partner Host Fee]',
-              externalRefId: `hostfee_${tournament.id}_${Date.now()}`,
+              externalRefId: `hostfee_${tournament.id}_${crypto.randomBytes(8).toString('hex')}`,
               payoutDestination: recipient.payoutDestination,
               paymentMethod: 'pending_release',
             },
@@ -736,7 +736,7 @@ export default class EscrowService {
             status: 'pending',
             refId: reward.id,
             reviewNotes: request.note,
-            externalRefId: `payout_${reward.id}_${Date.now()}`,
+            externalRefId: `payout_${reward.id}_${crypto.randomBytes(8).toString('hex')}`,
             payoutDestination: recipient.payoutDestination,
             paymentMethod: 'pending_release',
           },
@@ -782,17 +782,16 @@ export default class EscrowService {
       const paymentMethod = request.paymentMethod || 'gateway';
       const releasedAt = new Date();
 
-      await Promise.all(
+      // Mark each pending payout as successfully released (updates reward + participant.paymentStatus)
+      const releasedTransactions = await Promise.all(
         pendingTransactions.map((transaction) =>
-          tx.transaction.update({
-            where: { id: transaction.id },
-            data: {
-              paymentMethod,
-              payoutDestination: request.payoutDestination || transaction.payoutDestination,
-              reviewNotes: request.note || transaction.reviewNotes,
-              reviewedById: adminId,
-              reviewedAt: releasedAt,
-            },
+          this.markPayoutTransactionSuccessful(transaction.id, tx, {
+            paymentMethod,
+            payoutDestination: request.payoutDestination || transaction.payoutDestination,
+            reviewNotes: request.note || transaction.reviewNotes,
+            reviewedById: adminId,
+            reviewedAt: releasedAt,
+            providerEventId: this.buildProviderEventId('admin_release', transaction.id),
           }),
         ),
       );
@@ -800,7 +799,7 @@ export default class EscrowService {
       const escrow = await this.syncEscrowSnapshot(tournament.escrow.id, tx, {
         status: 'released',
         releasedAt,
-        reconciliationStatus: 'pending',
+        reconciliationStatus: 'success',
         lastReviewedById: adminId,
         lastReviewedAt: releasedAt,
       });
@@ -810,9 +809,11 @@ export default class EscrowService {
         data: { escrowStatus: escrow.status },
       });
 
+      this.emitEscrowUpdate(tournamentId, { escrowStatus: escrow.status, type: 'payout_released' });
+
       return {
         escrow,
-        transactions: pendingTransactions,
+        transactions: releasedTransactions.map(r => r.transaction),
       };
     });
   }
@@ -1443,22 +1444,22 @@ export default class EscrowService {
       take: 20,
     });
 
-    const results = [];
+    // Process all retries in parallel — each has its own transaction so partial failures are isolated
+    const results = await Promise.allSettled(
+      staleTransactions.map(tx =>
+        this.retryWithBackoff(tx.id, adminId)
+          .then(result => ({ transactionId: tx.id, status: 'retried' as const, retryCount: result.retryCount }))
+          .catch((error: any) => ({ transactionId: tx.id, status: 'skipped' as const, reason: error.message }))
+      )
+    );
 
-    for (const tx of staleTransactions) {
-      try {
-        const result = await this.retryWithBackoff(tx.id, adminId);
-        results.push({ transactionId: tx.id, status: 'retried', retryCount: result.retryCount });
-      } catch (error: any) {
-        results.push({ transactionId: tx.id, status: 'skipped', reason: error.message });
-      }
-    }
+    const summary = results.map(r => r.status === 'fulfilled' ? r.value : r.reason);
 
     logger.info('Bulk retry completed', { total: staleTransactions.length, adminId });
 
     return {
-      processed: results.length,
-      results,
+      processed: summary.length,
+      results: summary,
       generatedAt: new Date().toISOString(),
     };
   }

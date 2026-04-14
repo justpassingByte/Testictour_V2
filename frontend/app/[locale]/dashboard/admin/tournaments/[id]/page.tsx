@@ -29,21 +29,23 @@ import { formatCurrency } from "@/lib/utils"
 import { PieChart, TrendingUp, Medal, Sword } from "lucide-react"
 import api from "@/app/lib/apiConfig"
 import { useTranslations } from "next-intl"
+import { useCurrencyRate } from "@/app/hooks/useCurrencyRate"
 import { EscrowManagementTab } from "@/app/[locale]/dashboard/partner/components/EscrowManagementTab"
 import { TournamentStatisticsTab } from "@/app/[locale]/tournaments/[id]/components/TournamentStatisticsTab"
 import { io, Socket } from "socket.io-client"
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType }> = {
-  pending:      { label: "pending",      color: "slate",  icon: Clock },
-  UPCOMING:     { label: "upcoming",     color: "blue",   icon: Clock },
-  REGISTRATION: { label: "registration", color: "cyan",   icon: Users },
-  in_progress:  { label: "in_progress",  color: "green",  icon: Play },
-  COMPLETED:    { label: "completed",    color: "violet", icon: CheckCircle2 },
-  CANCELLED:    { label: "cancelled",    color: "red",    icon: XCircle },
+  pending: { label: "pending", color: "slate", icon: Clock },
+  UPCOMING: { label: "upcoming", color: "blue", icon: Clock },
+  REGISTRATION: { label: "registration", color: "cyan", icon: Users },
+  in_progress: { label: "in_progress", color: "green", icon: Play },
+  COMPLETED: { label: "completed", color: "violet", icon: CheckCircle2 },
+  CANCELLED: { label: "cancelled", color: "red", icon: XCircle },
 }
 
 export default function TournamentManagePage() {
   const t = useTranslations("common")
+  const { formatVndText } = useCurrencyRate()
   const params = useParams()
   const router = useRouter()
   const tournamentId = params.id as string
@@ -165,7 +167,7 @@ export default function TournamentManagePage() {
       if (selectedImage) {
         const formData = new FormData()
         formData.append("image", selectedImage)
-        
+
         // Remove default application/json content-type so browser forms the multipart boundary safely
         await api.post(`/tournaments/${tournamentId}/image`, formData, {
           headers: {
@@ -177,11 +179,11 @@ export default function TournamentManagePage() {
           }]
         })
       }
-      
+
       const { budget, ...restForm } = editForm
       const payload: any = { ...restForm, customPrizePool: budget }
       const phasePayload: any = {}
-      
+
       if (editPhases.length > 0) {
         phasePayload.update = editPhases.map(p => ({
           where: { id: p.id },
@@ -195,15 +197,15 @@ export default function TournamentManagePage() {
           }
         }))
       }
-      
+
       if (deletedPhaseIds.length > 0) {
         phasePayload.delete = deletedPhaseIds.map(id => ({ id }))
       }
-      
+
       if (Object.keys(phasePayload).length > 0) {
         payload.phases = phasePayload
       }
-      
+
       await TournamentService.update(tournamentId, payload)
       toast({ title: "Saved", description: "Tournament updated successfully." })
       setSelectedImage(null)
@@ -229,26 +231,57 @@ export default function TournamentManagePage() {
   }
 
   // ── Emergency manual round control (production-safe) ──────────────────────
-  const handleRoundControl = async (roundId: string, action: 'advance') => {
-    setRoundControlLoading(prev => ({ ...prev, [roundId + action]: true }));
+  const handleRoundControl = async (roundId: string, action: 'advance' | 'force-fetch' | 'force-complete') => {
+    const key = roundId + action;
+    setRoundControlLoading(prev => ({ ...prev, [key]: true }));
     try {
-      // Uses the production-safe, auth-protected RoundController endpoint
-      await api.post(`/rounds/${roundId}/auto-advance`);
-      toast({
-        title: '✅ Round Advanced',
-        description: 'Round advancement triggered. Lobbies will be assigned automatically.',
-      });
+      const endpointMap = {
+        'advance': `/rounds/${roundId}/auto-advance`,
+        'force-fetch': `/rounds/${roundId}/force-fetch-lobbies`,
+        'force-complete': `/rounds/${roundId}/force-complete`,
+      };
+      const titleMap = {
+        'advance': '✅ Round Advanced',
+        'force-fetch': '✅ Lobbies Marked Fetched',
+        'force-complete': '✅ Round Force-Completed',
+      };
+      const descMap = {
+        'advance': 'Auto-advance triggered. Lobbies will be reassigned automatically.',
+        'force-fetch': 'All stuck lobbies marked as fetchedResult=true. Trigger Force Advance next.',
+        'force-complete': 'All lobbies marked fetched + auto-advance triggered.',
+      };
+      await api.post(endpointMap[action]);
+      toast({ title: titleMap[action], description: descMap[action] });
       await refresh();
     } catch (error: any) {
       toast({
-        title: 'Failed',
-        description: error?.response?.data?.message || error.message || 'Could not advance round.',
+        title: 'Action Failed',
+        description: error?.response?.data?.error || error?.response?.data?.message || error.message || 'Could not complete action.',
         variant: 'destructive',
       });
     } finally {
-      setRoundControlLoading(prev => ({ ...prev, [roundId + action]: false }));
+      setRoundControlLoading(prev => ({ ...prev, [key]: false }));
     }
   };
+
+  const handleForceStartLobby = async (lobbyId: string) => {
+    const key = 'lobby-' + lobbyId;
+    setRoundControlLoading(prev => ({ ...prev, [key]: true }));
+    try {
+      await api.post(`/rounds/lobbies/${lobbyId}/force-start`);
+      toast({ title: '🚀 Lobby Force-Started', description: 'Lobby is now transitioning to STARTING → PLAYING. Players bypassed ready check.' });
+      await refresh();
+    } catch (error: any) {
+      toast({
+        title: 'Force Start Failed',
+        description: error?.response?.data?.error || error.message || 'Could not force-start lobby.',
+        variant: 'destructive',
+      });
+    } finally {
+      setRoundControlLoading(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
 
   const handleSync = async () => {
     setSyncing(true)
@@ -321,7 +354,7 @@ export default function TournamentManagePage() {
               <h1 className="text-2xl font-bold tracking-tight">{tournament.name}</h1>
               <Badge variant="outline" className={`bg-${statusCfg.color}-500/10 text-${statusCfg.color}-400 border-${statusCfg.color}-500/20 flex items-center gap-1`}>
                 <StatusIcon className="h-3 w-3" />
-              {statusCfg.label === 'pending' ? t('idle') : statusCfg.label === 'upcoming' ? t('upcoming') : statusCfg.label === 'in_progress' ? t('ongoing') : statusCfg.label === 'completed' ? t('finished') : t(statusCfg.label)}
+                {statusCfg.label === 'pending' ? t('idle') : statusCfg.label === 'upcoming' ? t('upcoming') : statusCfg.label === 'in_progress' ? t('ongoing') : statusCfg.label === 'completed' ? t('finished') : t(statusCfg.label)}
               </Badge>
               {tournament.isCommunityMode ? (
                 <Badge variant="outline" className="bg-orange-500/10 text-orange-500 border-orange-500/30">
@@ -374,9 +407,9 @@ export default function TournamentManagePage() {
             <span className="hidden sm:inline ml-2">{t("sync")}</span>
           </Button>
           {tournament.status !== 'in_progress' && tournament.status !== 'COMPLETED' && (
-            <Button 
-              size="sm" 
-              className="bg-green-600 hover:bg-green-700" 
+            <Button
+              size="sm"
+              className="bg-green-600 hover:bg-green-700"
               onClick={() => {
                 const firstRoundId = tournament.phases?.[0]?.rounds?.[0]?.id;
                 if (firstRoundId) {
@@ -384,11 +417,11 @@ export default function TournamentManagePage() {
                 } else {
                   handleStatusChange('in_progress'); // fallback
                 }
-              }} 
+              }}
               disabled={statusChanging || (tournament.phases?.[0]?.rounds?.[0]?.id ? roundControlLoading[tournament.phases[0].rounds[0].id + 'advance'] : false)}
             >
-              {(statusChanging || (tournament.phases?.[0]?.rounds?.[0]?.id && roundControlLoading[tournament.phases?.[0]?.rounds?.[0]?.id + 'advance'])) 
-                ? <Loader2 className="h-4 w-4 animate-spin" /> 
+              {(statusChanging || (tournament.phases?.[0]?.rounds?.[0]?.id && roundControlLoading[tournament.phases?.[0]?.rounds?.[0]?.id + 'advance']))
+                ? <Loader2 className="h-4 w-4 animate-spin" />
                 : <Play className="h-4 w-4" />}
               <span className="ml-2">Start Tournament</span>
             </Button>
@@ -415,8 +448,14 @@ export default function TournamentManagePage() {
         <Card className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border-emerald-500/20">
           <CardContent className="p-4">
             <p className="text-[11px] text-emerald-400 font-semibold uppercase tracking-wide">Prize Pool</p>
-            <p className="text-xl font-bold text-emerald-400 mt-1">{prizePool.toLocaleString()} <span className="text-sm font-normal text-emerald-400/70">Credits</span></p>
-            <p className="text-[10px] text-muted-foreground mt-1">Entry: {tournament.entryFee.toLocaleString()} Credits</p>
+            <div className="flex flex-col mt-1">
+              <p className="text-xl font-bold text-emerald-400">${prizePool.toLocaleString()} <span className="text-xs font-normal text-emerald-400/70">USD</span></p>
+              <p className="text-[10px] text-emerald-400/50 -mt-0.5">{formatVndText(prizePool)}</p>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1.5 flex justify-between items-center">
+              <span>Entry: ${tournament.entryFee.toLocaleString()} <span className="text-[9px]">USD</span></span>
+              <span>{formatVndText(tournament.entryFee)}</span>
+            </p>
           </CardContent>
         </Card>
         <Card className="bg-gradient-to-br from-violet-500/10 to-violet-600/5 border-violet-500/20">
@@ -620,11 +659,11 @@ export default function TournamentManagePage() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => handleToggleEliminate(p)}>
-                                <Skull className="mr-2 h-4 w-4" /> 
+                                <Skull className="mr-2 h-4 w-4" />
                                 {p.eliminated ? "Revive Player" : "Eliminate Player"}
                               </DropdownMenuItem>
-                              <DropdownMenuItem 
-                                className="text-red-500 focus:text-red-500" 
+                              <DropdownMenuItem
+                                className="text-red-500 focus:text-red-500"
                                 onClick={() => setRemoveDialog({ open: true, participant: p })}
                               >
                                 <UserMinus className="mr-2 h-4 w-4" /> Remove Complete
@@ -665,7 +704,7 @@ export default function TournamentManagePage() {
                       </div>
                       <div>
                         <p className="font-semibold">{phase.name}</p>
-                        <p className="text-xs text-muted-foreground capitalize">{phase.type} · Lobby size {phase.lobbySize}</p>
+                        <p className="text-xs text-muted-foreground capitalize">{phase.type} · Lobby size {phase.lobbySize} · {t("matches_per_player", { fallback: "Total matches" })}: {phase.matchesPerRound || 1}</p>
                       </div>
                     </div>
                     <Badge variant="outline" className={
@@ -682,7 +721,12 @@ export default function TournamentManagePage() {
                         {phase.rounds.map((round) => (
                           <div key={round.id} className="bg-white/5 rounded-lg p-3">
                             <div className="flex items-center justify-between mb-1">
-                              <span className="text-sm font-medium">Round {round.roundNumber}</span>
+                              <span className="text-sm font-medium">
+                                {phase.type === 'elimination' || phase.type === 'GROUP_STAGE'
+                                  ? t('group_n', { letter: String.fromCharCode(64 + round.roundNumber) })
+                                  : t('match_n', { number: round.roundNumber, fallback: `Match ${round.roundNumber}` })
+                                }
+                              </span>
                               <Badge variant="outline" className="text-[10px] px-1.5">{round.status}</Badge>
                             </div>
                             <div className="text-xs text-muted-foreground">
@@ -754,53 +798,110 @@ export default function TournamentManagePage() {
                   {!phase.rounds?.length ? (
                     <p className="text-xs text-muted-foreground py-4">No rounds in this phase.</p>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                       {phase.rounds.map((round: any) => {
                         const lobbyCount = round.lobbies?.length || 0;
-                        const completedLobbies = round.lobbies?.filter((l: any) => l.state === 'COMPLETED').length || 0;
-                        const isStuck = round.status !== 'completed' && round.status !== 'cancelled';
-                        const advancingKey = round.id + 'advance';
+                        const fetchedCount = round.lobbies?.filter((l: any) => l.fetchedResult).length || 0;
+                        const finishedCount = round.lobbies?.filter((l: any) => l.state === 'FINISHED' || l.state === 'COMPLETED').length || 0;
+                        const stuckLobbies = round.lobbies?.filter((l: any) => !['FINISHED', 'PLAYING', 'STARTING'].includes(l.state)) || [];
+                        const advanceKey = round.id + 'advance';
+                        const fetchKey = round.id + 'force-fetch';
+                        const completeKey = round.id + 'force-complete';
                         return (
-                          <div key={round.id} className={`flex items-center justify-between gap-3 rounded-lg p-3 border ${
-                            round.status === 'completed' ? 'bg-green-500/5 border-green-500/20' :
-                            round.status === 'in_progress' ? 'bg-yellow-500/5 border-yellow-500/20' :
-                            'bg-white/5 border-white/10'
-                          }`}>
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium">Round {round.roundNumber}</span>
-                                <Badge variant="outline" className={`text-[10px] px-1.5 ${
-                                  round.status === 'completed' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
-                                  round.status === 'in_progress' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
-                                  'text-slate-400'
-                                }`}>{round.status}</Badge>
+                          <div key={round.id} className={`rounded-lg border ${round.status === 'completed' ? 'bg-green-500/5 border-green-500/20' :
+                              round.status === 'in_progress' ? 'bg-yellow-500/5 border-yellow-500/20' :
+                                'bg-white/5 border-white/10'
+                            }`}>
+                            {/* Round header */}
+                            <div className="flex items-center justify-between gap-3 p-3">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-medium">
+                                    {phase.type === 'elimination' || phase.type === 'GROUP_STAGE'
+                                      ? t('group_n', { letter: String.fromCharCode(64 + round.roundNumber) })
+                                      : t('match_n', { number: round.roundNumber, fallback: `Match ${round.roundNumber}` })
+                                    }
+                                  </span>
+                                  <Badge variant="outline" className={`text-[10px] px-1.5 ${round.status === 'completed' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
+                                      round.status === 'in_progress' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
+                                        'text-slate-400'
+                                    }`}>{round.status}</Badge>
+                                </div>
+                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                  {lobbyCount} lobbies · {fetchedCount}/{lobbyCount} fetched · {finishedCount}/{lobbyCount} finished
+                                </p>
                               </div>
-                              <p className="text-[11px] text-muted-foreground mt-0.5">
-                                {lobbyCount} lobbies · {completedLobbies}/{lobbyCount} completed
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
                               {round.status === 'completed' ? (
-                                <span className="text-xs text-green-400 flex items-center gap-1">
-                                  <CheckCircle2 className="h-3.5 w-3.5" /> Done
+                                <span className="text-xs text-green-400 flex items-center gap-1 shrink-0 bg-green-400/10 px-3 py-1.5 rounded-md font-medium border border-green-400/20">
+                                  <CheckCircle2 className="h-4 w-4" /> Đã xong
                                 </span>
                               ) : (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  disabled={roundControlLoading[advancingKey]}
-                                  onClick={() => handleRoundControl(round.id, 'advance')}
-                                  className="border-amber-500/30 text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 h-8 text-xs gap-1.5"
-                                >
-                                  {roundControlLoading[advancingKey] ? (
-                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                  ) : (
-                                    <SkipForward className="h-3.5 w-3.5" />
-                                  )}
-                                  Force Advance
-                                </Button>
+                                <div className="flex flex-col gap-1.5 shrink-0 justify-start">
+                                  {/* Step 1: Force Advance (normal trigger) */}
+                                  <Button
+                                    size="icon"
+                                    variant="outline"
+                                    disabled={roundControlLoading[advanceKey]}
+                                    onClick={() => handleRoundControl(round.id, 'advance')}
+                                    className="border-amber-500/30 text-amber-500 bg-amber-500/10 hover:bg-amber-500/20 hover:text-amber-400 h-8 w-8 shadow-sm transition-colors"
+                                    title="Tiến Vòng / Trộn Lobby (Force Advance)"
+                                  >
+                                    {roundControlLoading[advanceKey] ? <Loader2 className="h-4 w-4 animate-spin" /> : <SkipForward className="h-4 w-4" />}
+                                  </Button>
+                                  {/* Step 2: Force Fetch (unstick fetchedResult) */}
+                                  <Button
+                                    size="icon"
+                                    variant="outline"
+                                    disabled={roundControlLoading[fetchKey]}
+                                    onClick={() => handleRoundControl(round.id, 'force-fetch')}
+                                    className="border-blue-500/30 text-blue-500 bg-blue-500/10 hover:bg-blue-500/20 hover:text-blue-400 h-8 w-8 shadow-sm transition-colors"
+                                    title="Tải Bảng Điểm (Force Fetch)"
+                                  >
+                                    {roundControlLoading[fetchKey] ? <Loader2 className="h-4 w-4 animate-spin" /> : <FastForward className="h-4 w-4" />}
+                                  </Button>
+                                  {/* Step 3: Nuclear — mark all fetched + auto-advance together */}
+                                  <Button
+                                    size="icon"
+                                    variant="outline"
+                                    disabled={roundControlLoading[completeKey]}
+                                    onClick={() => handleRoundControl(round.id, 'force-complete')}
+                                    className="border-red-500/30 text-red-500 bg-red-500/10 hover:bg-red-500/20 hover:text-red-400 h-8 w-8 shadow-sm transition-colors"
+                                    title="Bỏ Qua Lỗi & Xếp Vòng (Force Complete)"
+                                  >
+                                    {roundControlLoading[completeKey] ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
+                                  </Button>
+                                </div>
                               )}
                             </div>
+
+                            {/* Per-lobby Force Start — only show for non-finished, non-playing lobbies */}
+                            {stuckLobbies.length > 0 && round.status !== 'completed' && (
+                              <div className="border-t border-white/5 px-4 py-3 bg-white/[0.02] flex flex-col gap-2">
+                                <span className="text-[11px] font-semibold text-emerald-500 flex items-center gap-1.5 uppercase tracking-wide">
+                                  <Play className="h-3.5 w-3.5" /> Force Start:
+                                </span>
+                                <div className="flex flex-wrap gap-2">
+                                  {stuckLobbies.map((lobby: any) => (
+                                    <Button
+                                      key={lobby.id}
+                                      size="sm"
+                                      variant="outline"
+                                      disabled={roundControlLoading['lobby-' + lobby.id]}
+                                      onClick={() => handleForceStartLobby(lobby.id)}
+                                      className="border-emerald-500/30 text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 hover:text-emerald-300 gap-1.5 px-2.5 py-1 font-medium shadow-sm transition-colors justify-start h-auto min-h-[30px]"
+                                      title={`Ép Bắt Đầu ${lobby.name} — bỏ qua chờ Ready`}
+                                    >
+                                      {roundControlLoading['lobby-' + lobby.id]
+                                        ? <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
+                                        : <Play className="h-3.5 w-3.5 shrink-0" />
+                                      }
+                                      <span className="truncate">{lobby.name || `Lobby ${lobby.id.slice(-4)}`}</span>
+                                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 border-emerald-500/30 text-emerald-500/80 uppercase font-semibold shrink-0">{lobby.state}</Badge>
+                                    </Button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -810,12 +911,22 @@ export default function TournamentManagePage() {
               </Card>
             ))}
 
-            {/* Log note */}
-            <p className="text-[11px] text-muted-foreground text-center">
-              All actions here are logged. Calls <code className="bg-white/5 px-1 rounded">POST /rounds/:id/auto-advance</code> — the same endpoint the auto-advance queue uses.
-            </p>
+            {/* Legend */}
+            <div className="rounded-lg border border-white/5 bg-white/[0.02] p-4 flex flex-col gap-2.5 shadow-sm mt-4">
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+                <Settings2 className="h-3.5 w-3.5" />
+                Hướng dẫn sử dụng các nút
+              </p>
+              <div className="grid gap-2 text-[11px] text-muted-foreground">
+                <div className="flex items-start gap-2.5"><span className="text-amber-500 w-32 shrink-0 font-semibold bg-amber-500/10 px-2 py-0.5 rounded text-center">Tiến Vòng</span>— Tự động kiểm tra điều kiện lấy danh sách người chơi mới & trộn lobby. (Dùng nút này đầu tiên khi vòng không tự nhảy)</div>
+                <div className="flex items-start gap-2.5"><span className="text-blue-500 w-32 shrink-0 font-semibold bg-blue-500/10 px-2 py-0.5 rounded text-center">Tải Bảng Điểm</span>— Ép chuyển trạng thái <code className="bg-white/10 px-1 py-0.5 rounded">fetchedResult=true</code> cho các lobby bị kẹt đang lấy điểm lâu. Sau đó ấn Tiến Vòng.</div>
+                <div className="flex items-start gap-2.5"><span className="text-red-500 w-32 shrink-0 font-semibold bg-red-500/10 px-2 py-0.5 rounded text-center">Bỏ Qua & Xếp Vòng</span>— Phương án mạnh nhất: Ép tất cả lobbies thành đã tải điểm và ngay lập tức lấy TOP hiện tại để chuyển sang round kế tiếp. Dùng khi 2 nút trên gặp lỗi.</div>
+                <div className="flex items-start gap-2.5"><span className="text-emerald-500 w-32 shrink-0 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded text-center">Ép Bắt Đầu</span>— Bắt đầu trận ngay lập tức bỏ qua thời gian đếm ngược hoặc việc người chơi chưa ấn "Sẵn Sàng".</div>
+              </div>
+            </div>
           </div>
         </TabsContent>
+
 
         {/* ─── STATISTICS TAB ─── */}
         <TabsContent value="stats">
@@ -824,7 +935,7 @@ export default function TournamentManagePage() {
 
         {/* ─── ESCROW TAB ─── */}
         <TabsContent value="escrow">
-          <EscrowManagementTab 
+          <EscrowManagementTab
             tournamentId={tournament.id}
             tournamentName={tournament.name}
             tournamentStatus={tournament.status}
@@ -893,23 +1004,23 @@ export default function TournamentManagePage() {
                 <div className="flex items-center gap-4">
                   {(selectedImage || tournament?.image) && (
                     <div className="h-16 w-32 rounded-md overflow-hidden bg-white/5 border border-white/10 shrink-0">
-                      <img 
-                        src={selectedImage 
-                          ? URL.createObjectURL(selectedImage) 
-                          : tournament?.image?.startsWith('http') 
-                            ? tournament.image 
+                      <img
+                        src={selectedImage
+                          ? URL.createObjectURL(selectedImage)
+                          : tournament?.image?.startsWith('http')
+                            ? tournament.image
                             : `${process.env.NEXT_PUBLIC_API_URL ? process.env.NEXT_PUBLIC_API_URL.replace(/\/api$/, '') : 'http://localhost:4000'}${tournament?.image}`
-                        } 
-                        alt="Banner" 
+                        }
+                        alt="Banner"
                         className="h-full w-full object-cover"
                       />
                     </div>
                   )}
                   <div className="flex-1">
-                    <Input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={(e) => e.target.files && setSelectedImage(e.target.files[0])} 
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => e.target.files && setSelectedImage(e.target.files[0])}
                       className="cursor-pointer file:cursor-pointer"
                     />
                     <p className="text-[10px] text-muted-foreground mt-1">Recommended size: 1920x1080px (16:9 ratio)</p>
@@ -921,8 +1032,8 @@ export default function TournamentManagePage() {
                 <div className="border border-white/10 rounded-lg p-0 mt-6">
                   <div className="p-3 border-b border-white/10 bg-black/20 flex flex-col sm:flex-row items-center justify-between">
                     <div>
-                        <h3 className="font-bold">Phase Configuration</h3>
-                        <p className="text-xs text-muted-foreground">Modify phase settings. Avoid changing if tournament has started.</p>
+                      <h3 className="font-bold">Phase Configuration</h3>
+                      <p className="text-xs text-muted-foreground">Modify phase settings. Avoid changing if tournament has started.</p>
                     </div>
                   </div>
                   <div className="p-4 space-y-4">
@@ -964,7 +1075,7 @@ export default function TournamentManagePage() {
                                 {phase.type === 'checkmate' && "Người chơi phải đạt đủ số điểm ngưỡng, sau đó dành Top 1 để vô địch."}
                               </p>
                             </div>
-                            
+
                             <div className="space-y-1.5">
                               <Label className="text-[11px] uppercase tracking-wide text-orange-400">Matches to Play (Thể thức thi đấu)</Label>
                               <Input type="number" min={1} value={phase.matchesPerRound || phase.numberOfRounds} onChange={(e) => setEditPhases(prev => prev.map((p, i) => i === index ? { ...p, matchesPerRound: parseInt(e.target.value) || 1, numberOfRounds: parseInt(e.target.value) || 1 } : p))} className="bg-black/40 border-orange-500/50" />

@@ -145,6 +145,35 @@ export default class MomoService {
   }
 
   /**
+   * Creates a MoMo payment link for a tournament entry fee.
+   */
+  static async createEntryFeePayment(params: {
+    tournamentId: string;
+    participantId: string;
+    transactionId: string;
+    amountVnd: number;
+    returnUrl: string;
+    notifyUrl: string;
+  }) {
+    logger.info(`[MoMo] Creating Entry Fee payment for participant ${params.participantId}`);
+    const metadata = {
+      tournamentId: params.tournamentId,
+      participantId: params.participantId,
+      transactionId: params.transactionId,
+      paymentType: 'entry_fee',
+    };
+    const extraData = Buffer.from(JSON.stringify(metadata)).toString('base64');
+    return this.executeMomoRequest(
+      params.transactionId,
+      Math.round(params.amountVnd),
+      `Tournament Entry Fee: ${params.tournamentId}`,
+      params.returnUrl,
+      params.notifyUrl,
+      extraData,
+    );
+  }
+
+  /**
    * Validates a webhook sent by MoMo via their IPN (Instant Payment Notification).
    */
   static async validateWebhookSignature(payload: any): Promise<boolean> {

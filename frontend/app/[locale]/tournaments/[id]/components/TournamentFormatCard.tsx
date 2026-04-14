@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ITournament } from "@/app/types/tournament"
 import { Table } from "lucide-react"
 import { useTranslations } from "next-intl"
+import { useCurrencyRate } from "@/app/hooks/useCurrencyRate"
 
 interface TournamentFormatCardProps {
   tournament: ITournament;
@@ -11,6 +12,7 @@ interface TournamentFormatCardProps {
 
 export function TournamentFormatCard({ tournament }: TournamentFormatCardProps) {
   const t = useTranslations("common")
+  const { formatVndText } = useCurrencyRate()
   return (
     <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1">
       <CardHeader className="pb-3">
@@ -21,20 +23,26 @@ export function TournamentFormatCard({ tournament }: TournamentFormatCardProps) 
       </CardHeader>
       <CardContent className="grid gap-2 text-sm">
      
-        <div className="flex justify-between">
-          <div className="text-muted-foreground">{t("registration_fee")}:</div>
-          <div className="font-medium">
-            {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(
-              (tournament.entryFee || 0)
-            )}
+        <div className="flex justify-between items-start">
+          <div className="text-muted-foreground mt-0.5">{t("registration_fee")}:</div>
+          <div className="text-right">
+            <div className="font-medium">
+              {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(
+                (tournament.entryFee || 0)
+              )} <span className="text-[10px] ml-0.5 text-muted-foreground">USD</span>
+            </div>
+            <div className="text-[10px] text-muted-foreground opacity-70">{formatVndText(tournament.entryFee || 0)}</div>
           </div>
         </div>
-        <div className="flex justify-between">
-          <div className="text-muted-foreground">{t("prize_pool")}:</div>
-          <div className="font-medium">
-            {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(
-              tournament.budget || 0
-            )}
+        <div className="flex justify-between items-start">
+          <div className="text-muted-foreground mt-0.5">{t("prize_pool")}:</div>
+          <div className="text-right">
+            <div className="font-medium">
+              {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(
+                tournament.budget || 0
+              )} <span className="text-[10px] ml-0.5 text-muted-foreground">USD</span>
+            </div>
+            <div className="text-[10px] text-muted-foreground opacity-70">{formatVndText(tournament.budget || 0)}</div>
           </div>
         </div>
         <div className="grid gap-1">

@@ -12,6 +12,7 @@ import {
 import NextLink from "next/link"
 import { Button } from "@/components/ui/button"
 import { useTranslations } from "next-intl"
+import { useTournamentStore } from '@/app/stores/tournamentStore'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
@@ -94,13 +95,16 @@ export function TournamentBracketTab({ tournamentId }: TournamentBracketTabProps
   const [bracket, setBracket] = useState<BracketData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-
+  
   // Per-phase: which match tab is active (index into phase.groups for multi-match)
   const [activeMatchIdx, setActiveMatchIdx] = useState<Record<string, number>>({})
   // Per-match: which group letter is expanded
   const [activeGroup, setActiveGroup] = useState<Record<string, string | null>>({})
   // For non-multi-match: which groups are expanded
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
+  // For exporting all content
+  const [exportMode, setExportMode] = useState(false)
+  const [exportTournament, setExportTournament] = useState<any>(null)
 
   const getStateLabel = useCallback((state?: string) => {
     const s = (state || '').toUpperCase()
@@ -128,8 +132,25 @@ export function TournamentBracketTab({ tournamentId }: TournamentBracketTabProps
 
   useEffect(() => {
     const handler = () => fetchBracket()
+    const handleExportStart = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail?.tournament) {
+        setExportTournament(customEvent.detail.tournament);
+      }
+      setExportMode(true)
+    }
+    const handleExportEnd = () => {
+      setExportMode(false)
+      setTimeout(() => setExportTournament(null), 500)
+    }
     window.addEventListener('bracket_update', handler)
-    return () => window.removeEventListener('bracket_update', handler)
+    window.addEventListener('export_bracket_start', handleExportStart as EventListener)
+    window.addEventListener('export_bracket_end', handleExportEnd)
+    return () => {
+      window.removeEventListener('bracket_update', handler)
+      window.removeEventListener('export_bracket_start', handleExportStart as EventListener)
+      window.removeEventListener('export_bracket_end', handleExportEnd)
+    }
   }, [fetchBracket])
 
   // ── Detect multi-match phases ──
@@ -187,11 +208,60 @@ export function TournamentBracketTab({ tournamentId }: TournamentBracketTabProps
     )
   }
 
+  // ── Determine which phases to render ──
+  const activePhase = bracket.phases.find(p => p.status === 'in_progress' || p.status === 'PLAYING') 
+    || bracket.phases.slice().reverse().find(p => p.status === 'completed') 
+    || bracket.phases[0];
+  
+  const phasesToRender = exportMode ? (activePhase ? [activePhase] : bracket.phases) : bracket.phases;
+
   // ── Render ──
 
   return (
-    <div className="space-y-8">
-      {bracket.phases.map((phase) => {
+    <div id="bracket-export-target" className={`space-y-8 ${exportMode ? 'p-6 bg-[#0f172a]/95 rounded-xl border border-white/10' : ''}`}>
+      
+      {/* ── Export Banner ── */}
+      {exportMode && exportTournament && (
+        <div className="relative w-full h-[240px] rounded-t-xl overflow-hidden mb-12 border-b border-white/10 shadow-2xl">
+          <div className="absolute inset-0 bg-gradient-to-r from-slate-900 to-indigo-900/40">
+            {exportTournament.image ? (
+              <img 
+                src={exportTournament.image.startsWith('http') ? exportTournament.image : `${BACKEND_URL}${exportTournament.image}`} 
+                alt="Banner" 
+                className="w-full h-full object-cover opacity-50" 
+              />
+            ) : (
+              <div className="w-full h-full bg-primary/10" />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-[#0f172a]/80 to-transparent" />
+            <div className="absolute inset-0 border border-white/5 rounded-xl pointer-events-none" />
+          </div>
+
+          <div className="absolute bottom-6 left-8 flex flex-col gap-3">
+            <Badge className="w-fit bg-primary/20 text-primary border-primary/30 uppercase font-bold tracking-widest text-xs px-3 py-1 backdrop-blur-md">
+              {exportTournament.game || "Game"}
+            </Badge>
+            <h1 className="text-3xl md:text-4xl font-black text-white drop-shadow-lg leading-tight">
+              {exportTournament.name}
+            </h1>
+            <div className="flex items-center text-sm gap-4 mt-2">
+              {exportTournament.startTime && (
+                <div className="flex items-center gap-2 bg-black/40 text-slate-200 px-3 py-1.5 rounded-full backdrop-blur-md border border-white/10 shadow-inner">
+                  <span className="font-semibold">{new Date(exportTournament.startTime).toLocaleDateString()}</span>
+                </div>
+              )}
+              {exportTournament.prizeStructure && Object.keys(exportTournament.prizeStructure).length > 0 && (
+                <div className="flex items-center gap-2 bg-amber-500/10 text-amber-500 px-3 py-1.5 rounded-full backdrop-blur-md border border-amber-500/20 shadow-inner">
+                  <Trophy className="w-4 h-4" />
+                  <span className="font-bold tracking-wider text-xs">PRIZE POOL</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {phasesToRender.map((phase) => {
         const isMultiMatch = isMultiMatchPhase(phase)
         const matchIdx = activeMatchIdx[phase.id] ?? 0
         const currentMatch = phase.groups[matchIdx]
@@ -232,6 +302,7 @@ export function TournamentBracketTab({ tournamentId }: TournamentBracketTabProps
                 getStateLabel={getStateLabel}
                 tournamentId={tournamentId}
                 t={t}
+                exportMode={exportMode}
               />
             ) : (
               <RegularGroupsView
@@ -241,6 +312,7 @@ export function TournamentBracketTab({ tournamentId }: TournamentBracketTabProps
                 getStateLabel={getStateLabel}
                 tournamentId={tournamentId}
                 t={t}
+                exportMode={exportMode}
               />
             )}
           </div>
@@ -265,11 +337,12 @@ interface MultiMatchViewProps {
   getStateLabel: (state?: string) => string
   tournamentId: string
   t: any
+  exportMode?: boolean
 }
 
 function MultiMatchView({
   phase, matchIdx, setMatchIdx, activeGroup, setActiveGroup,
-  getGroupsFromLobbies, getStateLabel, tournamentId, t
+  getGroupsFromLobbies, getStateLabel, tournamentId, t, exportMode
 }: MultiMatchViewProps) {
   const currentMatch = phase.groups[matchIdx]
   const groupsMap = currentMatch ? getGroupsFromLobbies(currentMatch.lobbies) : {}
@@ -324,97 +397,152 @@ function MultiMatchView({
         <div className="space-y-4">
           {/* ── Group Tabs ── */}
           {groupLetters.length > 0 && (
-            <Tabs 
-              value={selectedGroupLetter || groupLetters[0]} 
-              onValueChange={(val) => {
-                setActiveGroup(prev => ({ ...prev, [groupKey]: val }))
-              }}
-              className="w-full"
-            >
-              <div className="border-b border-white/10 mb-6 w-full">
-                <TabsList className="w-full justify-start h-auto bg-transparent p-0 flex overflow-x-auto gap-6 scrollbar-thin">
-                  {groupLetters.map(letter => {
-                    const totalPlayers = groupsMap[letter].lobbies.reduce((s, l) => s + l.players.length, 0)
-                    return (
-                      <TabsTrigger
-                        key={letter}
-                        value={letter}
-                        className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-1 py-3 text-sm font-medium transition-all shadow-none hover:text-primary/80 text-muted-foreground data-[state=active]:shadow-none whitespace-nowrap"
-                      >
-                        {t('group_n', { letter })}
-                        <Badge variant="secondary" className="ml-2 text-[10px] px-1.5 py-0 h-4 bg-primary/10 text-primary/80">
-                          {totalPlayers}
-                        </Badge>
-                      </TabsTrigger>
-                    )
-                  })}
-                </TabsList>
-              </div>
-
-              {groupLetters.map(letter => {
-                const groupData = groupsMap[letter]
-                const lobbies = groupData.lobbies
-                const roundId = groupData.roundId
-                const anyPlaying = lobbies.some(l => l.state === 'PLAYING' || l.state === 'IN_PROGRESS')
-                const allFinished = lobbies.every(l => l.state === 'FINISHED' || l.state === 'COMPLETED')
-                const status = allFinished ? 'completed' : anyPlaying ? 'in_progress' : 'pending'
-                const detailHref = roundId
-                  ? `/tournaments/${tournamentId}/rounds/${roundId}?limitMatch=${matchIdx + 1}`
-                  : undefined
-
-                return (
-                  <TabsContent key={letter} value={letter} className="m-0 space-y-4 animate-fade-in-up">
-                    {/* Header Action Bar */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg bg-muted/20 border border-white/5 gap-4">
-                      <div className="flex flex-col gap-1.5">
-                        <div className="flex items-center gap-2 text-sm">
-                          <ShieldCheck className="h-4 w-4 text-primary" />
-                          <span className="font-medium text-base">{t('group_n', { letter })}</span>
-                          <Badge variant="outline" className={`${getStateColor(status)} text-[10px] uppercase font-bold ml-2`}>
-                            {getStateLabel(status)}
-                          </Badge>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-                          <Users className="h-3.5 w-3.5" />
-                          <span>{t('players_count_in_group', { count: lobbies.reduce((s, l) => s + l.players.length, 0) })}</span>
-                          <span className="opacity-50">•</span>
-                          <span>{t("lobbies")}: {lobbies.length}</span>
+            exportMode ? (
+              <div className="w-full space-y-8">
+                {groupLetters.map(letter => {
+                  const groupData = groupsMap[letter]
+                  const lobbies = groupData.lobbies
+                  const roundId = groupData.roundId
+                  const anyPlaying = lobbies.some(l => l.state === 'PLAYING' || l.state === 'IN_PROGRESS')
+                  const allFinished = lobbies.every(l => l.state === 'FINISHED' || l.state === 'COMPLETED')
+                  const status = allFinished ? 'completed' : anyPlaying ? 'in_progress' : 'pending'
+  
+                  return (
+                    <div key={letter} className="m-0 space-y-4">
+                      {/* Header Action Bar */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg bg-muted/20 border border-white/5 gap-4">
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex items-center gap-2 text-sm">
+                            <ShieldCheck className="h-4 w-4 text-primary" />
+                            <span className="font-medium text-base">{t('group_n', { letter })}</span>
+                            <Badge variant="outline" className={`${getStateColor(status)} text-[10px] uppercase font-bold ml-2`}>
+                              {getStateLabel(status)}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                            <Users className="h-3.5 w-3.5" />
+                            <span>{t('players_count_in_group', { count: lobbies.reduce((s, l) => s + l.players.length, 0) })}</span>
+                            <span className="opacity-50">•</span>
+                            <span>{t("lobbies")}: {lobbies.length}</span>
+                          </div>
                         </div>
                       </div>
-
-                      <div className="flex shrink-0 items-center justify-end gap-2">
-                        {detailHref && (
-                          <NextLink href={detailHref}>
-                            <Button size="sm" className="btn-zodiac text-white font-semibold text-xs h-8 shadow-md">
-                              <Eye className="h-3.5 w-3.5 mr-1" />
-                              {t('view_detail')}
-                            </Button>
-                          </NextLink>
-                        )}
-                      </div>
+  
+                      {/* Lobbies Grid */}
+                      {lobbies.length === 0 ? (
+                        <p className="text-muted-foreground text-center py-6 text-sm">{t('no_lobbies_in_group')}</p>
+                      ) : (
+                        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+                          {lobbies.map((lobby, idx) => (
+                            <LobbyCard
+                              key={lobby.id}
+                              lobby={lobby}
+                              lobbyIndex={idx}
+                              tournamentId={tournamentId}
+                              getStateLabel={getStateLabel}
+                              stripGroupPrefix
+                              exportMode={exportMode}
+                            />
+                          ))}
+                        </div>
+                      )}
                     </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <Tabs 
+                value={selectedGroupLetter || groupLetters[0]} 
+                onValueChange={(val) => {
+                  setActiveGroup(prev => ({ ...prev, [groupKey]: val }))
+                }}
+                className="w-full"
+              >
+                <div className="border-b border-white/10 mb-6 w-full">
+                  <TabsList className="w-full justify-start h-auto bg-transparent p-0 flex overflow-x-auto gap-6 scrollbar-thin">
+                    {groupLetters.map(letter => {
+                      const totalPlayers = groupsMap[letter].lobbies.reduce((s, l) => s + l.players.length, 0)
+                      return (
+                        <TabsTrigger
+                          key={letter}
+                          value={letter}
+                          className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-1 py-3 text-sm font-medium transition-all shadow-none hover:text-primary/80 text-muted-foreground data-[state=active]:shadow-none whitespace-nowrap"
+                        >
+                          {t('group_n', { letter })}
+                          <Badge variant="secondary" className="ml-2 text-[10px] px-1.5 py-0 h-4 bg-primary/10 text-primary/80">
+                            {totalPlayers}
+                          </Badge>
+                        </TabsTrigger>
+                      )
+                    })}
+                  </TabsList>
+                </div>
 
-                    {/* Lobbies Grid */}
-                    {lobbies.length === 0 ? (
-                      <p className="text-muted-foreground text-center py-6 text-sm">{t('no_lobbies_in_group')}</p>
-                    ) : (
-                      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-                        {lobbies.map((lobby, idx) => (
-                          <LobbyCard
-                            key={lobby.id}
-                            lobby={lobby}
-                            lobbyIndex={idx}
-                            tournamentId={tournamentId}
-                            getStateLabel={getStateLabel}
-                            stripGroupPrefix
-                          />
-                        ))}
+                {groupLetters.map(letter => {
+                  const groupData = groupsMap[letter]
+                  const lobbies = groupData.lobbies
+                  const roundId = groupData.roundId
+                  const anyPlaying = lobbies.some(l => l.state === 'PLAYING' || l.state === 'IN_PROGRESS')
+                  const allFinished = lobbies.every(l => l.state === 'FINISHED' || l.state === 'COMPLETED')
+                  const status = allFinished ? 'completed' : anyPlaying ? 'in_progress' : 'pending'
+                  const detailHref = roundId
+                    ? `/tournaments/${tournamentId}/rounds/${roundId}?limitMatch=${matchIdx + 1}`
+                    : undefined
+
+                  return (
+                    <TabsContent key={letter} value={letter} className={`m-0 space-y-4 ${exportMode ? '' : 'animate-fade-in-up'}`}>
+                      {/* Header Action Bar */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg bg-muted/20 border border-white/5 gap-4">
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex items-center gap-2 text-sm">
+                            <ShieldCheck className="h-4 w-4 text-primary" />
+                            <span className="font-medium text-base">{t('group_n', { letter })}</span>
+                            <Badge variant="outline" className={`${getStateColor(status)} text-[10px] uppercase font-bold ml-2`}>
+                              {getStateLabel(status)}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                            <Users className="h-3.5 w-3.5" />
+                            <span>{t('players_count_in_group', { count: lobbies.reduce((s, l) => s + l.players.length, 0) })}</span>
+                            <span className="opacity-50">•</span>
+                            <span>{t("lobbies")}: {lobbies.length}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex shrink-0 items-center justify-end gap-2">
+                          {detailHref && (
+                            <NextLink href={detailHref}>
+                              <Button size="sm" className="btn-zodiac text-white font-semibold text-xs h-8 shadow-md">
+                                <Eye className="h-3.5 w-3.5 mr-1" />
+                                {t('view_detail')}
+                              </Button>
+                            </NextLink>
+                          )}
+                        </div>
                       </div>
-                    )}
-                  </TabsContent>
-                )
-              })}
-            </Tabs>
+
+                      {/* Lobbies Grid */}
+                      {lobbies.length === 0 ? (
+                        <p className="text-muted-foreground text-center py-6 text-sm">{t('no_lobbies_in_group')}</p>
+                      ) : (
+                        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+                          {lobbies.map((lobby, idx) => (
+                            <LobbyCard
+                              key={lobby.id}
+                              lobby={lobby}
+                              lobbyIndex={idx}
+                              tournamentId={tournamentId}
+                              getStateLabel={getStateLabel}
+                              stripGroupPrefix
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </TabsContent>
+                  )
+                })}
+              </Tabs>
+            )
           )}
         </div>
       )}
@@ -433,10 +561,11 @@ interface RegularGroupsViewProps {
   getStateLabel: (state?: string) => string
   tournamentId: string
   t: any
+  exportMode?: boolean
 }
 
 function RegularGroupsView({
-  phase, expandedGroups, toggleGroup, getStateLabel, tournamentId, t
+  phase, expandedGroups, toggleGroup, getStateLabel, tournamentId, t, exportMode
 }: RegularGroupsViewProps) {
   const getUniqueGroupId = (group: BracketGroup) => `${group.id}-${group.groupNumber || 0}`
 
@@ -486,11 +615,11 @@ function RegularGroupsView({
       {/* Group content */}
       {phase.groups.map((group) => {
         const uniqueId = getUniqueGroupId(group)
-        if (phase.groups.length > 1 && !expandedGroups[uniqueId]) return null
+        if (!exportMode && phase.groups.length > 1 && !expandedGroups[uniqueId]) return null
         const isVirtualMatch = String(group.groupLetter || '').includes('Trận') || String(group.groupLetter || '').includes('Match')
 
         return (
-          <div key={uniqueId} className="space-y-3 animate-fade-in-up">
+          <div key={uniqueId} className={`space-y-3 ${exportMode ? '' : 'animate-fade-in-up'}`}>
             {/* Group info banner */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg bg-muted/20 border border-white/5 gap-4">
               <div className="flex flex-col gap-1.5">
@@ -559,6 +688,7 @@ function RegularGroupsView({
                     lobbyIndex={lobbyIndex}
                     tournamentId={tournamentId}
                     getStateLabel={getStateLabel}
+                    exportMode={exportMode}
                   />
                 ))}
               </div>
@@ -581,12 +711,14 @@ interface LobbyCardProps {
   tournamentId: string
   getStateLabel: (state?: string) => string
   stripGroupPrefix?: boolean
+  exportMode?: boolean
 }
 
-function LobbyCard({ lobby, lobbyIndex, tournamentId, getStateLabel, stripGroupPrefix }: LobbyCardProps) {
+function LobbyCard({ lobby, lobbyIndex, tournamentId, getStateLabel, stripGroupPrefix, exportMode }: LobbyCardProps) {
   const displayName = stripGroupPrefix ? lobby.name.replace(/\[\w+\]\s*/, '') : lobby.name
   const realId = getRealLobbyId(lobby.id)
   const lobbyHref = `/tournaments/${tournamentId}/lobbies/${realId}`
+  const playersToRender = exportMode ? lobby.players : lobby.players.slice(0, 4)
 
   return (
     <NextLink href={lobbyHref}>
@@ -597,9 +729,9 @@ function LobbyCard({ lobby, lobbyIndex, tournamentId, getStateLabel, stripGroupP
           bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/10
           ${lobby.state === 'PLAYING' ? 'ring-1 ring-emerald-500/30' : ''}
           ${lobby.state === 'FINISHED' ? 'opacity-80' : ''}
-          animate-fade-in-up
+          ${exportMode ? '' : 'animate-fade-in-up'}
         `}
-        style={{ animationDelay: `${lobbyIndex * 50}ms` }}
+        style={{ animationDelay: exportMode ? '0ms' : `${lobbyIndex * 50}ms` }}
       >
         <CardHeader className="p-3 pb-2 flex flex-row items-center justify-between">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -614,7 +746,7 @@ function LobbyCard({ lobby, lobbyIndex, tournamentId, getStateLabel, stripGroupP
         </CardHeader>
         <CardContent className="p-3 pt-0">
           <div className="space-y-1.5">
-            {lobby.players.slice(0, 4).map((player, playerIndex) => (
+            {playersToRender.map((player, playerIndex) => (
               <div
                 key={player.id}
                 className="flex items-center gap-2.5 p-1.5 rounded-lg bg-muted/20 hover:bg-muted/30 transition-colors"
@@ -642,7 +774,7 @@ function LobbyCard({ lobby, lobbyIndex, tournamentId, getStateLabel, stripGroupP
                 )}
               </div>
             ))}
-            {lobby.players.length > 4 && (
+            {!exportMode && lobby.players.length > 4 && (
               <div className="text-[10px] text-muted-foreground/50 text-center pt-1">
                 +{lobby.players.length - 4} more players
               </div>

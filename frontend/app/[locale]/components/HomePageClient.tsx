@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { ITournament } from "@/app/types/tournament"
 import { MiniTourLobby } from "@/app/stores/miniTourLobbyStore"
+import { useCurrencyRate } from "@/app/hooks/useCurrencyRate"
 
 import TournamentDirectoryClient from "./TournamentDirectoryClient"
 import { useTranslations } from 'next-intl';
@@ -280,6 +281,7 @@ function FeaturedTournamentCard({ tournament, index }: { tournament: ITournament
 // MiniTour Lobby Card Component
 function MiniTourLobbyCard({ lobby, index }: { lobby: MiniTourLobby, index: number }) {
   const t = useTranslations('common');
+  const { formatVndText } = useCurrencyRate();
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -315,19 +317,29 @@ function MiniTourLobbyCard({ lobby, index }: { lobby: MiniTourLobby, index: numb
             </span>
             <span className="font-medium">{lobby.currentPlayers}/{lobby.maxPlayers}</span>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground flex items-center gap-1">
+          <div className="flex items-start justify-between">
+            <span className="text-muted-foreground flex items-center gap-1 mt-0.5">
               {lobby.entryType === "coins" ? <Coins className="h-3.5 w-3.5" /> : <DollarSign className="h-3.5 w-3.5" />}
               {t('entry_fee', { defaultValue: 'Entry' })}
             </span>
-            <span className="font-medium">{lobby.entryFee}</span>
+            <div className="text-right">
+              <span className="font-medium">{lobby.entryType !== "coins" && "$"}{lobby.entryFee} {lobby.entryType !== "coins" && <span className="text-[10px] text-muted-foreground">USD</span>}</span>
+              {lobby.entryType !== "coins" && typeof lobby.entryFee === 'number' && lobby.entryFee > 0 && (
+                <div className="text-[10px] text-muted-foreground opacity-80">{formatVndText(lobby.entryFee)}</div>
+              )}
+            </div>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground flex items-center gap-1">
+          <div className="flex items-start justify-between">
+            <span className="text-muted-foreground flex items-center gap-1 mt-0.5">
               <Coins className="h-3.5 w-3.5" />
               {t('prize_pool', { defaultValue: 'Prize' })}
             </span>
-            <span className="font-bold text-primary">{lobby.prizePool}</span>
+            <div className="text-right">
+              <span className="font-bold text-primary">{lobby.entryType !== "coins" && "$"}{lobby.prizePool} {lobby.entryType !== "coins" && <span className="text-[10px] text-muted-foreground">USD</span>}</span>
+              {lobby.entryType !== "coins" && typeof lobby.prizePool === 'number' && lobby.prizePool > 0 && (
+                <div className="text-[10px] text-muted-foreground opacity-80">{formatVndText(lobby.prizePool)}</div>
+              )}
+            </div>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground flex items-center gap-1">

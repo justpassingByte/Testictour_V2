@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useTranslations } from "next-intl";
 import { Info, DollarSign, Wallet, Globe, Users, ScrollText, ShieldCheck } from "lucide-react"
 import { ITournament } from '@/app/types/tournament';
+import { useCurrencyRate } from '@/app/hooks/useCurrencyRate';
 
 interface TournamentDetailsTabProps {
   tournament: ITournament;
@@ -10,6 +11,7 @@ interface TournamentDetailsTabProps {
 
 export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tournament }) => {
   const t = useTranslations("common");  
+  const { formatVndText } = useCurrencyRate();
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -46,15 +48,21 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
           {/* Financial Information */}
           <div className="space-y-2">
             <h4 className="font-bold">{t("financial_information")}</h4>
-            <div className="flex items-center">
-              <DollarSign className="mr-2 h-4 w-4 text-muted-foreground" />
+            <div className="flex items-start">
+              <DollarSign className="mr-2 h-4 w-4 text-muted-foreground mt-0.5" />
               <span className="text-muted-foreground">{t("registration_fee")}:</span>
-              <span className="ml-auto font-medium">{formatCurrency(tournament.entryFee)}</span>
+              <div className="ml-auto text-right">
+                <div className="font-medium">{formatCurrency(tournament.entryFee)} <span className="text-xs text-muted-foreground ml-1">USD</span></div>
+                <div className="text-[10px] text-muted-foreground">{formatVndText(tournament.entryFee)}</div>
+              </div>
             </div>
-            <div className="flex items-center">
-              <Wallet className="mr-2 h-4 w-4 text-muted-foreground" />
+            <div className="flex items-start">
+              <Wallet className="mr-2 h-4 w-4 text-muted-foreground mt-0.5" />
               <span className="text-muted-foreground">{t("budget")}:</span>
-              <span className="ml-auto font-medium">{formatCurrency(tournament.budget || 0)}</span>
+              <div className="ml-auto text-right">
+                <div className="font-medium">{formatCurrency(tournament.budget || 0)} <span className="text-xs text-muted-foreground ml-1">USD</span></div>
+                <div className="text-[10px] text-muted-foreground">{formatVndText(tournament.budget || 0)}</div>
+              </div>
             </div>
           </div>
 
@@ -97,9 +105,10 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
             const prizeAmount = totalPrizePool * normalizedPercentage;
 
             return (
-              <Card key={rank} className="flex flex-col items-center justify-center p-4 border shadow-sm bg-muted/40">
+              <Card key={rank} className="flex flex-col items-center justify-center p-4 border shadow-sm bg-muted/40 text-center">
                 <span className="text-lg font-bold text-yellow-500">{rankSuffix(rank)}</span>
-                <span className="text-md font-medium text-muted-foreground">{formatCurrency(prizeAmount)}</span>
+                <span className="text-md font-medium text-muted-foreground">{formatCurrency(prizeAmount)} <span className="text-[10px]">USD</span></span>
+                <span className="text-[10px] text-muted-foreground opacity-70 mt-1">{formatVndText(prizeAmount)}</span>
               </Card>
             );
           })}
@@ -119,9 +128,10 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
             <p className="font-medium mb-1">{isEscrow ? t("escrow_title") : t("community_title")}</p>
             <p className="text-muted-foreground">{isEscrow ? t("escrow_desc") : t("community_desc")}</p>
             {isEscrow && tournament.escrowRequiredAmount && (
-                <p className="mt-2 font-bold text-green-600 dark:text-green-400">
-                  {t("guaranteed_pool")}: {formatCurrency(tournament.escrowRequiredAmount)}
-                </p>
+                <div className="mt-2 font-bold text-green-600 dark:text-green-400">
+                  <p>{t("guaranteed_pool")}: {formatCurrency(tournament.escrowRequiredAmount)} USD</p>
+                  <p className="text-xs opacity-70">{formatVndText(tournament.escrowRequiredAmount)}</p>
+                </div>
             )}
           </div>
           

@@ -2,14 +2,23 @@ import { IParticipant } from '../types/tournament';
 import api from '../lib/apiConfig';
 
 export class ParticipantService {
-  static async join(tournamentId: string, discordId?: string, referralSource?: string): Promise<IParticipant> {
+  static async join(
+    tournamentId: string,
+    discordId?: string,
+    referralSource?: string,
+  ): Promise<{ participant: IParticipant; checkoutUrl: string | null; requiresPayment: boolean; transactionId?: string }> {
     try {
       const response = await api.post(`/tournaments/${tournamentId}/participants`, { discordId, referralSource });
-      const participant: IParticipant = response.data.participant || response.data;
-      return participant;
-      } catch  {
-      console.error('Error during joining tournament:');
-      throw new Error('Error during joining tournament');
+      const data = response.data;
+      return {
+        participant: data.participant,
+        checkoutUrl: data.checkoutUrl ?? null,
+        requiresPayment: data.requiresPayment ?? false,
+        transactionId: data.transactionId,
+      };
+    } catch (err: any) {
+      const message = err?.response?.data?.message || 'Error during joining tournament';
+      throw new Error(message);
     }
   }
 

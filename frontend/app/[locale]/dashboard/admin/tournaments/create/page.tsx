@@ -48,6 +48,17 @@ export default function CreateTournamentPage() {
   })
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [imageFile, setImageFile] = useState<File | null>(null)
+  const [usdToVndRate, setUsdToVndRate] = useState<number>(25400) // Fallback rate
+
+  // Fetch exchange rate once on mount
+  useState(() => {
+    fetch('https://open.er-api.com/v6/latest/USD')
+      .then(res => res.json())
+      .then(data => {
+        if (data?.rates?.VND) setUsdToVndRate(data.rates.VND)
+      })
+      .catch(console.error)
+  })
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -252,25 +263,41 @@ export default function CreateTournamentPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="entryFee">{t("registration_fee")}</Label>
-                <Input id="entryFee" type="number" min={0} value={form.entryFee} onChange={(e) => updateForm("entryFee", parseFloat(e.target.value))} />
+                <Label htmlFor="entryFee">{t("registration_fee")} (USD)</Label>
+                <div className="flex flex-col gap-1">
+                  <Input id="entryFee" type="number" min={0} value={form.entryFee} onChange={(e) => updateForm("entryFee", parseFloat(e.target.value) || 0)} />
+                  {form.entryFee > 0 && (
+                    <span className="text-xs text-muted-foreground">≈ {(form.entryFee * usdToVndRate).toLocaleString('vi-VN')} VND</span>
+                  )}
+                </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="customPrizePool">Manual Prize Pool</Label>
-                <Input id="customPrizePool" type="number" min={0} value={form.customPrizePool} onChange={(e) => updateForm("customPrizePool", parseFloat(e.target.value))} placeholder="Use entry fees if 0" />
+                <Label htmlFor="customPrizePool">Manual Prize Pool (USD)</Label>
+                <div className="flex flex-col gap-1">
+                  <Input id="customPrizePool" type="number" min={0} value={form.customPrizePool} onChange={(e) => updateForm("customPrizePool", parseFloat(e.target.value) || 0)} placeholder="Use entry fees if 0" />
+                  {form.customPrizePool > 0 && (
+                    <span className="text-xs text-muted-foreground">≈ {(form.customPrizePool * usdToVndRate).toLocaleString('vi-VN')} VND</span>
+                  )}
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="hostFeePercent">Host Fee (%)</Label>
-                <Input id="hostFeePercent" type="number" min={0} max={1} step={0.01} value={form.hostFeePercent} onChange={(e) => updateForm("hostFeePercent", parseFloat(e.target.value))} />
+                <Input id="hostFeePercent" type="number" min={0} max={1} step={0.01} value={form.hostFeePercent} onChange={(e) => updateForm("hostFeePercent", parseFloat(e.target.value) || 0)} />
               </div>
             </div>
             
             <div className="text-sm text-muted-foreground bg-violet-500/5 border border-violet-500/10 rounded-lg p-3">
               Estimated prize pool: <strong className="text-violet-400">
-                {form.customPrizePool > (form.maxPlayers * form.entryFee * (1 - form.hostFeePercent)) 
+                ${form.customPrizePool > (form.maxPlayers * form.entryFee * (1 - form.hostFeePercent)) 
                   ? form.customPrizePool.toLocaleString() 
-                  : (form.maxPlayers * form.entryFee * (1 - form.hostFeePercent)).toLocaleString()} Credits
+                  : (form.maxPlayers * form.entryFee * (1 - form.hostFeePercent)).toLocaleString()} USD
               </strong>
+              {" "}
+              <span className="text-xs opacity-70">
+                (≈ {form.customPrizePool > (form.maxPlayers * form.entryFee * (1 - form.hostFeePercent))
+                  ? (form.customPrizePool * usdToVndRate).toLocaleString('vi-VN')
+                  : ((form.maxPlayers * form.entryFee * (1 - form.hostFeePercent)) * usdToVndRate).toLocaleString('vi-VN')} VND)
+              </span>
               {" "}(at full registration)
             </div>
             

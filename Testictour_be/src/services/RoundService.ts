@@ -200,9 +200,13 @@ export default class RoundService {
   }
 
   /**
-   * Get bracket data for a tournament, organized by Phase → Group (Round) → Lobby → Players.
+   * Lightweight bracket summary: Phase → Group (Round) → Lobby → Players list.
+   * Does NOT load match history or matchResults — those are fetched on-demand via getLobbyDetail().
+   * This keeps the initial bracket load fast even for large tournaments.
    */
   static async getBracket(tournamentId: string) {
+    // Use `any` cast: Prisma struggles to infer deeply nested mixed include+select types.
+    // All fields accessed are validated at runtime; shape is stable.
     const tournament = await prisma.tournament.findUnique({
       where: { id: tournamentId },
       include: {
@@ -213,12 +217,14 @@ export default class RoundService {
               orderBy: { roundNumber: 'asc' },
               include: {
                 lobbies: {
-                  include: {
-                    matches: {
-                      include: {
-                        matchResults: true
-                      }
-                    }
+                  // Only load lobby state + completedMatchesCount — no matches/matchResults
+                  select: {
+                    id: true,
+                    name: true,
+                    state: true,
+                    fetchedResult: true,
+                    completedMatchesCount: true,
+                    participants: true,
                   }
                 }
               }
@@ -226,7 +232,7 @@ export default class RoundService {
           }
         }
       }
-    });
+    }) as any;
 
     if (!tournament) throw new ApiError(404, 'Tournament not found');
 
@@ -252,116 +258,76 @@ export default class RoundService {
       : [];
     const userMap = new Map(users.map(u => [u.id, u]));
 
-    // Build bracket response
-    const phases = tournament.phases.map(phase => {
+    // Build bracket response — lightweight: no match records loaded, use completedMatchesCount for slot status
+    const phases = (tournament.phases as any[]).map((phase: any) => {
       let phaseGroups: any[] = [];
       const matchesPerRound = phase.matchesPerRound || 1;
-      const isMultiMatch = (phase.type === 'points' || phase.type === 'swiss') && matchesPerRound > 1;
-      // Elimination with multiple matches & multiple rounds (groups) → view by match number (Vòng 1/2/3)
-      // so all groups' lobbies aggregate into one "Vòng" tab for easy tracking
-      const isMultiMatchElimination = phase.type === 'elimination' && matchesPerRound > 1 && phase.rounds.length > 1;
+      const isMultiMatch = matchesPerRound > 1;
+      const isMultiMatchElimination = phase.type === 'elimination' && isMultiMatch && phase.rounds.length > 1;
 
       if (isMultiMatchElimination) {
-        // Group by match index across ALL rounds (A/B/C/D grouped into Vòng 1, Vòng 2, ...)
+        // Elimination BO with multiple groups: show "Vòng 1, Vòng 2..." aggregating all groups
         for (let m = 0; m < matchesPerRound; m++) {
           const allLobbiesForMatch: any[] = [];
-
           for (const round of phase.rounds) {
             const groupLetter = this.groupNameFromNumber(round.roundNumber);
             for (const lobby of round.lobbies) {
-              const sortedMatches = (lobby.matches || []).slice().sort((a: any, b: any) =>
-                new Date((a as any).createdAt).getTime() - new Date((b as any).createdAt).getTime()
-              );
-              const match = sortedMatches[m];
-
-              let players: any[] = [];
-              let lobbyState: string;
-
-              if (match && (match as any).matchResults) {
-                // Historical data for this match number
-                players = (match as any).matchResults.map((r: any) =>
-                  userMap.get(r.userId) || { id: r.userId, username: 'Unknown' }
-                );
-                lobbyState = 'FINISHED';
-              } else if (m === (lobby.completedMatchesCount || 0)) {
-                // Current active match — show current participants
-                players = (lobby.participants as string[]).map(userId =>
-                  userMap.get(userId) || { id: userId, username: 'Unknown' }
-                );
-                lobbyState = lobby.state;
-              } else {
-                // Future match — no data yet
-                players = [];
-                lobbyState = 'WAITING';
-              }
-
+              const completed = lobby.completedMatchesCount || 0;
               allLobbiesForMatch.push({
                 id: `${lobby.id}_m${m}`,
-                name: `[${groupLetter}] ${lobby.name}`, // e.g. "[A] Lobby 1"
-                state: lobbyState,
-                fetchedResult: !!match,
-                players,
-                roundId: round.id, // Real round ID for this group (A=round1, B=round2, etc.)
+                name: `[${groupLetter}] ${lobby.name}`,
+                state: completed > m ? 'FINISHED' : completed === m ? lobby.state : 'WAITING',
+                fetchedResult: completed > m,
+                completedMatchesCount: completed,
+                // Always show current participants (on-demand detail shows historical per-match)
+                players: (lobby.participants as string[]).map(userId => userMap.get(userId) || { id: userId, username: 'Unknown' }),
+                roundId: round.id,
               });
             }
           }
-
-          // Derive overall status for this "Vòng" (match number)
-          const completedCount = allLobbiesForMatch.filter(l => l.state === 'FINISHED').length;
+          const doneCount = allLobbiesForMatch.filter(l => l.state === 'FINISHED').length;
           const playingCount = allLobbiesForMatch.filter(l => l.state === 'PLAYING').length;
-          const matchStatus =
-            allLobbiesForMatch.length > 0 && completedCount === allLobbiesForMatch.length ? 'completed' :
-            playingCount > 0 || completedCount > 0 ? 'in_progress' : 'pending';
-
           phaseGroups.push({
-            id: phase.rounds[0]?.id || phase.id, // Link to first round for "View Detail"
+            id: phase.rounds[0]?.id || phase.id,
             name: `Vòng ${m + 1}`,
             groupLetter: `Vòng ${m + 1}`,
             groupNumber: m + 1,
-            status: matchStatus,
+            status: allLobbiesForMatch.length > 0 && doneCount === allLobbiesForMatch.length ? 'completed'
+              : playingCount > 0 || doneCount > 0 ? 'in_progress' : 'pending',
             startTime: phase.rounds[0]?.startTime,
             endTime: phase.rounds[0]?.endTime,
             lobbies: allLobbiesForMatch,
           });
         }
       } else {
-        phase.rounds.forEach(round => {
+        (phase.rounds as any[]).forEach((round: any) => {
           if (isMultiMatch && phase.rounds.length === 1) {
-            const matchesCount = matchesPerRound;
-            for (let m = 0; m < matchesCount; m++) {
+            // Swiss/Points single-round multi-match: show "Trận 1, Trận 2..."
+            for (let m = 0; m < matchesPerRound; m++) {
+              const firstCompleted = round.lobbies[0]?.completedMatchesCount || 0;
               phaseGroups.push({
-                id: round.id, // KEEP REAL ROUND ID so clicking 'View Detail' redirects to the single round page!
+                id: round.id,
                 name: `Trận ${m + 1}`,
                 groupLetter: `Trận ${m + 1}`,
                 groupNumber: m + 1,
-                status: (round.lobbies[0]?.completedMatchesCount || 0) > m ? 'completed' : ((round.lobbies[0]?.completedMatchesCount || 0) === m ? 'in_progress' : 'pending'),
+                status: firstCompleted > m ? 'completed' : firstCompleted === m ? 'in_progress' : 'pending',
                 startTime: round.startTime,
                 endTime: round.endTime,
-                lobbies: round.lobbies.map(lobby => {
-                  // Ensure matches are sorted chronologically
-                  const sortedMatches = (lobby.matches || []).slice().sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-                  const match = sortedMatches[m];
-
-                  let players: any[] = [];
-                  if (match && match.matchResults) {
-                    // We have historical data for this match
-                    players = match.matchResults.map((r: any) => userMap.get(r.userId) || { id: r.userId, username: 'Unknown' });
-                  } else if (m === (lobby.completedMatchesCount || 0)) {
-                    // This is the current active match, show current participants
-                    players = (lobby.participants as string[]).map(userId => userMap.get(userId) || { id: userId, username: 'Unknown' });
-                  }
-
+                lobbies: (round.lobbies as any[]).map((lobby: any) => {
+                  const completed = lobby.completedMatchesCount || 0;
                   return {
-                    id: lobby.id + '_m' + m, // Virtual lobby ID for React keys
+                    id: `${lobby.id}_m${m}`,
                     name: lobby.name,
-                    state: match ? 'FINISHED' : (m === (lobby.completedMatchesCount || 0) ? lobby.state : 'WAITING'),
-                    fetchedResult: !!match,
-                    players
+                    state: completed > m ? 'FINISHED' : completed === m ? lobby.state : 'WAITING',
+                    fetchedResult: completed > m,
+                    completedMatchesCount: completed,
+                    players: (lobby.participants as string[]).map(userId => userMap.get(userId) || { id: userId, username: 'Unknown' }),
                   };
-                })
+                }),
               });
             }
           } else {
+            // Standard single-match: each round = one Group (A, B, C...)
             phaseGroups.push({
               id: round.id,
               name: `Group ${this.groupNameFromNumber(round.roundNumber)}`,
@@ -370,11 +336,12 @@ export default class RoundService {
               status: round.status,
               startTime: round.startTime,
               endTime: round.endTime,
-              lobbies: round.lobbies.map(lobby => ({
+              lobbies: (round.lobbies as any[]).map((lobby: any) => ({
                 id: lobby.id,
                 name: lobby.name,
                 state: lobby.state,
                 fetchedResult: lobby.fetchedResult,
+                completedMatchesCount: lobby.completedMatchesCount || 0,
                 players: (lobby.participants as string[]).map(userId => userMap.get(userId) || { id: userId, username: 'Unknown' })
               }))
             });
@@ -388,11 +355,94 @@ export default class RoundService {
         phaseNumber: phase.phaseNumber,
         status: phase.status,
         type: phase.type,
+        matchesPerRound,
         groups: phaseGroups
       };
     });
 
     return { tournamentId, phases };
+  }
+
+  /**
+   * Lazy-load detail for a specific lobby — called when user clicks into a lobby card.
+   * Returns players with scores, match history, and per-match results.
+   * This is the "expensive" data that was previously loaded upfront in getBracket.
+   * Frontend calls: GET /api/lobbies/:id/detail
+   */
+  static async getLobbyDetail(lobbyId: string) {
+    const lobby = await prisma.lobby.findUnique({
+      where: { id: lobbyId },
+      include: {
+        round: {
+          include: {
+            phase: {
+              select: { id: true, name: true, type: true, phaseNumber: true, matchesPerRound: true, pointsMapping: true, tournamentId: true }
+            }
+          }
+        },
+        matches: {
+          orderBy: { createdAt: 'asc' },
+          include: {
+            matchResults: { orderBy: { placement: 'asc' } }
+          }
+        }
+      }
+    });
+
+    if (!lobby) throw new ApiError(404, 'Lobby not found');
+
+    const allUserIds = new Set<string>();
+    (lobby.participants as string[]).forEach(id => allUserIds.add(id));
+    for (const match of lobby.matches) {
+      for (const r of match.matchResults) allUserIds.add(r.userId);
+    }
+
+    const users = allUserIds.size > 0
+      ? await prisma.user.findMany({
+        where: { id: { in: Array.from(allUserIds) } },
+        select: { id: true, username: true, riotGameName: true, riotGameTag: true, rank: true }
+      })
+      : [];
+    const userMap = new Map(users.map(u => [u.id, u]));
+
+    // Aggregate per-player totals across all matches in this lobby
+    const playerScores = new Map<string, { points: number; placements: number[] }>();
+    for (const match of lobby.matches) {
+      for (const r of match.matchResults) {
+        const existing = playerScores.get(r.userId) || { points: 0, placements: [] };
+        existing.points += r.points || 0;
+        existing.placements.push(r.placement);
+        playerScores.set(r.userId, existing);
+      }
+    }
+
+    const players = (lobby.participants as string[]).map(userId => {
+      const user = userMap.get(userId) || { id: userId, username: 'Unknown' };
+      const score = playerScores.get(userId);
+      return { ...user, totalPoints: score?.points || 0, placements: score?.placements || [] };
+    }).sort((a, b) => b.totalPoints - a.totalPoints);
+
+    const matchHistory = lobby.matches.map((match, idx) => ({
+      id: match.id,
+      matchNumber: idx + 1,
+      fetchedAt: (match as any).fetchedAt,
+      results: match.matchResults.map(r => ({
+        placement: r.placement,
+        points: r.points,
+        user: userMap.get(r.userId) || { id: r.userId, username: 'Unknown' },
+      }))
+    }));
+
+    return {
+      lobbyId: lobby.id,
+      name: lobby.name,
+      state: lobby.state,
+      fetchedResult: lobby.fetchedResult,
+      completedMatchesCount: lobby.completedMatchesCount || 0,
+      phase: lobby.round.phase,
+      players,
+      matchHistory,
+    };
   }
 
   /**
@@ -1438,31 +1488,57 @@ export default class RoundService {
       }
     });
 
-    // ── BULK UPDATE: Single SQL statement for all participant scores ──
+    // ── BULK UPDATE: Batched Prisma updates (parameterized, transaction-safe) ──
     if (participantsToUpdate.length > 0) {
-      const caseClauses = participantsToUpdate
-        .map(p => {
+      await Promise.all(
+        participantsToUpdate.map(p => {
           const newScoreInRound = participantScores.get(p.id) || 0;
           const newTotalScore = (p.scoreTotal || 0) + newScoreInRound;
           logger.debug(`[Scores] Participant ${p.id}: current=${p.scoreTotal || 0}, roundDelta=+${newScoreInRound}, new=${newTotalScore}`);
-          return `WHEN "id" = '${p.id}' THEN ${newTotalScore}`;
+          return tx.participant.update({
+            where: { id: p.id },
+            data: { scoreTotal: newTotalScore },
+          });
         })
-        .join(' ');
-      const participantIds = participantsToUpdate
-        .map(p => `'${p.id}'`)
-        .join(', ');
-
-      await tx.$executeRawUnsafe(`
-        UPDATE "Participant"
-        SET "scoreTotal" = CASE ${caseClauses} ELSE "scoreTotal" END
-        WHERE "id" IN (${participantIds})
-      `);
-      logger.debug(`[Scores] Bulk updated scoreTotal for ${participantsToUpdate.length} participants in 1 query.`);
+      );
+      logger.debug(`[Scores] Batch-updated scoreTotal for ${participantsToUpdate.length} participants.`);
     }
     logger.debug(`[Scores] Finished _updateParticipantTotalScores.`);
   }
 
+  /**
+   * Shared tie-break comparator for all advancement modes (elimination, swiss, top_n_scores).
+   * Sort order (all criteria preserved consistently):
+   *   1. Total points            → descending (higher = better)
+   *   2. Sum of placements       → ascending  (lower avg placement = better)
+   *   3. Count of 1st-place wins → descending (more wins = better)
+   *   4. Best single placement   → ascending  (lower = better)
+   *   5. userId string           → ascending  (deterministic final fallback)
+   */
+  private static tiebreakComparator(
+    a: { score: number; placements: number[]; userId: string },
+    b: { score: number; placements: number[]; userId: string },
+  ): number {
+    // 1. Total score
+    if (b.score !== a.score) return b.score - a.score;
+    // 2. Sum of placements (lower is better: 1st+1st=2 beats 2nd+3rd=5)
+    const sumA = a.placements.reduce((s, p) => s + p, 0);
+    const sumB = b.placements.reduce((s, p) => s + p, 0);
+    if (sumA !== sumB) return sumA - sumB;
+    // 3. Count of 1st-place finishes
+    const wins1A = a.placements.filter(p => p === 1).length;
+    const wins1B = b.placements.filter(p => p === 1).length;
+    if (wins1B !== wins1A) return wins1B - wins1A;
+    // 4. Best (lowest) single placement
+    const bestA = a.placements.length > 0 ? Math.min(...a.placements) : 999;
+    const bestB = b.placements.length > 0 ? Math.min(...b.placements) : 999;
+    if (bestA !== bestB) return bestA - bestB;
+    // 5. Deterministic string fallback (prevents sort instability between runs)
+    return a.userId.localeCompare(b.userId);
+  }
+
   private static async _advanceByPlacement(tx: Prisma.TransactionClient, round: any, topNPerLobby: number, phaseId?: string) {
+
     const scopeLabel = phaseId ? `phase ${phaseId}` : `round ${round.id}`;
     logger.debug(`[Advancement] Starting per-lobby top-${topNPerLobby} advancement for ${scopeLabel}`);
 
@@ -1503,33 +1579,14 @@ export default class RoundService {
         }
       }
 
-      // Sort players with Swiss tiebreak:
-      // 1. Total points (desc)
-      // 2. Sum of placements (asc — lower = better average)
-      // 3. Count of 1st-place finishes (desc)
-      // 4. Best single placement (asc)
+      // Sort with shared 4-level tie-break (Points→SumPlacements→1stCount→BestPlacement→userId)
       const lobbyRanked = lobbyParticipantIds
         .map(uid => ({
           userId: uid,
           score: lobbyScoreMap.get(uid) || 0,
           placements: lobbyPlacementsMap.get(uid) || [],
         }))
-        .sort((a, b) => {
-          // Primary: total score descending
-          if (b.score !== a.score) return b.score - a.score;
-          // TB1: sum of placements ascending (1+2+3=6 beats 3+4+5=12)
-          const sumA = a.placements.reduce((s, p) => s + p, 0);
-          const sumB = b.placements.reduce((s, p) => s + p, 0);
-          if (sumA !== sumB) return sumA - sumB;
-          // TB2: count of 1st-place finishes descending
-          const wins1A = a.placements.filter(p => p === 1).length;
-          const wins1B = b.placements.filter(p => p === 1).length;
-          if (wins1B !== wins1A) return wins1B - wins1A;
-          // TB3: best single placement ascending
-          const bestA = a.placements.length > 0 ? Math.min(...a.placements) : 999;
-          const bestB = b.placements.length > 0 ? Math.min(...b.placements) : 999;
-          return bestA - bestB;
-        });
+        .sort(RoundService.tiebreakComparator);
 
       logger.debug(`[Advancement] Lobby ${lobby.id} ranking (top ${topNPerLobby} advance): ${lobbyRanked.map((p, i) => `#${i + 1} ${p.userId}(${p.score}pts placements:[${p.placements}])`).join(', ')}`);
 
@@ -1624,25 +1681,14 @@ export default class RoundService {
         }
       }
 
-      // Swiss tiebreak ranking (same logic as _advanceByPlacement)
+      // Sort with shared 4-level tie-break
       const ranked = lobbyParticipantIds
         .map(uid => ({
           userId: uid,
           score: scoreMap.get(uid) || 0,
           placements: placementsMap.get(uid) || [],
         }))
-        .sort((a, b) => {
-          if (b.score !== a.score) return b.score - a.score;
-          const sumA = a.placements.reduce((s, p) => s + p, 0);
-          const sumB = b.placements.reduce((s, p) => s + p, 0);
-          if (sumA !== sumB) return sumA - sumB;
-          const wins1A = a.placements.filter(p => p === 1).length;
-          const wins1B = b.placements.filter(p => p === 1).length;
-          if (wins1B !== wins1A) return wins1B - wins1A;
-          const bestA = a.placements.length > 0 ? Math.min(...a.placements) : 999;
-          const bestB = b.placements.length > 0 ? Math.min(...b.placements) : 999;
-          return bestA - bestB;
-        });
+        .sort(RoundService.tiebreakComparator);
 
       logger.info(`[Placement/Immediate] Lobby ${lobby.id}: Ranking ${ranked.length} players (top ${topNPerLobby} advance)`);
       logger.debug(`[Placement/Immediate] Lobby ${lobby.id} ranking: ${ranked.map((p, i) => `#${i + 1} ${p.userId}(${p.score}pts)`).join(', ')}`);
@@ -1728,22 +1774,42 @@ export default class RoundService {
       return;
     }
 
-    // For cross-phase ranking, use scoreTotal (already updated by _updateParticipantTotalScores)
-    // For single-round, use round-specific scores for accuracy
-    let sortedParticipants: (typeof participants[number] & { roundScore: number })[];
+    // For cross-phase ranking, use scoreTotal + placement history for full tie-break
+    let sortedParticipants: (typeof participants[number] & { score: number; placements: number[] })[];
     if (phaseId) {
-      // Cross-group: rank by cumulative scoreTotal across the whole phase
+      // Cross-group: load placement history from ALL lobbies in this phase for each player
+      const phaseMatchResults = await tx.matchResult.findMany({
+        where: { match: { lobby: { round: { phaseId } } } },
+        select: { userId: true, placement: true },
+      });
+      const phasePlacementsMap = new Map<string, number[]>();
+      for (const r of phaseMatchResults) {
+        const arr = phasePlacementsMap.get(r.userId) || [];
+        arr.push(r.placement);
+        phasePlacementsMap.set(r.userId, arr);
+      }
       sortedParticipants = participants
-        .map(p => ({ ...p, roundScore: p.scoreTotal || 0 }))
-        .sort((a, b) => b.roundScore - a.roundScore);
+        .map(p => ({ ...p, score: p.scoreTotal || 0, placements: phasePlacementsMap.get(p.userId) || [] }))
+        .sort(RoundService.tiebreakComparator);
     } else {
       const scoresInRound = await this._calculateScoresForRound(tx, round.id);
+      // Load per-round placement history for tie-break
+      const roundMatchResults = await tx.matchResult.findMany({
+        where: { match: { lobby: { roundId: round.id } } },
+        select: { userId: true, placement: true },
+      });
+      const roundPlacementsMap = new Map<string, number[]>();
+      for (const r of roundMatchResults) {
+        const arr = roundPlacementsMap.get(r.userId) || [];
+        arr.push(r.placement);
+        roundPlacementsMap.set(r.userId, arr);
+      }
       sortedParticipants = participants
-        .map(p => ({ ...p, roundScore: scoresInRound.get(p.userId) || 0 }))
-        .sort((a, b) => b.roundScore - a.roundScore);
+        .map(p => ({ ...p, score: scoresInRound.get(p.userId) || 0, placements: roundPlacementsMap.get(p.userId) || [] }))
+        .sort(RoundService.tiebreakComparator);
     }
 
-    logger.debug(`[Advancement Logic] Ranking (${scopeLabel}, top ${topN} advance): ${sortedParticipants.map((p, i) => `#${i+1} ${p.userId}(${p.roundScore}pts)`).join(', ')}`);
+    logger.debug(`[Advancement Logic] Ranking (${scopeLabel}, top ${topN} advance): ${sortedParticipants.map((p, i) => `#${i+1} ${p.userId}(${p.score}pts placements:[${p.placements}])`).join(', ')}`);
 
     // Guard: if fewer or equal participants than topN, advance all
     if (sortedParticipants.length <= topN) {
@@ -1751,8 +1817,8 @@ export default class RoundService {
       for (const p of sortedParticipants) {
         await tx.roundOutcome.upsert({
           where: { participantId_roundId: { participantId: p.id, roundId: round.id } },
-          update: { status: 'advanced', scoreInRound: p.roundScore },
-          create: { participantId: p.id, roundId: round.id, status: 'advanced', scoreInRound: p.roundScore },
+          update: { status: 'advanced', scoreInRound: p.score },
+          create: { participantId: p.id, roundId: round.id, status: 'advanced', scoreInRound: p.score },
         });
       }
       return;
@@ -1769,8 +1835,8 @@ export default class RoundService {
       const isEliminated = playerIdsToEliminate.includes(p.id);
       await tx.roundOutcome.upsert({
         where: { participantId_roundId: { participantId: p.id, roundId: round.id } },
-        update: { status: isEliminated ? 'eliminated' : 'advanced', scoreInRound: p.roundScore },
-        create: { participantId: p.id, roundId: round.id, status: isEliminated ? 'eliminated' : 'advanced', scoreInRound: p.roundScore },
+        update: { status: isEliminated ? 'eliminated' : 'advanced', scoreInRound: p.score },
+        create: { participantId: p.id, roundId: round.id, status: isEliminated ? 'eliminated' : 'advanced', scoreInRound: p.score },
       });
     }
 

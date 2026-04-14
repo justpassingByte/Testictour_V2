@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SyncStatus } from "@/components/sync-status"
 import { useTranslations } from "next-intl"
+import { useCurrencyRate } from "@/app/hooks/useCurrencyRate"
 
 import { ITournament } from "@/app/types/tournament"
 import { TournamentBracketTab } from "@/app/[locale]/tournaments/[id]/components/TournamentBracketTab"
@@ -24,6 +25,7 @@ interface LivePageClientProps {
 
 export default function LivePageClient({ tournament: initialTournament }: LivePageClientProps) {
   const t = useTranslations("common");
+  const { formatVndText } = useCurrencyRate();
   const router = useRouter()
   const fetchTournamentDetail = useTournamentStore(state => state.fetchTournamentDetail)
   const currentTournament = useTournamentStore(state => state.currentTournament)
@@ -195,10 +197,13 @@ export default function LivePageClient({ tournament: initialTournament }: LivePa
                 <Trophy className="w-6 h-6 text-orange-400" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-foreground">
-                  {calculatedPrizePool.toLocaleString()} <span className="text-xs text-muted-foreground font-normal">[{tournament.registered || 0} Players]</span>
-                </p>
-                <p className="text-sm font-medium text-muted-foreground mt-1">{t("prize_pool") || "Current Prize Pool"}</p>
+                <div className="flex flex-col">
+                  <p className="text-2xl font-bold text-foreground">
+                    ${calculatedPrizePool.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">USD</span>
+                  </p>
+                  <p className="text-[11px] text-muted-foreground opacity-70 mt-0.5">{formatVndText(calculatedPrizePool)}</p>
+                </div>
+                <p className="text-sm font-medium text-muted-foreground mt-1">{t("prize_pool") || "Current Prize Pool"} <span className="text-xs text-muted-foreground font-normal ml-1">[{tournament.registered || 0} Players]</span></p>
               </div>
             </CardContent>
           </Card>

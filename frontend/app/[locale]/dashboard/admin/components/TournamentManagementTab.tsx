@@ -27,6 +27,7 @@ import { toast } from '@/components/ui/use-toast';
 import { TournamentService } from "@/app/services/TournamentService"
 import { observer } from 'mobx-react-lite';
 import { useTournamentStore } from "@/app/stores/tournamentStore"
+import { useCurrencyRate } from "@/app/hooks/useCurrencyRate"
 
 const getCurrentRoundInfo = (tournament: ITournament): { current: number, total: number } => {
     if (!tournament.phases || tournament.phases.length === 0) return { current: 0, total: 0 };
@@ -48,6 +49,7 @@ const calculatePrizePool = (registered: number, entryFee: number, hostFeePercent
 
 const TournamentManagementTab = observer(() => {
   const { tournaments, loading, fetchTournaments } = useTournamentStore();
+  const { formatVndText } = useCurrencyRate();
   const [syncing, setSyncing] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -130,7 +132,8 @@ const TournamentManagementTab = observer(() => {
                   </div>
                 )}
                 <div className="text-sm">
-                  <strong>Prize Pool:</strong> {formatCurrency(prizePool, 'VND')}
+                  <strong>Prize Pool:</strong> ${prizePool.toLocaleString()} <span className="text-[10px] text-muted-foreground ml-1">USD</span>
+                  <div className="text-[10px] text-muted-foreground mt-0.5">{formatVndText(prizePool)}</div>
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <p>Last synced: {tournament.lastSyncTime ? new Date(tournament.lastSyncTime).toLocaleString() : 'Never'}</p>

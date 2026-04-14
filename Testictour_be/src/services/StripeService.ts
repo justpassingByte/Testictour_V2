@@ -99,6 +99,48 @@ export default class StripeService {
   }
 
   /**
+   * Creates a Stripe Checkout Session for a tournament entry fee payment.
+   */
+  static async createEntryFeeCheckout(params: {
+    tournamentId: string;
+    participantId: string;
+    transactionId: string;
+    amountUsd: number;
+    successUrl: string;
+    cancelUrl: string;
+  }) {
+    logger.info(`[Stripe] Creating Entry Fee checkout for participant ${params.participantId}`);
+    const stripe = await this.getStripeClient();
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      mode: 'payment',
+      client_reference_id: params.transactionId,
+      metadata: {
+        tournamentId: params.tournamentId,
+        participantId: params.participantId,
+        transactionId: params.transactionId,
+        paymentType: 'entry_fee',
+      },
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: `Tournament Entry Fee`,
+              description: `Entry fee for tournament ID: ${params.tournamentId}`,
+            },
+            unit_amount: Math.round(params.amountUsd * 100),
+          },
+          quantity: 1,
+        },
+      ],
+      success_url: params.successUrl,
+      cancel_url: params.cancelUrl,
+    });
+    return (session.url as string) || '';
+  }
+
+  /**
    * Validates Stripe webhook requests.
    */
   static async validateWebhookSignature(payload: string | Buffer, signature: string) {

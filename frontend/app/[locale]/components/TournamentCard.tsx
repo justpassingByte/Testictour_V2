@@ -8,11 +8,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/componen
 import { Button } from "@/components/ui/button";
 import { ITournament } from "@/app/types/tournament";
 import { useTranslations } from "next-intl";
+import { useCurrencyRate } from "@/app/hooks/useCurrencyRate";
 
 const defaultTFTImage = "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80";
 
 export function TournamentCard({ tournament, index }: { tournament: ITournament; index?: number }) {
   const t = useTranslations('common');
+  const { formatVndText } = useCurrencyRate();
   const statusColors = {
     in_progress: "bg-primary/20 text-primary border-primary/20 animate-pulse-subtle",
     UPCOMING: "bg-yellow-500/20 text-yellow-500 border-yellow-500/20",
@@ -27,7 +29,7 @@ export function TournamentCard({ tournament, index }: { tournament: ITournament;
 
   const formattedDate = new Date(tournament.startTime).toLocaleDateString();
   const formattedTime = new Date(tournament.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const registrationFeeDisplay = tournament.entryFee === 0 ? '0' : `$${tournament.entryFee}`;
+  const registrationFeeDisplay = tournament.entryFee === 0 ? '0' : `$${tournament.entryFee} USD`;
 
   // Helper to safely translate status
   const getStatusTranslation = (status: string) => {
@@ -80,9 +82,14 @@ export function TournamentCard({ tournament, index }: { tournament: ITournament;
             <MapPin className="mr-2 h-4 w-4" />
             <span>{t('region_label', { region: tournament.region })}</span>
           </div>
-          <div className="flex items-center justify-between text-sm mt-2">
-            <span>{t('registration_fee')}:</span>
-            <span className="font-medium">{registrationFeeDisplay}</span>
+          <div className="flex items-start justify-between text-sm mt-2">
+            <span className="mt-0.5">{t('registration_fee')}:</span>
+            <div className="text-right">
+              <span className="font-medium">{registrationFeeDisplay}</span>
+              {tournament.entryFee > 0 && (
+                <div className="text-[10px] text-muted-foreground opacity-80">{formatVndText(tournament.entryFee)}</div>
+              )}
+            </div>
           </div>
           <div className="flex items-center justify-between text-sm">
             <span>{t('players')}:</span>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import Link from "next/link"
 import Image from "next/image"
 import { format } from "date-fns"
@@ -11,12 +11,16 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { TournamentLobbyButton } from "./TournamentLobbyButton"
+import * as htmlToImage from "html-to-image"
+import { toast } from "sonner"
+import api from "@/app/lib/apiConfig"
 import {
   Globe, Users, Calendar,
   DollarSign, Clock, Download,
   AlertTriangle, ShieldCheck, Lock
 } from "lucide-react"
 import { useTranslations } from "next-intl"
+import { useCurrencyRate } from "@/app/hooks/useCurrencyRate"
 
 interface TournamentSidebarClientProps {
   initialTournament: ITournament;
@@ -30,6 +34,7 @@ const regionSubRegions: Record<string, string> = {
 
 export default function TournamentSidebarClient({ initialTournament }: TournamentSidebarClientProps) {
   const t = useTranslations("common")
+  const { formatVndText } = useCurrencyRate()
   const currentTournament = useTournamentStore(state => state.currentTournament)
   
   // Use the store's current tournament if available, otherwise SSR data
@@ -43,6 +48,117 @@ export default function TournamentSidebarClient({ initialTournament }: Tournamen
     COMPLETED:   { text: t("finished"),   color: "bg-muted text-muted-foreground" },
   }
   const currentStatus = statusMapping[tournament.status] || { text: tournament.status, color: "" }
+
+  const [loadingExportBracket, setLoadingExportBracket] = useState(false)
+  const [loadingExportScoreboard, setLoadingExportScoreboard] = useState(false)
+  const [loadingExportPlayers, setLoadingExportPlayers] = useState(false)
+
+  const downloadCSV = (content: string, filename: string) => {
+    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), content], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  const handleExportBracket = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    setLoadingExportBracket(true)
+    try {
+      window.dispatchEvent(new CustomEvent('export_bracket_start', { detail: { tournament } }))
+      await new Promise(resolve => setTimeout(resolve, 300)) // Wait for DOM re-render
+      const el = document.getElementById('bracket-export-target')
+      if (!el) {
+        toast.error(t("bracket") + " " + t("not_found") + " - " + t("please_navigate_to_bracket_tab"))
+        window.dispatchEvent(new Event('export_bracket_end'))
+        return
+      }
+      const dataUrl = await htmlToImage.toPng(el, { 
+        backgroundColor: '#0f172a',
+        skipFonts: true,
+        pixelRatio: 2
+      })
+      const link = document.createElement('a')
+      link.download = `bracket_${tournament.id}.png`
+      link.href = dataUrl
+      link.click()
+      toast.success(t("bracket") + " " + t("exported_successfully"))
+    } catch (error) {
+      console.error(error)
+      toast.error(t("export") + " " + t("failed"))
+    } finally {
+      window.dispatchEvent(new Event('export_bracket_end'))
+      setLoadingExportBracket(false)
+    }
+  }
+
+  const handleExportScoreboard = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    setLoadingExportScoreboard(true)
+    try {
+      const res = await api.get(`/tournaments/${tournament.id}/bracket`)
+      const data = res.data
+      if (!data.success || !data.phases) throw new Error("Invalid bracket data")
+
+      let csvContent = ""
+      data.phases.forEach((phase: any) => {
+        csvContent += `\n${phase.name.toUpperCase()}\n`
+        phase.groups.forEach((group: any) => {
+          group.lobbies.forEach((lobby: any) => {
+            const groupLetterRegex = lobby.name.match(/\[(.*?)\]/);
+            const actualGroup = groupLetterRegex ? groupLetterRegex[1] : (group.groupLetter || '');
+
+            csvContent += `\nBảng ${actualGroup} - ${lobby.name}\n`
+            csvContent += `In-Game Name,Riot ID,Placement,Points\n`
+
+            lobby.players.forEach((player: any) => {
+              const riotId = player.riotGameName && player.riotGameTag ? `${player.riotGameName}#${player.riotGameTag}` : ""
+              csvContent += `"${player.username}","${riotId}","${player.placement || ''}","${player.points || 0}"\n`
+            })
+          })
+        })
+      })
+
+      downloadCSV(csvContent, `scoreboard_${tournament.id}.csv`)
+      toast.success(t("export_scoreboard") + " " + t("exported_successfully"))
+    } catch (error) {
+      console.error(error)
+      toast.error(t("export") + " " + t("failed"))
+    } finally {
+      setLoadingExportScoreboard(false)
+    }
+  }
+
+  const handleExportPlayers = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    setLoadingExportPlayers(true)
+    try {
+      const response = await api.get(`/tournaments/${tournament.id}/participants`)
+      const participants = response.data.participants || response.data.data || []
+      
+      let csvContent = "In-Game Name,Riot ID,Email,Status,Payment Status\n"
+      participants.forEach((p: any) => {
+        const username = p.inGameName || p.user?.username || ''
+        const riotId = p.gameSpecificId || ''
+        const email = p.user?.email || ''
+        const status = p.eliminated ? 'Eliminated' : 'Active'
+        const payment = p.paid ? 'Paid' : 'Unpaid'
+        csvContent += `"${username}","${riotId}","${email}","${status}","${payment}"\n`
+      })
+
+      downloadCSV(csvContent, `participants_${tournament.id}.csv`)
+      toast.success(t("player_list") + " " + t("exported_successfully"))
+    } catch (error) {
+      console.error(error)
+      toast.error(t("export") + " " + t("failed"))
+    } finally {
+      setLoadingExportPlayers(false)
+    }
+  }
 
   return (
     <div className="flex flex-col space-y-8">
@@ -94,11 +210,14 @@ export default function TournamentSidebarClient({ initialTournament }: Tournamen
                   : t("n_a")}
               </span>
             </li>
-            <li className="flex items-center justify-between">
-              <span className="text-muted-foreground flex items-center">
+            <li className="flex items-start justify-between">
+              <span className="text-muted-foreground flex items-center mt-0.5">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 h-4 w-4"><circle cx="8" cy="8" r="7"/><polyline points="8 4 8 12 11.5 15.5"/><circle cx="16" cy="16" r="7"/><line x1="16" y1="12" x2="16" y2="20"/><line x1="12" y1="16" x2="20" y2="16"/></svg> {t("registration_fee")}:
               </span>
-              <span className="font-medium text-amber-400 font-mono">{tournament.entryFee.toLocaleString()}</span>
+              <div className="text-right">
+                <span className="font-medium text-amber-400 font-mono">${tournament.entryFee.toLocaleString()} USD</span>
+                <div className="text-[10px] text-muted-foreground">{formatVndText(tournament.entryFee)}</div>
+              </div>
             </li>
             <li className="flex items-center justify-between border-t border-white/5 pt-3">
               <span className="text-muted-foreground flex items-center"><ShieldCheck className="mr-2 h-4 w-4" /> {t("funding_status") || "Funding"}:</span>
@@ -146,15 +265,15 @@ export default function TournamentSidebarClient({ initialTournament }: Tournamen
           <CardTitle className="text-lg">{t("quick_links")}</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3">
-          <Link href="#" className="flex items-center text-sm font-medium text-muted-foreground hover:text-primary transition-all duration-200 hover:translate-x-1 p-2 hover:bg-primary/5 rounded-md -mx-2">
-            <Download className="mr-2 h-4 w-4" /> {t("bracket")}
-          </Link>
-          <Link href="#" className="flex items-center text-sm font-medium text-muted-foreground hover:text-primary transition-all duration-200 hover:translate-x-1 p-2 hover:bg-primary/5 rounded-md -mx-2">
-            <Download className="mr-2 h-4 w-4" /> {t("export_scoreboard")}
-          </Link>
-          <Link href="#" className="flex items-center text-sm font-medium text-muted-foreground hover:text-primary transition-all duration-200 hover:translate-x-1 p-2 hover:bg-primary/5 rounded-md -mx-2">
-            <Download className="mr-2 h-4 w-4" /> {t("player_list")}
-          </Link>
+          <a href="#" onClick={handleExportBracket} className="flex items-center text-sm font-medium text-muted-foreground hover:text-primary transition-all duration-200 hover:translate-x-1 p-2 hover:bg-primary/5 rounded-md -mx-2">
+            <Download className="mr-2 h-4 w-4" /> {loadingExportBracket ? "..." : t("bracket")}
+          </a>
+          <a href="#" onClick={handleExportScoreboard} className="flex items-center text-sm font-medium text-muted-foreground hover:text-primary transition-all duration-200 hover:translate-x-1 p-2 hover:bg-primary/5 rounded-md -mx-2">
+            <Download className="mr-2 h-4 w-4" /> {loadingExportScoreboard ? "..." : t("export_scoreboard")}
+          </a>
+          <a href="#" onClick={handleExportPlayers} className="flex items-center text-sm font-medium text-muted-foreground hover:text-primary transition-all duration-200 hover:translate-x-1 p-2 hover:bg-primary/5 rounded-md -mx-2">
+            <Download className="mr-2 h-4 w-4" /> {loadingExportPlayers ? "..." : t("player_list")}
+          </a>
         </CardContent>
       </Card>
     </div>

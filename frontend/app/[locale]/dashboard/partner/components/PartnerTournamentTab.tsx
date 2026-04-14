@@ -17,10 +17,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Progress } from "@/components/ui/progress"
 import { toast } from "@/components/ui/use-toast"
-import { formatCurrency } from "@/lib/utils"
 import api from "@/app/lib/apiConfig"
 import { ITournament } from "@/app/types/tournament"
 import { useUserStore } from "@/app/stores/userStore"
+import { useCurrencyRate } from "@/app/hooks/useCurrencyRate"
 
 interface PartnerTournamentTabProps {
   subscriptionPlan?: string
@@ -28,6 +28,7 @@ interface PartnerTournamentTabProps {
 
 export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTournamentTabProps) {
   const { currentUser } = useUserStore()
+  const { formatVndText } = useCurrencyRate()
   const [tournaments, setTournaments] = useState<ITournament[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
@@ -291,7 +292,12 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                           <Progress value={((tournament.registered || 0) / tournament.maxPlayers) * 100} className="h-1.5" />
                         </div>
                       </TableCell>
-                      <TableCell className="font-medium">{formatCurrency(prizePool, 'VND')}</TableCell>
+                      <TableCell className="font-medium">
+                        <div className="flex flex-col">
+                          <span>${prizePool.toLocaleString()} <span className="text-xs text-muted-foreground font-normal">USD</span></span>
+                          <span className="text-[10px] text-muted-foreground opacity-80">{formatVndText(prizePool)}</span>
+                        </div>
+                      </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {new Date(tournament.startTime).toLocaleDateString()}
                       </TableCell>
@@ -426,7 +432,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
             {form.entryFee > 0 && (
               <div className="text-sm bg-violet-500/10 border border-violet-500/20 rounded-md p-3">
                 Estimated Maximum Prize pool: <strong className="text-violet-400">
-                  {formatCurrency((form.maxPlayers * form.entryFee * (1 - form.hostFeePercent)), 'VND')}
+                  ${(form.maxPlayers * form.entryFee * (1 - form.hostFeePercent)).toLocaleString()} USD
                 </strong>
                 {" "}(When 100% full capacity)
               </div>

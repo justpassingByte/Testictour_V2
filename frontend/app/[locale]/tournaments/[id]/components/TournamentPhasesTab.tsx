@@ -9,6 +9,12 @@ interface TournamentPhasesTabProps {
 }
 
 export function TournamentPhasesTab({ phases }: TournamentPhasesTabProps) {
+  const getGroupsLabel = (count: number) => {
+    if (!count) return '';
+    const letters = Array.from({ length: count }, (_, i) => String.fromCharCode(65 + i));
+    return letters.join(', ');
+  };
+
   const t = useTranslations("common")
 
   if (!phases || phases.length === 0) {
@@ -78,14 +84,16 @@ export function TournamentPhasesTab({ phases }: TournamentPhasesTabProps) {
                 </div>
 
                 <div className="space-y-4">
-                  {phase.numberOfGroups !== undefined && (
+                  {phase.numberOfRounds !== undefined && (
                     <div className="flex items-start gap-3">
                       <div className="mt-0.5 p-1.5 rounded-md bg-muted/50 text-muted-foreground">
                         <Users className="h-4 w-4" />
                       </div>
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("structure")}</p>
-                        <p className="font-medium text-foreground">{phase.numberOfGroups} {t("groups")}</p>
+                        <p className="font-medium text-foreground">
+                          {phase.numberOfRounds} {t("groups")} {phase.numberOfRounds > 0 ? `(Bảng ${getGroupsLabel(phase.numberOfRounds)})` : ''}
+                        </p>
                       </div>
                     </div>
                   )}

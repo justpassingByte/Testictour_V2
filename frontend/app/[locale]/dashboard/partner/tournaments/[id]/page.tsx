@@ -1,5 +1,7 @@
 "use client"
 import { useState, useEffect, Suspense } from "react"
+import { useTranslations } from "next-intl"
+import { useCurrencyRate } from "@/app/hooks/useCurrencyRate"
 import { useParams, useRouter } from "next/navigation"
 import { Link } from "@/i18n/navigation"
 import {
@@ -29,7 +31,6 @@ import { formatCurrency } from "@/lib/utils"
 import { PieChart, TrendingUp, Medal, Sword } from "lucide-react"
 import api from "@/app/lib/apiConfig"
 import { BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, CartesianGrid, Cell, Pie, PieChart as RechartsPieChart } from 'recharts'
-import { useTranslations } from "next-intl"
 import { TournamentQuickStats } from "@/app/[locale]/components/TournamentQuickStats"
 import { EscrowManagementTab } from "@/app/[locale]/dashboard/partner/components/EscrowManagementTab"
 import { TournamentStatisticsTab } from "@/app/[locale]/tournaments/[id]/components/TournamentStatisticsTab"
@@ -46,6 +47,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.
 
 export default function TournamentManagePage() {
   const t = useTranslations("Common");
+  const { formatVndText } = useCurrencyRate()
   const params = useParams()
   const router = useRouter()
   const tournamentId = params.id as string
@@ -376,8 +378,14 @@ export default function TournamentManagePage() {
         <Card className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border-emerald-500/20">
           <CardContent className="p-4">
             <p className="text-[11px] text-emerald-400 font-semibold uppercase tracking-wide">{t("prize_pool")}</p>
-            <p className="text-xl font-bold text-emerald-400 mt-1">{formatCurrency(prizePool)}</p>
-            <p className="text-[10px] text-muted-foreground mt-1">Entry: {formatCurrency(tournament.entryFee)}</p>
+            <div className="flex flex-col mt-1">
+              <p className="text-xl font-bold text-emerald-400">${prizePool.toLocaleString()} <span className="text-xs font-normal text-emerald-400/70">USD</span></p>
+              <p className="text-[10px] text-emerald-400/50 -mt-0.5">{formatVndText(prizePool)}</p>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1.5 flex justify-between items-center">
+              <span>Entry: ${tournament.entryFee.toLocaleString()} <span className="text-[9px]">USD</span></span>
+              <span>{formatVndText(tournament.entryFee)}</span>
+            </p>
           </CardContent>
         </Card>
         <Card className="bg-gradient-to-br from-violet-500/10 to-violet-600/5 border-violet-500/20">
@@ -656,7 +664,12 @@ export default function TournamentManagePage() {
                               'border-white/10'
                           }`}>
                             <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-semibold">Round {round.roundNumber}</span>
+                              <span className="text-sm font-semibold">
+                                {phase.type === 'elimination' || phase.type === 'GROUP_STAGE' 
+                                  ? t('group_n', { letter: String.fromCharCode(64 + round.roundNumber) })
+                                  : t('match_n', { number: round.roundNumber, fallback: `Match ${round.roundNumber}` })
+                                }
+                              </span>
                               <Badge variant="outline" className={`text-[10px] px-1.5 ${
                                 round.status === 'completed' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
                                 round.status === 'in_progress' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
@@ -700,12 +713,12 @@ export default function TournamentManagePage() {
                                     variant="outline"
                                     disabled={roundControlLoading[advancingKey]}
                                     onClick={() => handleRoundControl(round.id, 'advance')}
-                                    className="w-full border-amber-500/30 text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 h-8 text-xs gap-1.5"
+                                    className="w-full border-amber-500/30 text-amber-500 bg-amber-500/10 hover:bg-amber-500/20 hover:text-amber-400 h-8 font-semibold gap-1.5 shadow-sm"
                                   >
                                     {roundControlLoading[advancingKey] ? (
                                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                     ) : (
-                                      <><SkipForward className="h-3.5 w-3.5" /> {t("force_advance")}</>
+                                      <><SkipForward className="h-3.5 w-3.5" /> Tiến Vòng / Trộn Lobby</>
                                     )}
                                   </Button>
                                 )}

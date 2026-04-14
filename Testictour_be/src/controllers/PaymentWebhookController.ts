@@ -2,10 +2,10 @@ import { Request, Response } from 'express';
 import asyncHandler from '../lib/asyncHandler';
 import logger from '../utils/logger';
 import EscrowService from '../services/EscrowService';
-
 import StripeService from '../services/StripeService';
 import MomoService from '../services/MomoService';
 import SubscriptionService from '../services/SubscriptionService';
+import ParticipantPaymentService from '../services/ParticipantPaymentService';
 
 const PaymentWebhookController = {
   handleWebhook: asyncHandler(async (req: Request, res: Response) => {
@@ -34,10 +34,15 @@ const PaymentWebhookController = {
             } else if (metadata.paymentType === 'subscription_upgrade') {
                 await SubscriptionService.completeUpgrade({
                   partnerId: metadata.partnerId,
-                  transactionId: metadata.transactionId, // Needs to be added to metadata when creating
+                  transactionId: metadata.transactionId,
                   plan: metadata.plan,
                   providerEventId: event.id,
                 });
+            } else if (metadata.paymentType === 'entry_fee') {
+                await ParticipantPaymentService.confirmEntryFeePayment(
+                  metadata.transactionId,
+                  event.id,
+                );
             }
         }
         return res.status(200).json({ received: true });
@@ -73,6 +78,11 @@ const PaymentWebhookController = {
                   plan: metadata.plan,
                   providerEventId: transId,
                 });
+           } else if (metadata.paymentType === 'entry_fee') {
+               await ParticipantPaymentService.confirmEntryFeePayment(
+                 metadata.transactionId,
+                 transId,
+               );
            }
         }
         // MoMo expects 204 No Content or 200 OK

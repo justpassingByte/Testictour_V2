@@ -14,6 +14,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { useTranslations } from "next-intl"
 import api from "@/app/lib/apiConfig"
 import { IParticipant } from "@/app/types/tournament"
+import { useCurrencyRate } from "@/app/hooks/useCurrencyRate"
 
 interface EscrowState {
   id: string
@@ -37,6 +38,7 @@ interface EscrowManagementTabProps {
 export function EscrowManagementTab({ tournamentId, tournamentName, tournamentStatus, isCommunityMode, participants, isAdmin, prizeStructure }: EscrowManagementTabProps) {
   const t = useTranslations("Common")
   const { toast } = useToast()
+  const { formatVndText } = useCurrencyRate()
   
   const [loading, setLoading] = useState(true)
   const [escrow, setEscrow] = useState<EscrowState | null>(null)
@@ -110,11 +112,13 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
         estimatedPayout = prizePool * ratio
       }
       
-      results.push({
-        rank: currentRank,
-        participant,
-        estimatedPayout
-      })
+      if (estimatedPayout > 0) {
+        results.push({
+          rank: currentRank,
+          participant,
+          estimatedPayout
+        })
+      }
     }
     return results
   }
@@ -309,8 +313,13 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-emerald-400">
-              {formatCurrency(escrow.fundedAmount)} <span className="text-sm font-normal text-muted-foreground">/ {formatCurrency(escrow.requiredAmount)}</span>
+            <div className="flex flex-col">
+              <div className="text-2xl font-bold text-emerald-400">
+                ${escrow.fundedAmount.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">/ ${escrow.requiredAmount.toLocaleString()} USD</span>
+              </div>
+              <div className="text-[11px] text-emerald-400/70 mt-0.5">
+                {formatVndText(escrow.fundedAmount)} <span className="opacity-70">/ {formatVndText(escrow.requiredAmount)}</span>
+              </div>
             </div>
             <Progress value={fillPercent} className={`h-1.5 mt-2 ${isFullyFunded ? '[&>div]:bg-emerald-500' : '[&>div]:bg-blue-500'}`} />
           </CardContent>
@@ -324,8 +333,9 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-violet-400">
-              {formatCurrency(escrow.releasedAmount)}
+            <div className="text-2xl font-bold text-violet-400 flex flex-col">
+              <span>${escrow.releasedAmount.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">USD</span></span>
+              <span className="text-[11px] text-violet-400/70 font-normal mt-0.5">{formatVndText(escrow.releasedAmount)}</span>
             </div>
             {escrow.status === 'released' && <p className="text-xs text-emerald-400 mt-1 flex items-center gap-1"><CheckCircle2 className="w-3 h-3"/> Đã hoàn tất</p>}
           </CardContent>
@@ -340,7 +350,7 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
               <Banknote className="w-5 h-5 text-blue-400" /> 1. Nạp Quỹ Bảo Lãnh
             </CardTitle>
             <CardDescription>
-              Bạn cần nạp đủ <strong>{formatCurrency(escrow.requiredAmount)}</strong> vào quỹ Escrow trước khi giải đấu bắt đầu. Nếu quỹ trống, giải sẽ không thể <code>Bắt đầu (Start)</code>.
+              Bạn cần nạp đủ <strong>${escrow.requiredAmount.toLocaleString()} USD ({formatVndText(escrow.requiredAmount)})</strong> vào quỹ Escrow trước khi giải đấu bắt đầu. Nếu quỹ trống, giải sẽ không thể <code>Bắt đầu (Start)</code>.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -351,7 +361,7 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
                     <Clock className="h-4 w-4" />
                     <AlertTitle className="text-sm font-bold">Chưa nạp đủ quỹ</AlertTitle>
                     <AlertDescription className="text-xs">
-                      Thiếu {formatCurrency(Math.max(0, escrow.requiredAmount - escrow.fundedAmount))}. Hãy chọn phương thức thanh toán.
+                      Thiếu ${Math.max(0, escrow.requiredAmount - escrow.fundedAmount).toLocaleString()} USD ({formatVndText(Math.max(0, escrow.requiredAmount - escrow.fundedAmount))}). Hãy chọn phương thức thanh toán.
                     </AlertDescription>
                   </Alert>
                 </div>
@@ -373,7 +383,7 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
                   disabled={fundingLoading}
                 >
                   {fundingLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ShieldCheck className="w-4 h-4 mr-2" />}
-                  Thanh toán ngay ({formatCurrency(fundingAmount)})
+                  Thanh toán ngay (${fundingAmount.toLocaleString()} USD)
                 </Button>
               </>
             ) : (
@@ -475,7 +485,7 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
                 {calculatedPayouts.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-                      Chưa có dữ liệu người chơi
+                      Chưa có người chơi nào đủ điều kiện nhận thưởng
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -538,7 +548,12 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
                         </TableCell>
                         <TableCell className="font-mono text-sm">{row.participant.scoreTotal || 0}</TableCell>
                         <TableCell className="text-right font-medium text-emerald-400 whitespace-nowrap">
-                          {row.estimatedPayout > 0 ? formatCurrency(row.estimatedPayout) : "-"}
+                          {row.estimatedPayout > 0 ? (
+                            <div className="flex flex-col items-end">
+                              <span>${row.estimatedPayout.toLocaleString()} <span className="text-[10px] text-emerald-400/70 font-normal">USD</span></span>
+                              <span className="text-[10px] text-emerald-400/50 font-normal">{formatVndText(row.estimatedPayout)}</span>
+                            </div>
+                          ) : "-"}
                         </TableCell>
                       </TableRow>
                     )
