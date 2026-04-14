@@ -55,6 +55,16 @@ export default async function fetchMatchData(job: Job<FetchMatchDataJobData>, io
     return;
   }
 
+  // Detect fake/simulated PUUIDs (e.g. puuid_sim_*, puuid_tour_*, puuid_mt_*)
+  // These are created by dev seed scripts and will never resolve on Riot API — abort immediately.
+  const FAKE_PUUID_PATTERNS = ['puuid_sim_', 'puuid_tour_', 'puuid_mt_', 'puuid_ft_', '_sim_', '_tour_', '_mt_'];
+  const allFake = puuids.every(p => FAKE_PUUID_PATTERNS.some(pat => p.includes(pat)));
+  if (allFake) {
+    logger.warn(`MatchDataWorker: lobby ${lobbyId} — all ${puuids.length} PUUIDs are simulated/fake. Skipping Riot API poll. Use Dev Tools → Simulate Match (Mock) instead.`);
+    // Do NOT flag for admin review or transition — this lobby needs manual sim via dev tools.
+    return;
+  }
+
   // 3. Smart polling delay calculation based on elapsed since matchStartedAt
   //    matchStartedAt is set to now + 90s when lobby enters PLAYING (loading screen offset)
   const matchStartedAt = lobby.matchStartedAt ? new Date(lobby.matchStartedAt).getTime() : Date.now();
@@ -82,7 +92,14 @@ export default async function fetchMatchData(job: Job<FetchMatchDataJobData>, io
       candidateMatchId,
     );
   } catch (grimoireError: any) {
-    // Grimoire API error (5xx / timeout) → throw → BullMQ retries with exponential backoff
+    const statusCode = grimoireError?.response?.status || grimoireError?.status;
+    // 400 = Bad Request (invalid/fake PUUIDs, wrong region, etc.) — terminal, do NOT retry
+    if (statusCode === 400) {
+      logger.warn(`MatchDataWorker: lobby ${lobbyId} — Grimoire returned 400 (likely invalid/fake PUUIDs). Aborting without retry.`);
+      await LobbyStateService.flagForAdminReview(lobbyId, 'grimoire_400_invalid_puuid');
+      return;
+    }
+    // 5xx / network errors → throw → BullMQ retries with exponential backoff
     logger.warn(`MatchDataWorker: Grimoire API error for lobby ${lobbyId}: ${grimoireError.message}`);
     throw grimoireError;
   }
@@ -100,7 +117,12 @@ export default async function fetchMatchData(job: Job<FetchMatchDataJobData>, io
       logger.info(`MatchDataWorker: lobby ${lobbyId} — no match yet. Re-queuing in 30s`);
     }
 
-    await fetchMatchDataQueue.add('fetchMatchData', job.data, { delay: retryDelay });
+    await fetchMatchDataQueue.add('fetchMatchData', job.data, {
+      delay: retryDelay,
+      jobId: `fetch-${lobbyId}-${Date.now()}`,
+      removeOnComplete: true,
+      removeOnFail: 100,
+    });
     await prisma.lobby.update({ where: { id: lobbyId }, data: { lastPolledAt: new Date() } });
     return;
   }
@@ -108,7 +130,12 @@ export default async function fetchMatchData(job: Job<FetchMatchDataJobData>, io
   if (result.status === 'invalid') {
     // Match found but failed validation — log and keep polling
     logger.warn(`MatchDataWorker: lobby ${lobbyId} — match invalid: ${result.reason}. Re-polling in 10s.`);
-    await fetchMatchDataQueue.add('fetchMatchData', job.data, { delay: 10_000 });
+    await fetchMatchDataQueue.add('fetchMatchData', job.data, {
+      delay: 10_000,
+      jobId: `fetch-invalid-${lobbyId}-${Date.now()}`,
+      removeOnComplete: true,
+      removeOnFail: 100,
+    });
     return;
   }
 

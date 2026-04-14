@@ -42,9 +42,9 @@ export default class RoundService {
     return prisma.round.create({
       data: {
         phaseId,
-      roundNumber: data.roundNumber,
-      startTime: data.startTime,
-      status: data.status || 'pending',
+        roundNumber: data.roundNumber,
+        startTime: data.startTime,
+        status: data.status || 'pending',
       }
     });
   }
@@ -70,7 +70,7 @@ export default class RoundService {
     });
 
     if (!tournament) throw new ApiError(404, 'Tournament not found');
-    
+
     const firstPhase = tournament.phases.find(p => p.phaseNumber === 1);
     if (!firstPhase) throw new ApiError(400, 'No first phase configured for tournament');
 
@@ -93,13 +93,13 @@ export default class RoundService {
     const lobbySize = firstPhase.lobbySize || 8;
     const maxLobbiesPerGroup = 4;
     const maxPlayersPerGroup = lobbySize * maxLobbiesPerGroup;
-    
+
     let requiredNumberOfGroups = Math.ceil(participants.length / maxPlayersPerGroup);
     if (requiredNumberOfGroups < 1) requiredNumberOfGroups = 1;
 
     // Ensure we have exactly requiredNumberOfGroups in firstPhase
     const existingRoundsCount = firstPhase.rounds.length;
-    
+
     if (existingRoundsCount > requiredNumberOfGroups) {
       // Delete extra rounds
       const roundsToDelete = firstPhase.rounds.slice(requiredNumberOfGroups);
@@ -138,6 +138,13 @@ export default class RoundService {
     } else {
       shuffled.sort((a, b) => (b.scoreTotal || 0) - (a.scoreTotal || 0));
     }
+
+    // Clear existing lobbies to prevent duplication if clicked multiple times
+    await prisma.lobby.deleteMany({
+      where: {
+        roundId: { in: firstPhase.rounds.map(r => r.id) }
+      }
+    });
 
     // Distribute participants sequentially (fill group up to maxPlayersPerGroup, then move to next)
     const groups: typeof participants[] = Array.from({ length: requiredNumberOfGroups }, () => []);
@@ -205,7 +212,15 @@ export default class RoundService {
             rounds: {
               orderBy: { roundNumber: 'asc' },
               include: {
-                lobbies: true
+                lobbies: {
+                  include: {
+                    matches: {
+                      include: {
+                        matchResults: true
+                      }
+                    }
+                  }
+                }
               }
             }
           }
@@ -231,36 +246,151 @@ export default class RoundService {
     // Batch fetch user data
     const users = allUserIds.size > 0
       ? await prisma.user.findMany({
-          where: { id: { in: Array.from(allUserIds) } },
-          select: { id: true, username: true, riotGameName: true, riotGameTag: true, rank: true }
-        })
+        where: { id: { in: Array.from(allUserIds) } },
+        select: { id: true, username: true, riotGameName: true, riotGameTag: true, rank: true }
+      })
       : [];
     const userMap = new Map(users.map(u => [u.id, u]));
 
     // Build bracket response
-    const phases = tournament.phases.map(phase => ({
-      id: phase.id,
-      name: phase.name,
-      phaseNumber: phase.phaseNumber,
-      status: phase.status,
-      type: phase.type,
-      groups: phase.rounds.map(round => ({
-        id: round.id,
-        name: `Group ${this.groupNameFromNumber(round.roundNumber)}`,
-        groupLetter: this.groupNameFromNumber(round.roundNumber),
-        groupNumber: round.roundNumber,
-        status: round.status,
-        startTime: round.startTime,
-        endTime: round.endTime,
-        lobbies: round.lobbies.map(lobby => ({
-          id: lobby.id,
-          name: lobby.name,
-          state: lobby.state,
-          fetchedResult: lobby.fetchedResult,
-          players: (lobby.participants as string[]).map(userId => userMap.get(userId) || { id: userId, username: 'Unknown' })
-        }))
-      }))
-    }));
+    const phases = tournament.phases.map(phase => {
+      let phaseGroups: any[] = [];
+      const matchesPerRound = phase.matchesPerRound || 1;
+      const isMultiMatch = (phase.type === 'points' || phase.type === 'swiss') && matchesPerRound > 1;
+      // Elimination with multiple matches & multiple rounds (groups) → view by match number (Vòng 1/2/3)
+      // so all groups' lobbies aggregate into one "Vòng" tab for easy tracking
+      const isMultiMatchElimination = phase.type === 'elimination' && matchesPerRound > 1 && phase.rounds.length > 1;
+
+      if (isMultiMatchElimination) {
+        // Group by match index across ALL rounds (A/B/C/D grouped into Vòng 1, Vòng 2, ...)
+        for (let m = 0; m < matchesPerRound; m++) {
+          const allLobbiesForMatch: any[] = [];
+
+          for (const round of phase.rounds) {
+            const groupLetter = this.groupNameFromNumber(round.roundNumber);
+            for (const lobby of round.lobbies) {
+              const sortedMatches = (lobby.matches || []).slice().sort((a: any, b: any) =>
+                new Date((a as any).createdAt).getTime() - new Date((b as any).createdAt).getTime()
+              );
+              const match = sortedMatches[m];
+
+              let players: any[] = [];
+              let lobbyState: string;
+
+              if (match && (match as any).matchResults) {
+                // Historical data for this match number
+                players = (match as any).matchResults.map((r: any) =>
+                  userMap.get(r.userId) || { id: r.userId, username: 'Unknown' }
+                );
+                lobbyState = 'FINISHED';
+              } else if (m === (lobby.completedMatchesCount || 0)) {
+                // Current active match — show current participants
+                players = (lobby.participants as string[]).map(userId =>
+                  userMap.get(userId) || { id: userId, username: 'Unknown' }
+                );
+                lobbyState = lobby.state;
+              } else {
+                // Future match — no data yet
+                players = [];
+                lobbyState = 'WAITING';
+              }
+
+              allLobbiesForMatch.push({
+                id: `${lobby.id}_m${m}`,
+                name: `[${groupLetter}] ${lobby.name}`, // e.g. "[A] Lobby 1"
+                state: lobbyState,
+                fetchedResult: !!match,
+                players,
+                roundId: round.id, // Real round ID for this group (A=round1, B=round2, etc.)
+              });
+            }
+          }
+
+          // Derive overall status for this "Vòng" (match number)
+          const completedCount = allLobbiesForMatch.filter(l => l.state === 'FINISHED').length;
+          const playingCount = allLobbiesForMatch.filter(l => l.state === 'PLAYING').length;
+          const matchStatus =
+            allLobbiesForMatch.length > 0 && completedCount === allLobbiesForMatch.length ? 'completed' :
+            playingCount > 0 || completedCount > 0 ? 'in_progress' : 'pending';
+
+          phaseGroups.push({
+            id: phase.rounds[0]?.id || phase.id, // Link to first round for "View Detail"
+            name: `Vòng ${m + 1}`,
+            groupLetter: `Vòng ${m + 1}`,
+            groupNumber: m + 1,
+            status: matchStatus,
+            startTime: phase.rounds[0]?.startTime,
+            endTime: phase.rounds[0]?.endTime,
+            lobbies: allLobbiesForMatch,
+          });
+        }
+      } else {
+        phase.rounds.forEach(round => {
+          if (isMultiMatch && phase.rounds.length === 1) {
+            const matchesCount = matchesPerRound;
+            for (let m = 0; m < matchesCount; m++) {
+              phaseGroups.push({
+                id: round.id, // KEEP REAL ROUND ID so clicking 'View Detail' redirects to the single round page!
+                name: `Trận ${m + 1}`,
+                groupLetter: `Trận ${m + 1}`,
+                groupNumber: m + 1,
+                status: (round.lobbies[0]?.completedMatchesCount || 0) > m ? 'completed' : ((round.lobbies[0]?.completedMatchesCount || 0) === m ? 'in_progress' : 'pending'),
+                startTime: round.startTime,
+                endTime: round.endTime,
+                lobbies: round.lobbies.map(lobby => {
+                  // Ensure matches are sorted chronologically
+                  const sortedMatches = (lobby.matches || []).slice().sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+                  const match = sortedMatches[m];
+
+                  let players: any[] = [];
+                  if (match && match.matchResults) {
+                    // We have historical data for this match
+                    players = match.matchResults.map((r: any) => userMap.get(r.userId) || { id: r.userId, username: 'Unknown' });
+                  } else if (m === (lobby.completedMatchesCount || 0)) {
+                    // This is the current active match, show current participants
+                    players = (lobby.participants as string[]).map(userId => userMap.get(userId) || { id: userId, username: 'Unknown' });
+                  }
+
+                  return {
+                    id: lobby.id + '_m' + m, // Virtual lobby ID for React keys
+                    name: lobby.name,
+                    state: match ? 'FINISHED' : (m === (lobby.completedMatchesCount || 0) ? lobby.state : 'WAITING'),
+                    fetchedResult: !!match,
+                    players
+                  };
+                })
+              });
+            }
+          } else {
+            phaseGroups.push({
+              id: round.id,
+              name: `Group ${this.groupNameFromNumber(round.roundNumber)}`,
+              groupLetter: this.groupNameFromNumber(round.roundNumber),
+              groupNumber: round.roundNumber,
+              status: round.status,
+              startTime: round.startTime,
+              endTime: round.endTime,
+              lobbies: round.lobbies.map(lobby => ({
+                id: lobby.id,
+                name: lobby.name,
+                state: lobby.state,
+                fetchedResult: lobby.fetchedResult,
+                players: (lobby.participants as string[]).map(userId => userMap.get(userId) || { id: userId, username: 'Unknown' })
+              }))
+            });
+          }
+        });
+      }
+
+      return {
+        id: phase.id,
+        name: phase.name,
+        phaseNumber: phase.phaseNumber,
+        status: phase.status,
+        type: phase.type,
+        groups: phaseGroups
+      };
+    });
 
     return { tournamentId, phases };
   }
@@ -298,7 +428,7 @@ export default class RoundService {
 
     // Find remaining active rounds (groups) that are still in_progress
     const activeRounds = activePhase.rounds.filter(r => r.status === 'in_progress' && r.id !== completedRoundId);
-    
+
     if (activeRounds.length === 0) {
       logger.info(`[Reshuffle] No remaining active groups. All groups completed.`);
       return;
@@ -355,7 +485,7 @@ export default class RoundService {
 
       // Combine existing + new players
       const allPlayers = [...existingUserIds, ...extraPlayers.map(p => p.userId)];
-      
+
       // Delete old lobbies for this round
       await prisma.lobby.deleteMany({ where: { roundId: round.id } });
 
@@ -523,59 +653,159 @@ export default class RoundService {
 
           const allLobbiesFetched = currentRound.lobbies.every(l => l.fetchedResult);
           logger.debug(`Round ${currentRound.id}: allLobbiesFetched = ${allLobbiesFetched}. Lobbies: ${JSON.stringify(currentRound.lobbies.map(l => ({ id: l.id, fetchedResult: l.fetchedResult })))}`);
-          
+
           // For checkmate phases, we bypass the allLobbiesFetched check, as matches are created continuously.
           // The _advanceCheckmate function will determine completion for this phase type.
           if (!allLobbiesFetched && currentRound.phase.type !== 'checkmate') {
             throw new ApiError(400, 'Cannot complete round. Not all lobbies have results fetched yet.');
           }
 
+          // ═══ MULTI-MATCH SUPPORT: matchesPerRound > 1 → play multiple matches, reshuffle between each ═══
+          const matchesPerRound = currentRound.phase.matchesPerRound || 1;
+          if (matchesPerRound > 1) {
+            // FIX: Must wait for ALL lobbies to complete their matches before proceeding, use min instead of max.
+            const minCompletedMatches = Math.min(...currentRound.lobbies.map((l: any) => l.completedMatchesCount || 0));
+            logger.info(`[MultiMatch] Round ${currentRound.id}: Match (min) ${minCompletedMatches}/${matchesPerRound} completed.`);
+
+            if (minCompletedMatches < matchesPerRound) {
+              // Scores already updated by MatchResultService/simulate-match (scoreTotal incremented directly).
+              // Just reshuffle lobbies for the next match.
+              logger.info(`[MultiMatch] Reshuffling lobbies for match ${minCompletedMatches + 1}/${matchesPerRound}.`);
+
+              // Collect all unique participant IDs
+              const allParticipantIds: string[] = [];
+              for (const lobby of currentRound.lobbies) {
+                const pIds = lobby.participants as string[];
+                if (Array.isArray(pIds)) allParticipantIds.push(...pIds);
+              }
+              const uniqueParticipantIds = [...new Set(allParticipantIds)];
+              let shuffled: string[] = [];
+
+              const lobbyAssignment = (currentRound.phase.lobbyAssignment || 'random') as string;
+              
+              if (currentRound.phase.type === 'elimination' || lobbyAssignment === 'none') {
+                // ELIMINATION BO2/BO3: Do NOT shuffle! Players play against the same opponents.
+                logger.info(`[MultiMatch] Elimination phase: Skipping reshuffle, recreating same lobbies for next match.`);
+                for (let i = 0; i < currentRound.lobbies.length; i++) {
+                  const lobby = currentRound.lobbies[i];
+                  await tx.lobby.update({
+                    where: { id: lobby.id },
+                    data: {
+                      fetchedResult: false,
+                      state: 'WAITING',
+                      matchStartedAt: null,
+                      phaseStartedAt: new Date(),
+                    }
+                  });
+                  logger.debug(`[MultiMatch] Lobby ${lobby.id} recreated with same ${((lobby.participants as any[]) || []).length} players.`);
+                }
+              } else {
+              if (lobbyAssignment === 'swiss' || lobbyAssignment === 'seeded' || lobbyAssignment === 'snake') {
+                const parts = await tx.participant.findMany({
+                  where: { userId: { in: uniqueParticipantIds }, tournamentId: currentRound.phase.tournamentId },
+                  select: { userId: true, scoreTotal: true }
+                });
+                parts.sort((a, b) => (b.scoreTotal || 0) - (a.scoreTotal || 0));
+                
+                if (lobbyAssignment === 'snake') {
+                  const numLobbies = Math.ceil(parts.length / (currentRound.phase.lobbySize || 8));
+                  const tempLobbies: any[][] = Array.from({ length: numLobbies }, () => []);
+                  for (let i = 0; i < parts.length; i++) {
+                    const lobbyIndex = i % numLobbies;
+                    const isReversed = Math.floor(i / numLobbies) % 2 !== 0;
+                    if (isReversed) tempLobbies[numLobbies - 1 - lobbyIndex].push(parts[i]);
+                    else tempLobbies[lobbyIndex].push(parts[i]);
+                  }
+                  shuffled = tempLobbies.flat().map(p => p.userId);
+                } else {
+                  shuffled = parts.map(p => p.userId);
+                }
+              } else {
+                shuffled = uniqueParticipantIds.sort(() => Math.random() - 0.5);
+              }
+
+              const lobbySize = currentRound.phase.lobbySize || 8;
+
+              // Redistribute shuffled participants across existing lobbies, reset states
+              for (let i = 0; i < currentRound.lobbies.length; i++) {
+                const lobby = currentRound.lobbies[i];
+                const start = i * lobbySize;
+                const end = Math.min(start + lobbySize, shuffled.length);
+                const newParticipants = shuffled.slice(start, end);
+                if (newParticipants.length === 0) continue;
+
+                await tx.lobby.update({
+                  where: { id: lobby.id },
+                  data: {
+                    participants: newParticipants,
+                    fetchedResult: false,
+                    state: 'WAITING',
+                    matchStartedAt: null,
+                    phaseStartedAt: new Date(),
+                  }
+                });
+                logger.debug(`[MultiMatch] Lobby ${lobby.id} reshuffled with ${newParticipants.length} players.`);
+              }
+
+              }
+
+              // Emit events for frontend
+              if ((global as any).io) {
+                const tId = currentRound.phase.tournamentId;
+                (global as any).io.to(`tournament:${tId}`).emit('bracket_update', { tournamentId: tId });
+                (global as any).io.to(`tournament:${tId}`).emit('tournament_update', { type: 'lobbies_reshuffled', matchNumber: minCompletedMatches, matchesPerRound });
+              }
+
+              return { message: `Match ${minCompletedMatches}/${matchesPerRound} completed. Lobbies reshuffled for next match.`, matchNumber: minCompletedMatches, matchesPerRound };
+            }
+            logger.info(`[MultiMatch] All ${matchesPerRound} matches done for round ${currentRound.id}. Finalizing round.`);
+          }
+
           logger.debug(`Attempting to update Round ${roundId} status to 'completed'.`);
           await tx.round.update({ where: { id: roundId }, data: { status: 'completed', endTime: new Date() } });
           logger.debug(`Round ${currentRound.id} status updated to 'completed'.`);
-          
+
           const allPhases = await tx.phase.findMany({ where: { tournamentId: currentRound.phase.tournament.id }, orderBy: { phaseNumber: 'asc' } });
           const currentPhase = allPhases.find(p => p.id === currentRound.phaseId);
           if (!currentPhase) throw new ApiError(404, 'Current phase not found');
 
-          // Apply advancement/elimination logic
-          const advancementResult = await this._applyAdvancementCondition(tx, currentRound, currentPhase);
-
-          if (!advancementResult.continue) {
-              logger.debug(`Round ${currentRound.id}: Advancement logic prevented immediate finalization (e.g., Checkmate created new round).`);
-              return { message: `Round ${currentRound.id} completed. Waiting for next round in Checkmate phase.` };
-          }
-
-          // --- NEW LOGIC: Update participant total scores after round completion ---
+          // Always update this round's participant scores immediately (real-time leaderboard)
           await this._updateParticipantTotalScores(tx, currentRound.phase.tournament.id, currentRound.id);
           logger.debug(`Round ${currentRound.id}: Participant total scores updated.`);
 
-          // Check if this was the last round of the phase
+          const totalRoundsInPhase = currentPhase.numberOfRounds || 1;
           const completedRoundsInPhase = await tx.round.count({ where: { phaseId: currentPhase.id, status: 'completed' } });
-          logger.debug(`Round ${currentRound.id}: completedRoundsInPhase = ${completedRoundsInPhase}, currentPhase.numberOfRounds = ${currentPhase.numberOfRounds || 1}.`);
-          if (completedRoundsInPhase < (currentPhase.numberOfRounds || 1)) {
-            // Advance to the next round in the same phase
-            const nextRound = await tx.round.findUnique({
-              where: { phaseId_roundNumber: { phaseId: currentPhase.id, roundNumber: currentRound.roundNumber + 1 } }
-            });
-            if (!nextRound) {
-              logger.error(`Round ${currentRound.id}: Next round (number ${currentRound.roundNumber + 1}) not found for phase ${currentPhase.id}. This might indicate a misconfiguration of numberOfRounds.`);
-              throw new ApiError(404, 'Next round not found.');
-            }
-            
-            // Dynamically update start time for the next round
-            const updatedNextRound = await tx.round.update({
-              where: { id: nextRound.id },
-              data: { startTime: new Date(Date.now() + 1000 * 60 * 5) } // 5 minutes from now
-            });
+          const advancementType = (currentPhase as any).advancementCondition?.type;
+          logger.debug(`Round ${currentRound.id}: completedRoundsInPhase = ${completedRoundsInPhase}/${totalRoundsInPhase}, advancementType = ${advancementType}.`);
 
-            // Return a sentinel so the next round is started OUTSIDE the transaction
-            // (avoids calling BullMQ from inside a Prisma transaction boundary)
-            return {
-              _action: 'queue_next_round',
-              nextRoundId: updatedNextRound.id,
-              message: `Round ${currentRound.id} completed. Next round ${updatedNextRound.id} queued.`,
-            };
+          // ── PLACEMENT mode: eliminate per-lobby immediately, no need to wait for other groups ──
+          if (advancementType === 'placement') {
+            const topNPerLobby = (currentPhase as any).advancementCondition?.value;
+            if (topNPerLobby) {
+              logger.info(`[ParallelGroups/Placement] Group ${currentRound.roundNumber} done. Applying per-lobby elimination (top ${topNPerLobby}/lobby) immediately.`);
+              // Pass no phaseId → operates only on THIS round's lobbies
+              await this._advanceByPlacement(tx, currentRound, topNPerLobby);
+            }
+            // If more groups are still running, stop here (don't advance phase yet)
+            if (totalRoundsInPhase > 1 && completedRoundsInPhase < totalRoundsInPhase) {
+              logger.info(`[ParallelGroups/Placement] ${totalRoundsInPhase - completedRoundsInPhase} more group(s) still running. Waiting before phase transition.`);
+              return { message: `Group ${currentRound.roundNumber} completed and eliminated. Waiting for remaining groups.` };
+            }
+            // All groups done — proceed to phase transition below (skip _applyAdvancementCondition, already applied)
+            logger.info(`[ParallelGroups/Placement] All ${totalRoundsInPhase} groups done. Proceeding to phase transition.`);
+          } else {
+            // ── SCORE mode (top_n_scores, swiss, etc.): wait for ALL groups, then rank globally ──
+            if (totalRoundsInPhase > 1 && completedRoundsInPhase < totalRoundsInPhase) {
+              logger.info(`[ParallelGroups/Scores] Group ${currentRound.roundNumber}/${totalRoundsInPhase} completed. Waiting for ${totalRoundsInPhase - completedRoundsInPhase} more group(s) before global ranking.`);
+              return { message: `Group ${currentRound.roundNumber} completed. Waiting for other groups.` };
+            }
+
+            // All groups done — apply global advancement/elimination
+            const advancementResult = await this._applyAdvancementCondition(tx, currentRound, currentPhase);
+            if (!advancementResult.continue) {
+              logger.debug(`Round ${currentRound.id}: Advancement logic prevented immediate finalization (e.g., Checkmate created new round).`);
+              return { message: `Round ${currentRound.id} completed. Waiting for next round in Checkmate phase.` };
+            }
           }
 
           logger.debug(`Round ${currentRound.id}: All rounds in current phase (${currentPhase.id}) are completed. Checking for next phase.`);
@@ -586,7 +816,7 @@ export default class RoundService {
             // Advance to the next phase
             const nextPhase = allPhases[nextPhaseIndex];
             logger.info(`Round ${currentRound.id} completed. Advancing to next phase: ${nextPhase.name} (${nextPhase.id}).`);
-            
+
             if (nextPhase.carryOverScores === false) {
               await tx.participant.updateMany({
                 where: { tournamentId: currentRound.phase.tournament.id, eliminated: false },
@@ -594,7 +824,7 @@ export default class RoundService {
               });
               logger.info(`Round ${currentRound.id}: Scores reset for new phase ${nextPhase.id} due to carryOverScores=false.`);
             }
-            
+
             await tx.phase.update({ where: { id: currentPhase.id }, data: { status: 'completed' } });
             logger.info(`Phase ${currentPhase.id} status updated to 'completed'.`);
 
@@ -615,31 +845,23 @@ export default class RoundService {
               message: `Phase ${currentPhase.id} completed. Next phase ${nextPhase.id} scheduled.`,
             };
           }
-          
+
           logger.info(`Round ${currentRound.id}: This was the last round of the last phase. Finalizing tournament.`);
-          // This was the last round of the last phase. Finalize tournament.
           logger.debug(`Finalizing tournament ${currentRound.phase.tournament.id}.`);
-          
-          // Tìm tất cả người chơi không bị loại
-          const finalParticipants = await tx.participant.findMany({
-              where: { tournamentId: currentRound.phase.tournament.id, eliminated: false },
-              orderBy: { scoreTotal: 'desc' }
+
+          // Only mark tournament as COMPLETED inside the transaction (fast, minimal locks).
+          // Payout logic runs AFTER the transaction commits to prevent P2028 timeouts.
+          await tx.tournament.update({
+            where: { id: currentRound.phase.tournament.id },
+            data: { status: 'COMPLETED', endTime: new Date() }
           });
-          
-          // Cập nhật trạng thái tournament
-          await tx.tournament.update({ 
-              where: { id: currentRound.phase.tournament.id }, 
-              data: { status: 'COMPLETED' } 
-          });
-          
-          // Phát thưởng trong transaction
-          await this.payoutPrizes(tx, currentRound.phase.tournament.id, finalParticipants);
-          
-          logger.info(`Tournament ${currentRound.phase.tournament.id} completed.`);
-          
-          return { 
-              message: 'Tournament completed and prizes paid out.',
-              tournamentId: currentRound.phase.tournament.id
+
+          logger.info(`Tournament ${currentRound.phase.tournament.id} marked COMPLETED. Payout deferred to post-commit.`);
+
+          return {
+            _action: 'payout_prizes',
+            message: 'Tournament completed. Prize payout deferred to post-commit.',
+            tournamentId: currentRound.phase.tournament.id
           };
         }
 
@@ -707,6 +929,32 @@ export default class RoundService {
 
         return result; // return original sentinel message
       }
+      // ── Handle deferred prize payout (post-transaction, separate from round completion) ──
+      if (result && result._action === 'payout_prizes') {
+        const tId = result.tournamentId;
+        logger.info(`[PostTx] Running deferred payoutPrizes for tournament ${tId} in separate transaction.`);
+
+        try {
+          // Run payout in its own transaction — completely independent from the round transaction
+          await prisma.$transaction(async (payoutTx: Prisma.TransactionClient) => {
+            const finalParticipants = await payoutTx.participant.findMany({
+              where: { tournamentId: tId, eliminated: false },
+              orderBy: { scoreTotal: 'desc' },
+            });
+
+            await this.payoutPrizes(payoutTx, tId, finalParticipants);
+          }, { maxWait: 10000, timeout: 30000 });
+
+          logger.info(`[PostTx] Prize payout completed for tournament ${tId}.`);
+        } catch (payoutError) {
+          // Payout failure must NOT crash the tournament flow — tournament is already COMPLETED.
+          // Log the error and the admin can trigger manual payout via the dashboard.
+          const errMsg = payoutError instanceof Error ? payoutError.message : String(payoutError);
+          logger.error(`[PostTx] CRITICAL: Prize payout failed for tournament ${tId}: ${errMsg}. Manual payout required.`);
+        }
+
+        // Fall through to the summary processing below (result.tournamentId is set)
+      }
 
       // Process tournament summary after transaction if tournament was completed
       if (result && result.tournamentId) {
@@ -718,51 +966,51 @@ export default class RoundService {
 
         // Log để biết rằng xử lý async đã được lên lịch
         logger.info(`Scheduling async processing for tournament ${result.tournamentId}`);
-        
+
         // Tách biệt xử lý bất đồng bộ để không block response
         // Sử dụng setTimeout thay vì setImmediate để tránh lỗi TypeScript
         setTimeout(async () => {
           try {
             logger.info(`Starting async post-transaction processing for tournament ${result.tournamentId}`);
-            
+
             // Kiểm tra xem tournament đã tồn tại hay chưa
             const tournamentExists = await prisma.tournament.findUnique({
               where: { id: result.tournamentId }
             });
-            
+
             if (!tournamentExists) {
               logger.error(`Cannot process tournament summary: Tournament ${result.tournamentId} not found in database`);
               return;
             }
-            
+
             // Sử dụng phương thức processCompletedTournamentDirectly mới để xử lý tất cả các summaries
             try {
               await SummaryManagerService.processCompletedTournamentDirectly(result.tournamentId);
             } catch (directError) {
               const errorMsg = directError instanceof Error ? directError.message : String(directError);
               logger.error(`Error in direct tournament summary processing: ${errorMsg}`);
-              
+
               // Fallback: nếu xử lý trực tiếp thất bại, kiểm tra từng phần
               logger.info(`Using fallback approach to process tournament ${result.tournamentId} summaries`);
-              
+
               // Tiếp tục với cách tiếp cận ban đầu
               try {
                 // Kiểm tra điều kiện bảng UserTournamentSummary
                 const tournamentSummaries = await prisma.userTournamentSummary.findMany({
                   where: { tournamentId: result.tournamentId }
                 });
-                
+
                 if (tournamentSummaries.length > 0) {
                   logger.info(`Tournament ${result.tournamentId} already has ${tournamentSummaries.length} summaries. Skipping direct update.`);
                 } else {
                   await SummaryManagerService.updateTournamentSummaries(result.tournamentId);
                   logger.info(`Direct summary update completed for tournament ${result.tournamentId}`);
-                  
+
                   // Kiểm tra xem summary đã được tạo chưa
                   const createdSummaries = await prisma.userTournamentSummary.findMany({
                     where: { tournamentId: result.tournamentId }
                   });
-                  
+
                   logger.info(`After direct update: Tournament ${result.tournamentId} now has ${createdSummaries.length} summaries.`);
                 }
               } catch (secondaryError) {
@@ -770,24 +1018,24 @@ export default class RoundService {
                 logger.warn(`All direct summary approaches failed for tournament ${result.tournamentId}, adding to queue`);
                 await SummaryManagerService.queueTournamentSummary(result.tournamentId);
               }
-              
+
               // Kiểm tra các bảng khác liên quan đến summary
               try {
                 // Kiểm tra PlayerMatchSummary
                 const matchSummaries = await prisma.playerMatchSummary.findMany({
                   where: { tournamentId: result.tournamentId }
                 });
-                
+
                 logger.info(`Tournament ${result.tournamentId} has ${matchSummaries.length} match summaries.`);
-                
+
                 // Kiểm tra nếu không có match summary, có thể cần tạo từ MatchResult
                 if (matchSummaries.length === 0) {
                   logger.warn(`No match summaries found for tournament ${result.tournamentId}. Will try to create from match results.`);
-                  
+
                   // Lấy tất cả round trong tournament
                   const rounds = await prisma.round.findMany({
-                    where: { 
-                      phase: { tournamentId: result.tournamentId } 
+                    where: {
+                      phase: { tournamentId: result.tournamentId }
                     },
                     include: {
                       lobbies: {
@@ -801,7 +1049,7 @@ export default class RoundService {
                       }
                     }
                   });
-                  
+
                   // Tạo match summaries từ match results
                   for (const round of rounds) {
                     for (const lobby of round.lobbies) {
@@ -817,12 +1065,12 @@ export default class RoundService {
                 logger.error(`Error checking summary tables: ${checkError instanceof Error ? checkError.message : String(checkError)}`);
               }
             }
-            
+
             // Lấy danh sách người chơi để cập nhật thống kê
             const participants = await prisma.participant.findMany({
               where: { tournamentId: result.tournamentId }
             });
-            
+
             // Xử lý người chơi theo batch để tối ưu
             logger.info(`Processing stats for ${participants.length} players in batches`);
             const batchSize = 10;
@@ -836,14 +1084,14 @@ export default class RoundService {
                   });
               });
               await Promise.all(promises);
-              logger.debug(`Processed batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(participants.length/batchSize)}`);
+              logger.debug(`Processed batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(participants.length / batchSize)}`);
             }
-            
+
             logger.info(`Async post-transaction processing completed for tournament ${result.tournamentId}`);
           } catch (error) {
             const processError = error instanceof Error ? error : new Error(String(error));
             logger.error(`Error in async summary processing: ${processError.message}`, processError);
-            
+
             // Fallback: đảm bảo ít nhất thêm vào queue
             try {
               await SummaryManagerService.queueTournamentSummary(result.tournamentId);
@@ -855,7 +1103,7 @@ export default class RoundService {
           }
         }, 0);
       }
-      
+
       return result; // Return the original result of the transaction
 
     } catch (error) {
@@ -872,247 +1120,252 @@ export default class RoundService {
 
     // Handle advancement based on phase type (for single-round advancement or specific conditions like checkmate)
     if (phase.advancementCondition) {
-        switch (phase.advancementCondition.type) {
-            case 'placement':
-                if (phase.advancementCondition.value) {
-                    logger.debug(`[Advancement] Applying placement-based advancement for Phase ${phase.phaseNumber}.`);
-                    await this._advanceByPlacement(tx, round, phase.advancementCondition.value);
-                }
-                return { continue: true, jobsToQueue: [] }; // Allows the parent autoAdvance to continue
-            case 'checkmate':
-                const checkmateResult = await this._advanceCheckmate(tx, round, phase); // Call the new extracted function
-                // Assign jobs to the outer scope variable `jobsToQueue` in autoAdvance
-                jobsToQueue.push(...checkmateResult.jobsToQueue);
-                return { continue: checkmateResult.continue, jobsToQueue: jobsToQueue }; // Ensure jobsToQueue is returned
-            case 'tiered_advancement':
-                interface RoundAdvancementDetail { round: number; advances: number; }
-                const advancementDetails = phase.advancementCondition.details as RoundAdvancementDetail[];
-    if (advancementDetails && advancementDetails.length > 0) {
-        const roundDetail = advancementDetails.find(d => d.round === round.roundNumber);
-        if (roundDetail && roundDetail.advances) {
-            const numberOfPlayersToAdvance = roundDetail.advances;
-                        logger.debug(`[Advancement] Using tiered advancement for Round ${round.roundNumber}. Advancing top ${numberOfPlayersToAdvance} players.`);
-            await this._advanceTopNPlayers(tx, round, numberOfPlayersToAdvance);
-                    }
-                }
-                return { continue: true, jobsToQueue: [] }; // Allows the parent autoAdvance to continue
-            default:
-                logger.warn(`[Advancement] Unknown advancement condition type: ${phase.advancementCondition.type}. No specific logic applied.`);
-                return { continue: true, jobsToQueue: [] }; // Default to allow continuation
-        }
-    } 
+      switch (phase.advancementCondition.type) {
+        case 'placement':
+          if (phase.advancementCondition.value) {
+            logger.debug(`[Advancement] Applying placement-based advancement for Phase ${phase.phaseNumber}.`);
+            await this._advanceByPlacement(tx, round, phase.advancementCondition.value, phase.id);
+          }
+          return { continue: true, jobsToQueue: [] }; // Allows the parent autoAdvance to continue
+        case 'top_n_scores':
+          if (phase.advancementCondition.value) {
+            logger.debug(`[Advancement] Applying top_n_scores advancement for Phase ${phase.phaseNumber}.`);
+            await this._advanceTopNPlayers(tx, round, phase.advancementCondition.value, phase.id);
+          }
+          return { continue: true, jobsToQueue: [] }; // Allows the parent autoAdvance to continue
+        case 'checkmate':
+          const checkmateResult = await this._advanceCheckmate(tx, round, phase); // Call the new extracted function
+          // Assign jobs to the outer scope variable `jobsToQueue` in autoAdvance
+          jobsToQueue.push(...checkmateResult.jobsToQueue);
+          return { continue: checkmateResult.continue, jobsToQueue: jobsToQueue }; // Ensure jobsToQueue is returned
+        case 'tiered_advancement':
+          interface RoundAdvancementDetail { round: number; advances: number; }
+          const advancementDetails = phase.advancementCondition.details as RoundAdvancementDetail[];
+          if (advancementDetails && advancementDetails.length > 0) {
+            const roundDetail = advancementDetails.find(d => d.round === round.roundNumber);
+            if (roundDetail && roundDetail.advances) {
+              const numberOfPlayersToAdvance = roundDetail.advances;
+              logger.debug(`[Advancement] Using tiered advancement for Round ${round.roundNumber}. Advancing top ${numberOfPlayersToAdvance} players.`);
+              await this._advanceTopNPlayers(tx, round, numberOfPlayersToAdvance);
+            }
+          }
+          return { continue: true, jobsToQueue: [] }; // Allows the parent autoAdvance to continue
+        default:
+          logger.warn(`[Advancement] Unknown advancement condition type: ${phase.advancementCondition.type}. No specific logic applied.`);
+          return { continue: true, jobsToQueue: [] }; // Default to allow continuation
+      }
+    }
     logger.debug(`[Advancement] Advancement logic applied for Round ${round.roundNumber} in Phase ${phase.phaseNumber}.`)
     return { continue: true, jobsToQueue: [] }; // Default return if no specific condition met
   }
 
   private static async _advanceCheckmate(tx: Prisma.TransactionClient, round: any, phase: any): Promise<{ continue: boolean; jobsToQueue: any[] }> {
-                logger.debug(`[Advancement] Applying Checkmate condition for Phase ${phase.phaseNumber}.`);
-                
+    logger.debug(`[Advancement] Applying Checkmate condition for Phase ${phase.phaseNumber}.`);
+
     let jobsToQueue: any[] = [];
 
-                // Set a reasonable default for pointsToActivate if it's missing or too high (> 20)
-                const configuredPoints = phase.advancementCondition.pointsToActivate;
-                const pointsToActivate = configuredPoints;
-                // Lấy maxRounds từ cấu hình thay vì cố định giá trị
-                const maxRounds = phase.advancementCondition.maxRounds || phase.numberOfRounds || 3;
-                logger.debug(`[Advancement] Checkmate phase configured with maxRounds=${maxRounds}, pointsToActivate=${pointsToActivate}`);
-                logger.debug(`[Advancement] Derived pointsToActivate for round ${round.id}: ${pointsToActivate}`);
+    // Set a reasonable default for pointsToActivate if it's missing or too high (> 20)
+    const configuredPoints = phase.advancementCondition.pointsToActivate;
+    const pointsToActivate = configuredPoints;
+    // Lấy maxRounds từ cấu hình thay vì cố định giá trị
+    const maxRounds = phase.advancementCondition.maxRounds || phase.numberOfRounds || 3;
+    logger.debug(`[Advancement] Checkmate phase configured with maxRounds=${maxRounds}, pointsToActivate=${pointsToActivate}`);
+    logger.debug(`[Advancement] Derived pointsToActivate for round ${round.id}: ${pointsToActivate}`);
 
-                // Fetch all active participants and their current total scores
-                const currentParticipants = await tx.participant.findMany({
-                    where: { tournamentId: round.phase.tournamentId, eliminated: false },
-                    orderBy: { scoreTotal: 'desc' },
-        include: {
-            roundOutcomes: {
-                include: {
-                    round: true
-                }
+    // Fetch all active participants and their current total scores
+    const currentParticipants = await tx.participant.findMany({
+      where: { tournamentId: round.phase.tournamentId, eliminated: false },
+      orderBy: { scoreTotal: 'desc' },
+      include: {
+        roundOutcomes: {
+          include: {
+            round: true
+          }
+        }
+      }
+    });
+
+    if (currentParticipants.length === 0) {
+      logger.warn(`[Advancement] No active participants found in Checkmate phase ${phase.phaseNumber}. Forcing completion.`);
+      return { continue: true, jobsToQueue: [] };
+    }
+
+    // Log chi tiết điểm của các người chơi hàng đầu để debug
+    if (currentParticipants.length > 0) {
+      const topPlayers = currentParticipants.slice(0, Math.min(3, currentParticipants.length));
+      logger.debug(`[Advancement] Top players in Checkmate phase ${phase.phaseNumber}, Round ${round.roundNumber}: ${topPlayers.map(p => {
+        const latestOutcome = p.roundOutcomes.find(ro => ro.roundId === round.id);
+        return `${p.userId} (scoreInRound: ${latestOutcome?.scoreInRound || 0}, scoreTotal: ${p.scoreTotal})`;
+      }).join(', ')
+        }`);
+      logger.debug(`[Advancement] Required score to win: ${pointsToActivate}`);
+    }
+
+    let winnerFound = false;
+    for (const participant of currentParticipants) {
+      const latestRoundOutcome = participant.roundOutcomes.find(ro => ro.roundId === round.id);
+
+      if (!latestRoundOutcome) {
+        logger.debug(`[Advancement] Player ${participant.userId} has no round outcome for round ${round.id}. Skipping.`);
+        continue;
+      }
+
+      // Kiểm tra xem người chơi có đạt top 1 trong trận đấu gần nhất không
+      // Lấy kết quả trận đấu gần nhất của người chơi trong round hiện tại
+      const isTop1InLatestMatch = await tx.matchResult.findFirst({
+        where: {
+          userId: participant.userId,
+          match: {
+            lobby: {
+              roundId: round.id
             }
-        }
-                });
+          },
+          placement: 1 // Check for placement 1 directly in the query
+        },
+        orderBy: {
+          id: 'desc'
+        },
+        take: 1
+      }).then(result => !!result); // Convert result to boolean
 
-                if (currentParticipants.length === 0) {
-                    logger.warn(`[Advancement] No active participants found in Checkmate phase ${phase.phaseNumber}. Forcing completion.`);
-        return { continue: true, jobsToQueue: [] };
-                }
+      // Debug log cho kết quả trận đấu
+      logger.debug(`[Advancement] Player ${participant.userId} (Round ${round.id}): scoreInRound = ${latestRoundOutcome.scoreInRound}, isTop1InLatestMatch = ${isTop1InLatestMatch}, pointsToActivate = ${pointsToActivate}`);
 
-                // Log chi tiết điểm của các người chơi hàng đầu để debug
-                if (currentParticipants.length > 0) {
-                    const topPlayers = currentParticipants.slice(0, Math.min(3, currentParticipants.length));
-                    logger.debug(`[Advancement] Top players in Checkmate phase ${phase.phaseNumber}, Round ${round.roundNumber}: ${
-            topPlayers.map(p => {
-                const latestOutcome = p.roundOutcomes.find(ro => ro.roundId === round.id);
-                return `${p.userId} (scoreInRound: ${latestOutcome?.scoreInRound || 0}, scoreTotal: ${p.scoreTotal})`;
-            }).join(', ')
-                    }`);
-                    logger.debug(`[Advancement] Required score to win: ${pointsToActivate}`);
-                }
-
-                let winnerFound = false;
-                for (const participant of currentParticipants) {
-        const latestRoundOutcome = participant.roundOutcomes.find(ro => ro.roundId === round.id);
-        
-        if (!latestRoundOutcome) {
-            logger.debug(`[Advancement] Player ${participant.userId} has no round outcome for round ${round.id}. Skipping.`);
-            continue;
-        }
-
-                    // Kiểm tra xem người chơi có đạt top 1 trong trận đấu gần nhất không
-                    // Lấy kết quả trận đấu gần nhất của người chơi trong round hiện tại
-        const isTop1InLatestMatch = await tx.matchResult.findFirst({
-                        where: {
-                            userId: participant.userId,
-                            match: {
-                                lobby: {
-                                    roundId: round.id
-                            }
-                },
-                placement: 1 // Check for placement 1 directly in the query
-                        },
-                        orderBy: {
-                id: 'desc'
-                        },
-            take: 1
-        }).then(result => !!result); // Convert result to boolean
-                    
-                    // Debug log cho kết quả trận đấu
-        logger.debug(`[Advancement] Player ${participant.userId} (Round ${round.id}): scoreInRound = ${latestRoundOutcome.scoreInRound}, isTop1InLatestMatch = ${isTop1InLatestMatch}, pointsToActivate = ${pointsToActivate}`);
-
-        // Kiểm tra cả hai điều kiện: top 1 trong trận đấu gần nhất VÀ đủ điểm trong vòng hiện tại
-        if (isTop1InLatestMatch && latestRoundOutcome.scoreInRound >= pointsToActivate) {
-            logger.info(`[Advancement] Checkmate winner found: ${participant.userId} with scoreInRound ${latestRoundOutcome.scoreInRound} >= ${pointsToActivate} AND placement = 1 in latest match.`);
-            winnerFound = true;
-            break;
-        }
+      // Kiểm tra cả hai điều kiện: top 1 trong trận đấu gần nhất VÀ đủ điểm trong vòng hiện tại
+      if (isTop1InLatestMatch && latestRoundOutcome.scoreInRound >= pointsToActivate) {
+        logger.info(`[Advancement] Checkmate winner found: ${participant.userId} with scoreInRound ${latestRoundOutcome.scoreInRound} >= ${pointsToActivate} AND placement = 1 in latest match.`);
+        winnerFound = true;
+        break;
+      }
     }
 
     // Refactored logic to handle round completion based on winnerFound and maxRounds
     if (winnerFound) {
-        logger.debug(`[Advancement] Checkmate winner found. Round ${round.id} advancement logic complete.`);
-        // Mark the round and phase as completed when a winner is found
-        await tx.round.update({
-            where: { id: round.id },
-            data: { status: 'completed', endTime: new Date() }
-        });
-        await tx.phase.update({
-            where: { id: round.phaseId },
-            data: { status: 'completed' }
-        });
-        return { continue: true, jobsToQueue: [] };
+      logger.debug(`[Advancement] Checkmate winner found. Round ${round.id} advancement logic complete.`);
+      // Mark the round and phase as completed when a winner is found
+      await tx.round.update({
+        where: { id: round.id },
+        data: { status: 'completed', endTime: new Date() }
+      });
+      await tx.phase.update({
+        where: { id: round.phaseId },
+        data: { status: 'completed' }
+      });
+      return { continue: true, jobsToQueue: [] };
     } else if (round.roundNumber >= maxRounds) {
-        logger.info(`[Advancement] Max rounds (${maxRounds}) reached and no Checkmate winner found. Completing phase without winner.`);
-        // No winner found and max rounds reached, complete the round/phase without declaring a specific winner based on checkmate conditions.
-        await tx.round.update({
-            where: { id: round.id },
-            data: { status: 'completed', endTime: new Date() }
-        });
-        await tx.phase.update({
-            where: { id: round.phaseId },
-            data: { status: 'completed' }
-        });
-        return { continue: true, jobsToQueue: [] };
+      logger.info(`[Advancement] Max rounds (${maxRounds}) reached and no Checkmate winner found. Completing phase without winner.`);
+      // No winner found and max rounds reached, complete the round/phase without declaring a specific winner based on checkmate conditions.
+      await tx.round.update({
+        where: { id: round.id },
+        data: { status: 'completed', endTime: new Date() }
+      });
+      await tx.phase.update({
+        where: { id: round.phaseId },
+        data: { status: 'completed' }
+      });
+      return { continue: true, jobsToQueue: [] };
     } else {
-        logger.debug(`[Advancement] No Checkmate winner found in Round ${round.id} (${round.roundNumber}/${maxRounds}). Creating new match for next attempt.`);
-        logger.debug(`[Advancement] Current round number: ${round.roundNumber}, Max rounds: ${maxRounds}`);
-            
-        // Hiển thị chi tiết lý do không tìm thấy người thắng
-        logger.info(`[Advancement] Checkmate conditions: Player must have placement=1 in latest match AND scoreInRound >= ${pointsToActivate}`);
-            
-        // Hiển thị thông tin người chơi có điểm cao nhất
-        if (currentParticipants.length > 0) {
-            const topPlayer = currentParticipants[0]; // Assuming currentParticipants is sorted by scoreTotal
-            const topPlayerOutcome = topPlayer.roundOutcomes.find(ro => ro.roundId === round.id);
+      logger.debug(`[Advancement] No Checkmate winner found in Round ${round.id} (${round.roundNumber}/${maxRounds}). Creating new match for next attempt.`);
+      logger.debug(`[Advancement] Current round number: ${round.roundNumber}, Max rounds: ${maxRounds}`);
 
-            logger.debug(`[Advancement] Top scoring participant (by scoreTotal): ${topPlayer.userId}`);
-            if (topPlayerOutcome) {
-                logger.debug(`[Advancement] Top player's scoreInRound for this round: ${topPlayerOutcome.scoreInRound}, needs ${pointsToActivate}`);
-                const hasEnoughPoints = topPlayerOutcome.scoreInRound >= pointsToActivate;
-                logger.debug(`[Advancement] Top player has enough points (${hasEnoughPoints})`);
-            } else {
-                logger.warn(`[Advancement] Top scoring participant has no round outcome for this round.`);
-            }
-                
-            // Kiểm tra kết quả trận đấu gần nhất của người chơi điểm cao nhất
-            const topPlayerLatestMatch = await tx.matchResult.findFirst({
-                where: {
-                    userId: topPlayer.userId,
-                    match: {
-                        lobby: {
-                            roundId: round.id
-                        }
-                    }
-                },
-                orderBy: {
-                    id: 'desc'
-                },
-                include: {
-                    match: true
-                }
-            });
-                
-            if (topPlayerLatestMatch) {
-                logger.debug(`[Advancement] Top scoring player's latest match placement: ${topPlayerLatestMatch.placement}`);
-                    
-                // Giải thích lý do không thắng
-                const hasEnoughPoints = topPlayerOutcome ? topPlayerOutcome.scoreInRound >= pointsToActivate : false;
-                const hasTop1Placement = topPlayerLatestMatch.placement === 1;
-                    
-                if (!hasEnoughPoints && !hasTop1Placement) {
-                    logger.info(`[Advancement] Top player doesn't meet either condition: needs more scoreInRound AND top 1 placement`);
-                } else if (!hasEnoughPoints) {
-                    logger.info(`[Advancement] Top player has placement 1 but needs more scoreInRound: ${topPlayerOutcome?.scoreInRound || 0}/${pointsToActivate}`);
-                } else if (!hasTop1Placement) {
-                    logger.info(`[Advancement] Top player has enough scoreInRound but placement is ${topPlayerLatestMatch.placement}, needs 1`);
-                }
-            } else {
-                logger.warn(`[Advancement] Top scoring player has no match results in this round`);
-            }
-        }
-            
-        const currentPhase = await tx.phase.findUnique({
-            where: { id: round.phaseId },
-            include: { rounds: true }
-        });
-        if (currentPhase) {
-            // Instead of creating a new round, we need to create a new match within the existing lobby
-            // and then return a job to fetch data for that match.
-            const lobby = await tx.lobby.findFirst({
-                where: { roundId: round.id },
-                // Order by creation to consistently pick one if multiple exist (though ideally 1 per checkmate round)
-                orderBy: { id: 'asc' }
-            });
+      // Hiển thị chi tiết lý do không tìm thấy người thắng
+      logger.info(`[Advancement] Checkmate conditions: Player must have placement=1 in latest match AND scoreInRound >= ${pointsToActivate}`);
 
-            if (lobby) {
-                logger.debug(`[Advancement] Found lobby ${lobby.id} for new match creation.`);
-                const newRiotMatchId = 'mock_riot_match_id_' + crypto.randomUUID();
-                const newMatch = await tx.match.create({
-                    data: {
-                        matchIdRiotApi: newRiotMatchId,
-                        lobbyId: lobby.id,
-                    },
-                });
+      // Hiển thị thông tin người chơi có điểm cao nhất
+      if (currentParticipants.length > 0) {
+        const topPlayer = currentParticipants[0]; // Assuming currentParticipants is sorted by scoreTotal
+        const topPlayerOutcome = topPlayer.roundOutcomes.find(ro => ro.roundId === round.id);
 
-                jobsToQueue.push({
-                    name: 'fetchMatchData',
-                    data: {
-                        matchId: newMatch.id
-                    },
-                });
-                logger.info(`[Advancement] No winner found. New match ${newMatch.id} created and queued for Checkmate phase. (Lobby: ${lobby.id})`);
-            } else {
-                logger.error(`[Advancement] No lobby found for round ${round.id}. Cannot create new match.`);
-            }
+        logger.debug(`[Advancement] Top scoring participant (by scoreTotal): ${topPlayer.userId}`);
+        if (topPlayerOutcome) {
+          logger.debug(`[Advancement] Top player's scoreInRound for this round: ${topPlayerOutcome.scoreInRound}, needs ${pointsToActivate}`);
+          const hasEnoughPoints = topPlayerOutcome.scoreInRound >= pointsToActivate;
+          logger.debug(`[Advancement] Top player has enough points (${hasEnoughPoints})`);
         } else {
-            logger.error(`[Advancement] Current phase not found for round ${round.id}. Cannot create new match.`);
+          logger.warn(`[Advancement] Top scoring participant has no round outcome for this round.`);
         }
-        return { continue: false, jobsToQueue };
+
+        // Kiểm tra kết quả trận đấu gần nhất của người chơi điểm cao nhất
+        const topPlayerLatestMatch = await tx.matchResult.findFirst({
+          where: {
+            userId: topPlayer.userId,
+            match: {
+              lobby: {
+                roundId: round.id
+              }
+            }
+          },
+          orderBy: {
+            id: 'desc'
+          },
+          include: {
+            match: true
+          }
+        });
+
+        if (topPlayerLatestMatch) {
+          logger.debug(`[Advancement] Top scoring player's latest match placement: ${topPlayerLatestMatch.placement}`);
+
+          // Giải thích lý do không thắng
+          const hasEnoughPoints = topPlayerOutcome ? topPlayerOutcome.scoreInRound >= pointsToActivate : false;
+          const hasTop1Placement = topPlayerLatestMatch.placement === 1;
+
+          if (!hasEnoughPoints && !hasTop1Placement) {
+            logger.info(`[Advancement] Top player doesn't meet either condition: needs more scoreInRound AND top 1 placement`);
+          } else if (!hasEnoughPoints) {
+            logger.info(`[Advancement] Top player has placement 1 but needs more scoreInRound: ${topPlayerOutcome?.scoreInRound || 0}/${pointsToActivate}`);
+          } else if (!hasTop1Placement) {
+            logger.info(`[Advancement] Top player has enough scoreInRound but placement is ${topPlayerLatestMatch.placement}, needs 1`);
+          }
+        } else {
+          logger.warn(`[Advancement] Top scoring player has no match results in this round`);
+        }
+      }
+
+      const currentPhase = await tx.phase.findUnique({
+        where: { id: round.phaseId },
+        include: { rounds: true }
+      });
+      if (currentPhase) {
+        // Instead of creating a new round, we need to create a new match within the existing lobby
+        // and then return a job to fetch data for that match.
+        const lobby = await tx.lobby.findFirst({
+          where: { roundId: round.id },
+          // Order by creation to consistently pick one if multiple exist (though ideally 1 per checkmate round)
+          orderBy: { id: 'asc' }
+        });
+
+        if (lobby) {
+          logger.debug(`[Advancement] Found lobby ${lobby.id} for new match creation.`);
+          const newRiotMatchId = 'mock_riot_match_id_' + crypto.randomUUID();
+          const newMatch = await tx.match.create({
+            data: {
+              matchIdRiotApi: newRiotMatchId,
+              lobbyId: lobby.id,
+            },
+          });
+
+          jobsToQueue.push({
+            name: 'fetchMatchData',
+            data: {
+              matchId: newMatch.id
+            },
+          });
+          logger.info(`[Advancement] No winner found. New match ${newMatch.id} created and queued for Checkmate phase. (Lobby: ${lobby.id})`);
+        } else {
+          logger.error(`[Advancement] No lobby found for round ${round.id}. Cannot create new match.`);
+        }
+      } else {
+        logger.error(`[Advancement] Current phase not found for round ${round.id}. Cannot create new match.`);
+      }
+      return { continue: false, jobsToQueue };
     }
   }
 
   private static async _calculateScoresForRound(tx: Prisma.TransactionClient, roundId: string): Promise<Map<string, number>> {
     const lobbiesInRound = await tx.lobby.findMany({
-        where: { roundId },
-        include: { matches: { include: { matchResults: true } } }
+      where: { roundId },
+      include: { matches: { include: { matchResults: true } } }
     });
 
     const scores = new Map<string, number>();
@@ -1122,35 +1375,35 @@ export default class RoundService {
     logger.debug(`[Scoring] Processing ${lobbiesInRound.length} lobbies for round ${roundId}`);
 
     for (const lobby of lobbiesInRound) {
-        logger.debug(`[Scoring] Processing lobby ${lobby.id} with ${lobby.matches?.length || 0} matches`);
-        for (const match of lobby.matches) {
-            matchCount++;
-            logger.debug(`[Scoring] Processing match ${match.id} with ${match.matchResults?.length || 0} results`);
-            for (const result of match.matchResults) {
-                resultCount++;
-                const currentScore = scores.get(result.userId) || 0;
-                scores.set(result.userId, currentScore + result.points);
-                logger.debug(`[Scoring] User ${result.userId} scored ${result.points}. Current total: ${scores.get(result.userId)}`);
-            }
+      logger.debug(`[Scoring] Processing lobby ${lobby.id} with ${lobby.matches?.length || 0} matches`);
+      for (const match of lobby.matches) {
+        matchCount++;
+        logger.debug(`[Scoring] Processing match ${match.id} with ${match.matchResults?.length || 0} results`);
+        for (const result of match.matchResults) {
+          resultCount++;
+          const currentScore = scores.get(result.userId) || 0;
+          scores.set(result.userId, currentScore + result.points);
+          logger.debug(`[Scoring] User ${result.userId} scored ${result.points}. Current total: ${scores.get(result.userId)}`);
         }
+      }
     }
-    
+
     logger.debug(`[Scoring] Calculated scores for round ${roundId}: ${scores.size} players, ${matchCount} matches, ${resultCount} results`);
-    
+
     // Log the scores for debugging
     if (scores.size > 0) {
-        const scoresLog = Array.from(scores.entries())
-            .sort((a, b) => b[1] - a[1])  // Sort by score descending
-            .map(([userId, score]) => {
-              if (score === 0) {
-                logger.debug(`[Scoring] User ${userId} has 0 score in round ${roundId}. This might indicate missing match results for this user.`);
-              }
-              return `${userId}: ${score}`;
-            })
-            .join(', ');
-        logger.debug(`[Scoring] Round ${roundId} scores: ${scoresLog}`);
+      const scoresLog = Array.from(scores.entries())
+        .sort((a, b) => b[1] - a[1])  // Sort by score descending
+        .map(([userId, score]) => {
+          if (score === 0) {
+            logger.debug(`[Scoring] User ${userId} has 0 score in round ${roundId}. This might indicate missing match results for this user.`);
+          }
+          return `${userId}: ${score}`;
+        })
+        .join(', ');
+      logger.debug(`[Scoring] Round ${roundId} scores: ${scoresLog}`);
     }
-    
+
     return scores;
   }
 
@@ -1173,40 +1426,51 @@ export default class RoundService {
 
     // Fetch existing participants to update their scoreTotal
     const participantsToUpdate = await tx.participant.findMany({
-        where: {
+      where: {
         tournamentId: tournamentId,
         id: {
           in: Array.from(participantScores.keys())
         }
-        },
-        select: {
+      },
+      select: {
         id: true,
         scoreTotal: true,
       }
     });
 
-    // Perform updates
-    for (const participant of participantsToUpdate) {
-        const newScoreInRound = participantScores.get(participant.id) || 0;
-        const currentScoreTotal = participant.scoreTotal || 0;
-        const newTotalScore = currentScoreTotal + newScoreInRound; // Add scoreInRound to current scoreTotal
+    // ── BULK UPDATE: Single SQL statement for all participant scores ──
+    if (participantsToUpdate.length > 0) {
+      const caseClauses = participantsToUpdate
+        .map(p => {
+          const newScoreInRound = participantScores.get(p.id) || 0;
+          const newTotalScore = (p.scoreTotal || 0) + newScoreInRound;
+          logger.debug(`[Scores] Participant ${p.id}: current=${p.scoreTotal || 0}, roundDelta=+${newScoreInRound}, new=${newTotalScore}`);
+          return `WHEN "id" = '${p.id}' THEN ${newTotalScore}`;
+        })
+        .join(' ');
+      const participantIds = participantsToUpdate
+        .map(p => `'${p.id}'`)
+        .join(', ');
 
-        logger.debug(`[Scores] Updating participant ${participant.id}: currentScoreTotal=${currentScoreTotal}, scoreInRoundToAdd=${newScoreInRound}, newScoreTotal=${newTotalScore}`);
-
-        await tx.participant.update({
-            where: { id: participant.id },
-            data: { scoreTotal: newTotalScore },
-        });
+      await tx.$executeRawUnsafe(`
+        UPDATE "Participant"
+        SET "scoreTotal" = CASE ${caseClauses} ELSE "scoreTotal" END
+        WHERE "id" IN (${participantIds})
+      `);
+      logger.debug(`[Scores] Bulk updated scoreTotal for ${participantsToUpdate.length} participants in 1 query.`);
     }
     logger.debug(`[Scores] Finished _updateParticipantTotalScores.`);
   }
 
-  private static async _advanceByPlacement(tx: Prisma.TransactionClient, round: any, topNPerLobby: number) {
-    logger.debug(`[Advancement] Starting per-lobby top-${topNPerLobby} advancement for round ${round.id}`);
+  private static async _advanceByPlacement(tx: Prisma.TransactionClient, round: any, topNPerLobby: number, phaseId?: string) {
+    const scopeLabel = phaseId ? `phase ${phaseId}` : `round ${round.id}`;
+    logger.debug(`[Advancement] Starting per-lobby top-${topNPerLobby} advancement for ${scopeLabel}`);
 
-    // Fetch all lobbies in this round with their match results
+    // Fetch all lobbies — either for the whole phase (parallel groups) or just this round
     const lobbies = await tx.lobby.findMany({
-      where: { roundId: round.id },
+      where: phaseId
+        ? { round: { phaseId } }  // All groups in the phase
+        : { roundId: round.id },  // Single round only
       include: {
         matches: {
           include: { matchResults: true }
@@ -1215,7 +1479,7 @@ export default class RoundService {
     });
 
     if (lobbies.length === 0) {
-      logger.warn(`[Advancement] No lobbies found for round ${round.id}. Skipping.`);
+      logger.warn(`[Advancement] No lobbies found for ${scopeLabel}. Skipping.`);
       return;
     }
 
@@ -1227,21 +1491,47 @@ export default class RoundService {
       const lobbyParticipantIds = lobby.participants as string[];
       if (!Array.isArray(lobbyParticipantIds) || lobbyParticipantIds.length === 0) continue;
 
-      // Build a score map for this lobby from its match results
+      // Build a score map AND placement history for this lobby (for tiebreak)
       const lobbyScoreMap = new Map<string, number>();
+      const lobbyPlacementsMap = new Map<string, number[]>(); // userId → [p1, p2, p3...]
       for (const match of lobby.matches) {
         for (const result of match.matchResults) {
           const prev = lobbyScoreMap.get(result.userId) || 0;
           lobbyScoreMap.set(result.userId, prev + (result.points || 0));
+          const prevPlacements = lobbyPlacementsMap.get(result.userId) || [];
+          lobbyPlacementsMap.set(result.userId, [...prevPlacements, result.placement]);
         }
       }
 
-      // Sort players in this lobby by score descending (higher score = better placement)
+      // Sort players with Swiss tiebreak:
+      // 1. Total points (desc)
+      // 2. Sum of placements (asc — lower = better average)
+      // 3. Count of 1st-place finishes (desc)
+      // 4. Best single placement (asc)
       const lobbyRanked = lobbyParticipantIds
-        .map(uid => ({ userId: uid, score: lobbyScoreMap.get(uid) || 0 }))
-        .sort((a, b) => b.score - a.score);
+        .map(uid => ({
+          userId: uid,
+          score: lobbyScoreMap.get(uid) || 0,
+          placements: lobbyPlacementsMap.get(uid) || [],
+        }))
+        .sort((a, b) => {
+          // Primary: total score descending
+          if (b.score !== a.score) return b.score - a.score;
+          // TB1: sum of placements ascending (1+2+3=6 beats 3+4+5=12)
+          const sumA = a.placements.reduce((s, p) => s + p, 0);
+          const sumB = b.placements.reduce((s, p) => s + p, 0);
+          if (sumA !== sumB) return sumA - sumB;
+          // TB2: count of 1st-place finishes descending
+          const wins1A = a.placements.filter(p => p === 1).length;
+          const wins1B = b.placements.filter(p => p === 1).length;
+          if (wins1B !== wins1A) return wins1B - wins1A;
+          // TB3: best single placement ascending
+          const bestA = a.placements.length > 0 ? Math.min(...a.placements) : 999;
+          const bestB = b.placements.length > 0 ? Math.min(...b.placements) : 999;
+          return bestA - bestB;
+        });
 
-      logger.debug(`[Advancement] Lobby ${lobby.id} ranking (top ${topNPerLobby} advance): ${lobbyRanked.map((p, i) => `#${i+1} ${p.userId}(${p.score}pts)`).join(', ')}`);
+      logger.debug(`[Advancement] Lobby ${lobby.id} ranking (top ${topNPerLobby} advance): ${lobbyRanked.map((p, i) => `#${i + 1} ${p.userId}(${p.score}pts placements:[${p.placements}])`).join(', ')}`);
 
       // Top-N advance, rest are eliminated
       lobbyRanked.forEach((player, index) => {
@@ -1294,22 +1584,121 @@ export default class RoundService {
     logger.info(`[Advancement] Round ${round.id} complete: ${advancedCount} advanced, ${eliminatedCount} eliminated.`);
   }
 
-  private static async _advanceTopNPlayers(tx: Prisma.TransactionClient, round: any, topN: number) {
-    logger.debug(`[Advancement Logic] Advancing top ${topN} players for Round ID: ${round.id}`);
-    
-    // Lấy danh sách người chơi thực sự tham gia round này
-    // Đầu tiên, lấy tất cả id người chơi trong các lobby của round
-    const lobbies = await tx.lobby.findMany({
-      where: { roundId: round.id },
-      include: {
-        matches: {
-          include: {
-            matchResults: true
-          }
+  /**
+   * Per-lobby immediate elimination for placement mode.
+   * Called from checkAndAdvanceRound BEFORE all lobbies are done — processes each
+   * completed lobby independently so eliminated players are marked right away.
+   * Idempotent: skips lobbies that already have RoundOutcome records.
+   */
+  static async eliminateCompletedLobbies(roundId: string, topNPerLobby: number, tournamentId: string) {
+    const completedLobbies = await prisma.lobby.findMany({
+      where: { roundId, fetchedResult: true },
+      include: { matches: { include: { matchResults: true } } }
+    });
+
+    if (completedLobbies.length === 0) return;
+
+    for (const lobby of completedLobbies) {
+      const lobbyParticipantIds = lobby.participants as string[];
+      if (!Array.isArray(lobbyParticipantIds) || lobbyParticipantIds.length === 0) continue;
+
+      // Skip if already processed — check for existing RoundOutcome records for any player in this lobby
+      const existingOutcome = await prisma.roundOutcome.findFirst({
+        where: {
+          roundId,
+          participant: { userId: { in: lobbyParticipantIds }, tournamentId }
+        }
+      });
+      if (existingOutcome) {
+        logger.debug(`[Placement/Immediate] Lobby ${lobby.id} already processed. Skipping.`);
+        continue;
+      }
+
+      // Build score map and placement history from match results
+      const scoreMap = new Map<string, number>();
+      const placementsMap = new Map<string, number[]>();
+      for (const match of lobby.matches) {
+        for (const result of match.matchResults) {
+          scoreMap.set(result.userId, (scoreMap.get(result.userId) || 0) + (result.points || 0));
+          placementsMap.set(result.userId, [...(placementsMap.get(result.userId) || []), result.placement]);
         }
       }
+
+      // Swiss tiebreak ranking (same logic as _advanceByPlacement)
+      const ranked = lobbyParticipantIds
+        .map(uid => ({
+          userId: uid,
+          score: scoreMap.get(uid) || 0,
+          placements: placementsMap.get(uid) || [],
+        }))
+        .sort((a, b) => {
+          if (b.score !== a.score) return b.score - a.score;
+          const sumA = a.placements.reduce((s, p) => s + p, 0);
+          const sumB = b.placements.reduce((s, p) => s + p, 0);
+          if (sumA !== sumB) return sumA - sumB;
+          const wins1A = a.placements.filter(p => p === 1).length;
+          const wins1B = b.placements.filter(p => p === 1).length;
+          if (wins1B !== wins1A) return wins1B - wins1A;
+          const bestA = a.placements.length > 0 ? Math.min(...a.placements) : 999;
+          const bestB = b.placements.length > 0 ? Math.min(...b.placements) : 999;
+          return bestA - bestB;
+        });
+
+      logger.info(`[Placement/Immediate] Lobby ${lobby.id}: Ranking ${ranked.length} players (top ${topNPerLobby} advance)`);
+      logger.debug(`[Placement/Immediate] Lobby ${lobby.id} ranking: ${ranked.map((p, i) => `#${i + 1} ${p.userId}(${p.score}pts)`).join(', ')}`);
+
+      const advancedUserIds = new Set(ranked.slice(0, topNPerLobby).map(p => p.userId));
+      const participants = await prisma.participant.findMany({
+        where: { userId: { in: lobbyParticipantIds }, tournamentId }
+      });
+
+      let advancedCount = 0;
+      let eliminatedCount = 0;
+
+      for (const participant of participants) {
+        const status: 'advanced' | 'eliminated' = advancedUserIds.has(participant.userId) ? 'advanced' : 'eliminated';
+        const scoreInRound = scoreMap.get(participant.userId) || 0;
+
+        await prisma.roundOutcome.upsert({
+          where: { participantId_roundId: { participantId: participant.id, roundId } },
+          update: { scoreInRound, status },
+          create: { participantId: participant.id, roundId, scoreInRound, status },
+        });
+
+        if (status === 'eliminated') {
+          await prisma.participant.update({
+            where: { id: participant.id },
+            data: { eliminated: true },
+          });
+          eliminatedCount++;
+          logger.info(`[Placement/Immediate] Eliminated ${participant.userId} from lobby ${lobby.id}`);
+        } else {
+          advancedCount++;
+        }
+      }
+
+      logger.info(`[Placement/Immediate] Lobby ${lobby.id} done: ${advancedCount} advanced, ${eliminatedCount} eliminated`);
+
+      // Emit real-time update so frontend refreshes immediately
+      if ((global as any).io) {
+        (global as any).io.to(`tournament:${tournamentId}`).emit('tournament_update', { type: 'lobby_eliminated', lobbyId: lobby.id });
+        (global as any).io.to(`tournament:${tournamentId}`).emit('bracket_update', { tournamentId });
+      }
+    }
+  }
+
+  private static async _advanceTopNPlayers(tx: Prisma.TransactionClient, round: any, topN: number, phaseId?: string) {
+    const scopeLabel = phaseId ? `phase ${phaseId}` : `round ${round.id}`;
+    logger.debug(`[Advancement Logic] Advancing top ${topN} players for ${scopeLabel}`);
+
+    // Gather all participant user IDs from ALL lobbies in the phase (or just this round)
+    const lobbies = await tx.lobby.findMany({
+      where: phaseId
+        ? { round: { phaseId } }   // All groups in phase
+        : { roundId: round.id },   // Single round
+      select: { participants: true }
     });
-    
+
     const participantUserIds = new Set<string>();
     lobbies.forEach(lobby => {
       const lobbyParticipants = lobby.participants as string[];
@@ -1317,15 +1706,15 @@ export default class RoundService {
         lobbyParticipants.forEach(userId => participantUserIds.add(userId));
       }
     });
-    
-    logger.debug(`[Advancement Logic] Found ${participantUserIds.size} participants in round ${round.id} lobbies`);
-    
+
+    logger.debug(`[Advancement Logic] Found ${participantUserIds.size} participants in ${scopeLabel}`);
+
     if (participantUserIds.size === 0) {
-      logger.warn(`[Advancement Logic] No participants found in lobbies for round ${round.id}. Skipping advancement.`);
+      logger.warn(`[Advancement Logic] No participants found in ${scopeLabel}. Skipping advancement.`);
       return;
     }
-    
-    // Lấy thông tin participant cho những người tham gia round này và chưa bị loại
+
+    // Fetch participant records (not eliminated)
     const participants = await tx.participant.findMany({
       where: {
         tournamentId: round.phase.tournamentId,
@@ -1339,83 +1728,62 @@ export default class RoundService {
       return;
     }
 
-    // Lấy điểm của mỗi người trong round hiện tại thay vì dùng tổng điểm
-    const scoresInRound = await this._calculateScoresForRound(tx, round.id);
+    // For cross-phase ranking, use scoreTotal (already updated by _updateParticipantTotalScores)
+    // For single-round, use round-specific scores for accuracy
+    let sortedParticipants: (typeof participants[number] & { roundScore: number })[];
+    if (phaseId) {
+      // Cross-group: rank by cumulative scoreTotal across the whole phase
+      sortedParticipants = participants
+        .map(p => ({ ...p, roundScore: p.scoreTotal || 0 }))
+        .sort((a, b) => b.roundScore - a.roundScore);
+    } else {
+      const scoresInRound = await this._calculateScoresForRound(tx, round.id);
+      sortedParticipants = participants
+        .map(p => ({ ...p, roundScore: scoresInRound.get(p.userId) || 0 }))
+        .sort((a, b) => b.roundScore - a.roundScore);
+    }
 
-    // Tạo mảng mới bao gồm participant và điểm trong round
-    const participantsWithRoundScore = participants.map(p => ({
-      ...p,
-      roundScore: scoresInRound.get(p.userId) || 0
-    }));
-    
-    // Sắp xếp theo điểm trong round này (không phải scoreTotal)
-    const sortedParticipants = [...participantsWithRoundScore].sort((a, b) => b.roundScore - a.roundScore);
-    
-    logger.debug(`[Advancement Logic] Participants sorted by round score (ID: Score): ${sortedParticipants.map(p => `${p.id}: ${p.roundScore}`).join(', ')}`);
+    logger.debug(`[Advancement Logic] Ranking (${scopeLabel}, top ${topN} advance): ${sortedParticipants.map((p, i) => `#${i+1} ${p.userId}(${p.roundScore}pts)`).join(', ')}`);
 
-    // Chỉ loại người khi số lượng người chơi vượt quá số người được tiếp tục
+    // Guard: if fewer or equal participants than topN, advance all
     if (sortedParticipants.length <= topN) {
       logger.info(`[Advancement Logic] Only ${sortedParticipants.length} participants, which is <= ${topN} required. Not eliminating any.`);
-      
-      // Create or update RoundOutcome for all players, marking them as advanced
       for (const p of sortedParticipants) {
         await tx.roundOutcome.upsert({
           where: { participantId_roundId: { participantId: p.id, roundId: round.id } },
-          update: {
-            status: 'advanced',
-            scoreInRound: p.roundScore,
-          },
-          create: {
-        participantId: p.id,
-        roundId: round.id,
-        status: 'advanced',
-        scoreInRound: p.roundScore,
-          },
+          update: { status: 'advanced', scoreInRound: p.roundScore },
+          create: { participantId: p.id, roundId: round.id, status: 'advanced', scoreInRound: p.roundScore },
         });
-        logger.debug(`[Advancement Logic] Upserted round outcome for participant ${p.id} with status: advanced, score: ${p.roundScore}`);
       }
       return;
     }
 
-    // Lấy top N người dựa trên điểm round
     const playersToAdvance = sortedParticipants.slice(0, topN);
     const playersToEliminate = sortedParticipants.slice(topN);
-
-    logger.debug(`[Advancement Logic] Players to Advance (ID: Round Score): ${playersToAdvance.map(p => `${p.id}: ${p.roundScore}`).join(', ')}`);
-    logger.debug(`[Advancement Logic] Players to Eliminate (ID: Round Score): ${playersToEliminate.map(p => `${p.id}: ${p.roundScore}`).join(', ')}`);
-
     const playerIdsToEliminate = playersToEliminate.map(p => p.id);
 
-    // --- Upsert RoundOutcomes for ALL participants in this round ---
+    logger.info(`[Advancement Logic] ${scopeLabel}: ${playersToAdvance.length} advance, ${playersToEliminate.length} eliminated`);
+
+    // Upsert RoundOutcomes
     for (const p of sortedParticipants) {
-        const isEliminated = playerIdsToEliminate.includes(p.id);
-        await tx.roundOutcome.upsert({
-          where: { participantId_roundId: { participantId: p.id, roundId: round.id } },
-          update: {
-            status: isEliminated ? 'eliminated' : 'advanced',
-            scoreInRound: p.roundScore,
-          },
-          create: {
-            participantId: p.id,
-            roundId: round.id,
-            status: isEliminated ? 'eliminated' : 'advanced',
-            scoreInRound: p.roundScore,
-          },
-        });
-        logger.debug(`[Advancement Logic] Upserted round outcome for participant ${p.id} with status: ${isEliminated ? 'eliminated' : 'advanced'}, score: ${p.roundScore}`);
+      const isEliminated = playerIdsToEliminate.includes(p.id);
+      await tx.roundOutcome.upsert({
+        where: { participantId_roundId: { participantId: p.id, roundId: round.id } },
+        update: { status: isEliminated ? 'eliminated' : 'advanced', scoreInRound: p.roundScore },
+        create: { participantId: p.id, roundId: round.id, status: isEliminated ? 'eliminated' : 'advanced', scoreInRound: p.roundScore },
+      });
     }
 
-    // --- Eliminate players ---
+    // Mark eliminated in DB
     if (playerIdsToEliminate.length > 0) {
-        logger.debug(`[Advancement Logic] Eliminating ${playerIdsToEliminate.length} players.`);
       await tx.participant.updateMany({
-          where: { id: { in: playerIdsToEliminate } },
-          data: { eliminated: true },
-        });
-    } else {
-        logger.debug(`[Advancement Logic] No players were eliminated in this round.`);
+        where: { id: { in: playerIdsToEliminate } },
+        data: { eliminated: true },
+      });
+      logger.info(`[Advancement Logic] Eliminated ${playerIdsToEliminate.length} participants.`);
     }
   }
+
 
   static async payoutPrizes(tx: Prisma.TransactionClient, tournamentId: string, winners: Participant[]) {
     const tournament = await tx.tournament.findUnique({
@@ -1436,7 +1804,7 @@ export default class RoundService {
     const participantCount = tournament._count.participants;
     const totalPot = participantCount * tournament.entryFee;
     const computedPrizePool = totalPot * (1 - (tournament.hostFeePercent || 0));
-    
+
     let prizePool = computedPrizePool;
     if (!tournament.isCommunityMode && tournament.escrow) {
       if (tournament.escrow.fundedAmount > computedPrizePool) {
@@ -1445,7 +1813,7 @@ export default class RoundService {
         prizePool = Math.max(computedPrizePool, tournament.escrow.fundedAmount);
       }
     }
-    
+
     logger.debug(`Calculating prizes for tournament ${tournamentId}. Total pot: ${totalPot}, Prize pool: ${prizePool}`);
 
     const customStructure = tournament.prizeStructure;
@@ -1454,8 +1822,8 @@ export default class RoundService {
       (typeof customStructure === 'object' && !Array.isArray(customStructure) && Object.keys(customStructure as object).length > 0)
     );
 
-    const structureToUse = hasCustomStructure 
-      ? customStructure 
+    const structureToUse = hasCustomStructure
+      ? customStructure
       : PrizeCalculationService.getDynamicPrizeDistribution(participantCount);
 
     // Use the PrizeCalculationService to get the optimized distribution
@@ -1466,27 +1834,27 @@ export default class RoundService {
     for (const prize of prizeDistribution) {
       logger.debug(`Payout: Participant ${prize.participantId} (Rank ${prize.rank}) receives ${prize.amount} from the prize pool.`);
 
-        // Create a Reward record in the database
-        await tx.reward.create({
-          data: {
+      // Create a Reward record in the database
+      await tx.reward.create({
+        data: {
           participantId: prize.participantId,
-            tournamentId: tournamentId,
+          tournamentId: tournamentId,
           amount: prize.amount,
-            status: 'completed', // Or 'pending' if there's a manual approval step
-            sentAt: new Date(),
-          },
-        });
+          status: 'completed', // Or 'pending' if there's a manual approval step
+          sentAt: new Date(),
+        },
+      });
 
-        // Mark participant as rewarded
-        await tx.participant.update({
-          where: { id: prize.participantId },
-            data: { rewarded: true },
-        });
-      }
-    
+      // Mark participant as rewarded
+      await tx.participant.update({
+        where: { id: prize.participantId },
+        data: { rewarded: true },
+      });
+    }
+
     // Đảm bảo tất cả rounds, lobbies và roundOutcomes đều được đánh dấu completed khi tournament kết thúc
     await this._ensureAllResourcesCompleted(tx, tournamentId);
-    
+
     logger.info(`Paid out prizes for tournament ${tournamentId} to ${prizeDistribution.length} winners`);
   }
 
@@ -1511,10 +1879,10 @@ export default class RoundService {
 
       // Tìm các rounds chưa completed trong phase
       const incompleteRounds = phase.rounds.filter(r => r.status !== 'completed');
-      
+
       if (incompleteRounds.length > 0) {
         logger.info(`Updating ${incompleteRounds.length} incomplete rounds in phase ${phase.id} to completed`);
-        
+
         for (const round of incompleteRounds) {
           // Cập nhật round status
           await tx.round.update({
@@ -1526,7 +1894,7 @@ export default class RoundService {
           const lobbies = await tx.lobby.findMany({
             where: { roundId: round.id }
           });
-          
+
           if (lobbies.length > 0) {
             for (const lobby of lobbies) {
               // Cập nhật lobby fetchedResult nếu chưa
@@ -1542,7 +1910,7 @@ export default class RoundService {
 
           // 3. Cập nhật tất cả roundOutcomes của round này
           const pendingOutcomes = await tx.roundOutcome.findMany({
-            where: { 
+            where: {
               roundId: round.id,
               status: { notIn: ['advanced', 'eliminated'] }
             }
@@ -1572,7 +1940,7 @@ export default class RoundService {
   static async getResults(roundId: string) {
     const round = await prisma.round.findUnique({
       where: { id: roundId },
-      include: { 
+      include: {
         lobbies: {
           include: {
             matches: {

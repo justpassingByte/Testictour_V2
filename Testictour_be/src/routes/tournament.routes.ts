@@ -52,6 +52,9 @@ router.post('/:id/image', auth('admin', 'partner'), upload.single('image'), asyn
 // Sync
 router.post('/:id/sync', auth('admin', 'partner'), TournamentController.syncMatches);
 
+// Recent Results (Public)
+router.get('/:id/recent-results', TournamentController.recentResults);
+
 // Bracket (Public) — get group bracket for tournament
 router.get('/:id/bracket', async (req: Request, res: Response, next: NextFunction) => {
   try {

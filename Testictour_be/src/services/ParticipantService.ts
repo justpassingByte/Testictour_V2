@@ -70,11 +70,116 @@ export default class ParticipantService {
 
   static async list(tournamentId: string, page: number = 1, limit: number = 10) {
     const skip = (page - 1) * limit;
-    return prisma.participant.findMany({
-      where: { tournamentId },
-      include: { user: true },
-      skip: skip,
-      take: limit,
+    const [data, total] = await Promise.all([
+      prisma.participant.findMany({
+        where: { tournamentId },
+        include: { user: true },
+        skip: skip,
+        take: limit,
+      }),
+      prisma.participant.count({ where: { tournamentId } })
+    ]);
+    return { data, total };
+  }
+
+  static async leaderboard(tournamentId: string) {
+    const participants = await prisma.participant.findMany({
+      where: { tournamentId, eliminated: false },
+      include: { 
+        user: { select: { id: true, username: true, riotGameName: true, riotGameTag: true, rank: true, topFourRate: true, firstPlaceRate: true, region: true } },
+        rewards: true 
+      },
+      orderBy: [
+        { scoreTotal: 'desc' },
+        { id: 'asc' }
+      ]
+    });
+
+    // Count matches played for each participant dynamically
+    const userIds = participants.map(p => p.user?.id).filter(Boolean) as string[];
+    const [matchCounts, tournament] = await Promise.all([
+      prisma.matchResult.groupBy({
+        by: ['userId'],
+        where: {
+          userId: { in: userIds },
+          match: {
+            lobby: {
+              round: {
+                phase: { tournamentId }
+              }
+            }
+          }
+        },
+        _count: { id: true }
+      }),
+      prisma.tournament.findUnique({
+        where: { id: tournamentId },
+        include: { escrow: true, _count: { select: { participants: true } } }
+      })
+    ]);
+    const matchCountMap = new Map<string, number>();
+    for (const mc of matchCounts) {
+      matchCountMap.set(mc.userId, mc._count.id);
+    }
+
+    // Calculate projected prizes if tournament has prize structure
+    let projectedDistribution: any[] = [];
+    if (tournament) {
+      const participantCount = tournament._count.participants;
+      const totalPot = participantCount * tournament.entryFee;
+      const computedPrizePool = tournament.escrowRequiredAmount || (totalPot * (1 - (tournament.hostFeePercent || 0)));
+
+      let prizePool = computedPrizePool;
+      if (!tournament.isCommunityMode && tournament.escrow) {
+        if (tournament.escrow.fundedAmount > computedPrizePool) {
+          prizePool = tournament.escrow.fundedAmount;
+        } else if (tournament.escrow.fundedAmount > 0) {
+          prizePool = Math.max(computedPrizePool, tournament.escrow.fundedAmount);
+        }
+      }
+
+      const customStructure = tournament.prizeStructure;
+      const hasCustomStructure = customStructure && (
+        (Array.isArray(customStructure) && customStructure.length > 0) ||
+        (typeof customStructure === 'object' && !Array.isArray(customStructure) && Object.keys(customStructure as object).length > 0)
+      );
+
+      const PrizeCalculationService = (await import('./PrizeCalculationService')).default;
+      const structureToUse = hasCustomStructure
+        ? customStructure
+        : PrizeCalculationService.getDynamicPrizeDistribution(participantCount);
+
+      projectedDistribution = PrizeCalculationService.getFinalPrizeDistribution(
+        participants as any,
+        structureToUse as any,
+        prizePool
+      );
+    }
+
+    return participants.map(p => {
+      let rewards = p.rewards || [];
+      // If DB has no rewards, inject projected reward for UI
+      if (rewards.length === 0) {
+        const projectedPrize = projectedDistribution.find(dist => dist.participantId === p.id);
+        if (projectedPrize) {
+          rewards = [{
+            id: `projected_${p.id}`,
+            participantId: p.id,
+            tournamentId: p.tournamentId,
+            amount: projectedPrize.amount,
+            status: 'projected',
+            sentAt: null,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          } as any];
+        }
+      }
+
+      return {
+        ...p,
+        rewards,
+        matchesPlayed: p.user?.id ? (matchCountMap.get(p.user.id) || 0) : 0
+      };
     });
   }
 

@@ -24,6 +24,20 @@ async function checkAndAdvanceRound(roundId: string) {
       return;
     }
 
+    // ── PLACEMENT MODE: Eliminate per-lobby IMMEDIATELY (don't wait for all lobbies) ──
+    const advancementType = (round.phase as any).advancementCondition?.type;
+    if (advancementType === 'placement') {
+      const topNPerLobby = (round.phase as any).advancementCondition?.value;
+      if (topNPerLobby) {
+        try {
+          await RoundService.eliminateCompletedLobbies(roundId, topNPerLobby, round.phase.tournamentId);
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          logger.error(`[Placement/Immediate] Per-lobby elimination error for round ${roundId}: ${errMsg}`);
+        }
+      }
+    }
+
     const incompleteLobbiesCount = await prisma.lobby.count({
       where: { roundId: roundId, fetchedResult: false },
     });
@@ -45,9 +59,51 @@ async function checkAndAdvanceRound(roundId: string) {
         // No Redis — call directly with a small delay so this handler finishes first
         logger.info(`[NoRedis] Queue unavailable — directly advancing round ${roundId}`);
         setTimeout(() => {
-          RoundService.autoAdvance(roundId).catch(err => {
-            logger.error(`[NoRedis] Direct autoAdvance failed for round ${roundId}: ${err instanceof Error ? err.message : String(err)}`);
-          });
+          RoundService.autoAdvance(roundId)
+            .then(async (result) => {
+              if (result && typeof result === 'object' && '_action' in result) {
+                if (result._action === 'payout_prizes' && result.tournamentId) {
+                  logger.info(`[NoRedis] Handling deferred payout_prizes for tournament: ${result.tournamentId}`);
+                  try {
+                    // DO NOT distribute prizes automatically!
+                    // We have an Escrow system. The host must trigger the payout manually via the EscrowService.
+                    logger.info(`[NoRedis] Skipped automatic payout for tournament ${result.tournamentId} (Delegating to Escrow System).`);
+                    
+                    if ((global as any).io) {
+                      (global as any).io.to(`tournament:${result.tournamentId}`).emit('leaderboard_update', { tournamentId: result.tournamentId });
+                      (global as any).io.to(`tournament:${result.tournamentId}`).emit('tournament_update', { type: 'tournament_completed' });
+                    }
+                  } catch (err) {
+                    logger.error(`[NoRedis] Failed to distribute prizes: ${err instanceof Error ? err.message : String(err)}`);
+                  }
+                } else if (result._action === 'create_next_phase_rounds' && result.completedPhaseId && result.nextPhaseId) {
+                  logger.info(`[NoRedis] Handling deferred round creation for phase: ${result.nextPhaseId}`);
+                  const { prisma } = await import('../services/prisma');
+                  const numberOfRounds = result.numberOfRounds || 1;
+                  try {
+                    for (let i = 1; i <= numberOfRounds; i++) {
+                      await prisma.round.create({
+                        data: {
+                          phaseId: result.nextPhaseId,
+                          roundNumber: i,
+                          startTime: new Date(Date.now() + 5 * 60 * 1000),
+                          status: 'pending'
+                        }
+                      });
+                    }
+                    if ((global as any).io && result.tournamentId) {
+                      (global as any).io.to(`tournament:${result.tournamentId}`).emit('bracket_update', { tournamentId: result.tournamentId });
+                      (global as any).io.to(`tournament:${result.tournamentId}`).emit('tournament_update', { type: 'phase_started' });
+                    }
+                  } catch (err) {
+                    logger.error(`[NoRedis] Failed to create rounds: ${err instanceof Error ? err.message : String(err)}`);
+                  }
+                }
+              }
+            })
+            .catch(err => {
+              logger.error(`[NoRedis] Direct autoAdvance failed for round ${roundId}: ${err instanceof Error ? err.message : String(err)}`);
+            });
         }, 200);
       }
     }

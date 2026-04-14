@@ -68,10 +68,13 @@ export default class MatchResultService {
           });
           const participantMap = new Map(participantsInvolved.map(p => [p.userId, p]));
 
-          // Iterate over the sorted participants to ensure updates are done in a consistent order.
+          // ── BULK UPSERT: MatchResults (single SQL statement for all players) ──
+          // Build arrays of values for all participants in this match
+          const bulkMatchResultValues: { matchId: string; userId: string; placement: number; points: number }[] = [];
+          const bulkScoreIncrements: { participantId: string; points: number }[] = [];
+
           for (const participant of participantsInvolved) {
             const p_data = matchData.info.participants.find((d: any) => d.puuid === participant.userId);
-
             if (!p_data) {
               logger.warn(`Participant data not found in matchData for user ID: ${participant.userId}. Skipping.`);
               continue;
@@ -81,23 +84,60 @@ export default class MatchResultService {
               ? pointsMapping[p_data.placement - 1] 
               : 0;
 
-            // Use upsert for MatchResult: this is idempotent and correct.
-            await tx.matchResult.upsert({
-              where: { matchId_userId: { matchId: matchId, userId: p_data.puuid } },
-              update: { placement: p_data.placement, points: pointsFromPlacement },
-              create: { matchId: matchId, userId: p_data.puuid, placement: p_data.placement, points: pointsFromPlacement },
+            bulkMatchResultValues.push({
+              matchId: matchId,
+              userId: p_data.puuid,
+              placement: p_data.placement,
+              points: pointsFromPlacement,
             });
 
-            // Use atomic increment which is safer for concurrency for scoreTotal
-            await tx.participant.update({
-              where: { id: participant.id },
-              data: { scoreTotal: { increment: pointsFromPlacement } },
+            bulkScoreIncrements.push({
+              participantId: participant.id,
+              points: pointsFromPlacement,
             });
-            
-            if (phase.type === 'checkmate') {
-              const pointsToActivate = (phase.advancementCondition as any)?.pointsToActivate;
+          }
+
+          // Execute bulk INSERT ... ON CONFLICT for MatchResult (1 query instead of N)
+          if (bulkMatchResultValues.length > 0) {
+            const valuesClause = bulkMatchResultValues
+              .map(v => `(gen_random_uuid(), '${v.matchId}', '${v.userId}', ${v.placement}, ${v.points})`)
+              .join(', ');
+
+            await tx.$executeRawUnsafe(`
+              INSERT INTO "MatchResult" ("id", "matchId", "userId", "placement", "points")
+              VALUES ${valuesClause}
+              ON CONFLICT ("matchId", "userId")
+              DO UPDATE SET "placement" = EXCLUDED."placement", "points" = EXCLUDED."points"
+            `);
+            logger.debug(`Bulk upserted ${bulkMatchResultValues.length} match results for match ${matchId}`);
+          }
+
+          // Execute bulk UPDATE for Participant.scoreTotal (1 query instead of N)
+          if (bulkScoreIncrements.length > 0) {
+            const caseClauses = bulkScoreIncrements
+              .map(v => `WHEN id = '${v.participantId}' THEN "scoreTotal" + ${v.points}`)
+              .join(' ');
+            const participantIds = bulkScoreIncrements
+              .map(v => `'${v.participantId}'`)
+              .join(', ');
+
+            await tx.$executeRawUnsafe(`
+              UPDATE "Participant"
+              SET "scoreTotal" = CASE ${caseClauses} ELSE "scoreTotal" END
+              WHERE "id" IN (${participantIds})
+            `);
+            logger.debug(`Bulk updated scoreTotal for ${bulkScoreIncrements.length} participants`);
+          }
+
+          // ── PER-PLAYER: Checkmate-specific logic (requires conditional evaluation) ──
+          if (phase.type === 'checkmate') {
+            const pointsToActivate = (phase.advancementCondition as any)?.pointsToActivate;
+
+            for (const participant of participantsInvolved) {
+              const p_data = matchData.info.participants.find((d: any) => d.puuid === participant.userId);
+              if (!p_data) continue;
               
-              // Instead of using scoreTotal, calculate the player's total points in the current round
+              // Calculate the player's total points in the current round
               const matchResultsInCurrentRound = await tx.matchResult.findMany({
                 where: {
                   userId: participant.userId,
@@ -112,7 +152,6 @@ export default class MatchResultService {
                 }
               });
               
-              // Calculate scoreInRound as the sum of points from all match results in this round
               const scoreInRound = matchResultsInCurrentRound.reduce((sum, result) => sum + (result.points || 0), 0);
               
               // Store the scoreInRound in RoundOutcome
@@ -140,7 +179,6 @@ export default class MatchResultService {
                 select: { checkmateActive: true, userId: true }
               });
 
-              // Use scoreInRound instead of scoreTotal for the checkmate activation check
               if (pointsToActivate && updatedParticipantForCheckmate) {
                 if (scoreInRound >= pointsToActivate && !(updatedParticipantForCheckmate.checkmateActive ?? false)) {
                   await tx.participant.update({
@@ -149,10 +187,10 @@ export default class MatchResultService {
                   });
                   logger.info(`Participant ${participant.userId} is now in CHECKMATE with scoreInRound: ${scoreInRound}!`);
                 }
-                }
               }
             }
           }
+        }
 
         // After processing all participants for the match, perform checkmate logic if applicable.
           if (phase.type === 'checkmate') {
@@ -201,40 +239,23 @@ export default class MatchResultService {
           data: { matchData: matchData } as any
         });
 
-        // --- REAL-TIME UPDATE LOGIC: Emit lobby_update after each match processing --- 
-        if (ioClient) { 
-          // Fetch the latest state of the lobby to send to frontend 
-          const updatedLobby = await tx.lobby.findUnique({ 
-            where: { id: lobby.id },
-            include: { 
-              matches: { 
-                include: { matchResults: true } 
-              }, 
-              round: { 
-                select: { id: true, roundNumber: true, phase: { select: { id: true, name: true } } } 
-              } 
-            } 
-          }); 
+        // --- REAL-TIME UPDATE: Lightweight signal + lobby-scoped match results ---
+        if (ioClient) {
+          // Query only placement/points — NEVER emit raw matchData over sockets
+          const leanMatchResults = await tx.matchResult.findMany({
+            where: { matchId },
+            select: { userId: true, placement: true, points: true },
+          });
 
-          if (updatedLobby) { 
-            // Fetch actual participant details based on userIds stored in lobby.participants (JsonValue) 
-            const participantUserIds = updatedLobby.participants as string[]; 
-            const participantsDetails = await tx.participant.findMany({ 
-              where: { userId: { in: participantUserIds } }, 
-              include: { user: true } 
-            }); 
-
-            logger.info(`Emitting 'lobby_update' after match ${matchId} for tournament ${tournamentId}, lobby ${lobby.id}.`); 
-            ioClient.emit('worker_lobby_update', {
-              tournamentId: tournamentId,
-              lobbyId: updatedLobby.id,
-              roundId: updatedLobby.round.id,
-              fetchedResult: updatedLobby.fetchedResult,
-              matches: updatedLobby.matches,
-              participants: participantsDetails,
-              name: updatedLobby.name,
-            });
-          }
+          logger.info(`Emitting lightweight update after match ${matchId} for tournament ${tournamentId}, lobby ${lobby.id}.`);
+          ioClient.emit('worker_lobby_update', {
+            tournamentId,
+            lobbyId: lobby.id,
+            roundId: round.id,
+            type: 'match_processed',
+            fetchedResult: false,
+            matchResults: leanMatchResults,
+          });
         }
 
         // --- LOBBY COMPLETION LOGIC: Check if all matches in this lobby are fetched and update flag --- 
@@ -260,48 +281,28 @@ export default class MatchResultService {
                 logger.info(`All matches for non-checkmate lobby ${lobby.id} are fetched. Updating lobby.fetchedResult to true.`); 
                 await tx.lobby.update({ 
                     where: { id: lobby.id }, 
-                    data: { fetchedResult: true }, 
+                    data: { fetchedResult: true, completedMatchesCount: { increment: 1 } }, 
                 }); 
                 
-                // Emit another lobby_update to reflect the fetchedResult status change 
-                const updatedLobbyFinal = await tx.lobby.findUnique({ 
-                    where: { id: lobby.id }, 
-                    include: { 
-                        matches: { 
-                            include: { matchResults: true } 
-                        }, 
-                        round: { 
-                            select: { id: true, roundNumber: true, phase: { select: { id: true, name: true } } } 
-                        } 
-                    } 
-                }); 
-    
-                if (updatedLobbyFinal) { 
-                    const participantUserIds = updatedLobbyFinal.participants as string[]; 
-                    const participantsDetails = await tx.participant.findMany({ 
-                        where: { userId: { in: participantUserIds } }, 
-                        include: { user: true } 
-                    }); 
-    
-                    logger.info(`Emitting 'lobby_update' for tournament ${tournamentId}, lobby ${lobby.id}. All matches complete.`); 
+                logger.info(`Emitting 'lobby_completed' for tournament ${tournamentId}, lobby ${lobby.id}. All matches complete.`);
+                // Emit lightweight signal — lobby completion (no heavy re-query)
+                if (ioClient) {
                     ioClient.emit('worker_lobby_update', {
-                        tournamentId: tournamentId,
-                        lobbyId: updatedLobbyFinal.id,
-                        roundId: updatedLobbyFinal.round.id,
-                        fetchedResult: updatedLobbyFinal.fetchedResult,
-                        matches: updatedLobbyFinal.matches,
-                        participants: participantsDetails,
-                        name: updatedLobbyFinal.name,
-                    }); 
+                        tournamentId,
+                        lobbyId: lobby.id,
+                        roundId: round.id,
+                        type: 'lobby_completed',
+                        fetchedResult: true,
+                    });
+                }
 
-                    // Trigger round completion check — queue if Redis available, else call directly
-                    logger.info(`Triggering completion check for round ${updatedLobbyFinal.round.id} (non-checkmate).`);
-                    if (checkRoundCompletionQueue) {
-                      await checkRoundCompletionQueue.add('checkRoundCompletion', { roundId: updatedLobbyFinal.round.id }, { jobId: `check-round-completion-${updatedLobbyFinal.round.id}`, removeOnComplete: true, removeOnFail: true });
-                    } else {
-                      const _roundIdCheck = updatedLobbyFinal.round.id;
-                      setTimeout(() => { checkAndAdvanceRound(_roundIdCheck).catch(e => logger.error(`[NoRedis] checkAndAdvanceRound: ${e}`)); }, 300);
-                    }
+                // Trigger round completion check — queue if Redis available, else call directly
+                logger.info(`Triggering completion check for round ${round.id} (non-checkmate).`);
+                if (checkRoundCompletionQueue) {
+                  await checkRoundCompletionQueue.add('checkRoundCompletion', { roundId: round.id }, { jobId: `check-round-completion-${round.id}`, removeOnComplete: true, removeOnFail: true });
+                } else {
+                  const _roundIdCheck = round.id;
+                  setTimeout(() => { checkAndAdvanceRound(_roundIdCheck).catch(e => logger.error(`[NoRedis] checkAndAdvanceRound: ${e}`)); }, 300);
                 } 
             } 
         } else { // It's a checkmate phase
@@ -313,43 +314,25 @@ export default class MatchResultService {
                     where: { id: lobby.id },
                     data: { fetchedResult: true },
                 });
-                // Emit an update to reflect this status change for checkmate lobbies
-                const updatedLobbyCheckmate = await tx.lobby.findUnique({
-                    where: { id: lobby.id },
-                    include: {
-                        matches: {
-                            include: { matchResults: true }
-                        },
-                        round: {
-                            select: { id: true, roundNumber: true, phase: { select: { id: true, name: true } } }
-                        },
-                    },
-                });
-                if (updatedLobbyCheckmate) {
-                    const participantUserIds = updatedLobbyCheckmate.participants as string[];
-                    const participantsDetails = await tx.participant.findMany({
-                        where: { userId: { in: participantUserIds } },
-                        include: { user: true },
-                    });
-                    logger.info(`Emitting 'lobby_update' for tournament ${tournamentId}, lobby ${lobby.id}. Checkmate lobby fetchedResult updated.`);
+                // Emit lightweight signal for checkmate lobby completion — no heavy re-query
+                logger.info(`Emitting 'lobby_completed' for tournament ${tournamentId}, lobby ${lobby.id}. Checkmate lobby fetchedResult updated.`);
+                if (ioClient) {
                     ioClient.emit('worker_lobby_update', {
-                        tournamentId: tournamentId,
-                        lobbyId: updatedLobbyCheckmate.id,
-                        roundId: updatedLobbyCheckmate.round.id,
-                        fetchedResult: updatedLobbyCheckmate.fetchedResult,
-                        matches: updatedLobbyCheckmate.matches,
-                        participants: participantsDetails,
-                        name: updatedLobbyCheckmate.name,
+                        tournamentId,
+                        lobbyId: lobby.id,
+                        roundId: round.id,
+                        type: 'lobby_completed',
+                        fetchedResult: true,
                     });
+                }
 
-                    // Trigger round completion check — queue if Redis available, else call directly
-                    logger.info(`Triggering completion check for round ${updatedLobbyCheckmate.round.id} (checkmate).`);
-                    if (checkRoundCompletionQueue) {
-                      await checkRoundCompletionQueue.add('checkRoundCompletion', { roundId: updatedLobbyCheckmate.round.id }, { jobId: `check-round-completion-${updatedLobbyCheckmate.round.id}`, removeOnComplete: true, removeOnFail: true });
-                    } else {
-                      const _roundIdCheck = updatedLobbyCheckmate.round.id;
-                      setTimeout(() => { checkAndAdvanceRound(_roundIdCheck).catch(e => logger.error(`[NoRedis] checkAndAdvanceRound: ${e}`)); }, 300);
-                    }
+                // Trigger round completion check — queue if Redis available, else call directly
+                logger.info(`Triggering completion check for round ${round.id} (checkmate).`);
+                if (checkRoundCompletionQueue) {
+                  await checkRoundCompletionQueue.add('checkRoundCompletion', { roundId: round.id }, { jobId: `check-round-completion-${round.id}`, removeOnComplete: true, removeOnFail: true });
+                } else {
+                  const _roundIdCheck = round.id;
+                  setTimeout(() => { checkAndAdvanceRound(_roundIdCheck).catch(e => logger.error(`[NoRedis] checkAndAdvanceRound: ${e}`)); }, 300);
                 }
             }
         }

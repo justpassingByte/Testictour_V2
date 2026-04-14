@@ -92,7 +92,12 @@ export default class TournamentService {
       const multiplier = t.status === 'UPCOMING' ? Math.max(t.maxPlayers || 0, registeredCount) : registeredCount;
       const totalCollected = multiplier * (t.entryFee || 0);
       const platformFee = Math.floor(totalCollected * (t.hostFeePercent || 0.1));
-      const finalPrizePool = totalCollected - platformFee;
+      let finalPrizePool = totalCollected - platformFee;
+      
+      // If there's a manual budget/escrow configured, prefer it if it's higher
+      if (!t.isCommunityMode && t.escrowRequiredAmount > finalPrizePool) {
+        finalPrizePool = t.escrowRequiredAmount;
+      }
 
       return {
         ...t,
@@ -111,6 +116,7 @@ export default class TournamentService {
         organizer: true,
         escrow: true,
         phases: { 
+          orderBy: { phaseNumber: 'asc' },
           include: { 
             rounds: {
               include: {
@@ -160,7 +166,11 @@ export default class TournamentService {
     const multiplier = tournament.status === 'UPCOMING' ? Math.max(maxPlayers, registeredCount) : registeredCount;
     const totalCollected = multiplier * (tournament.entryFee || 0);
     const platformFee = Math.floor(totalCollected * (tournament.hostFeePercent || 0.1));
-    const finalPrizePool = totalCollected - platformFee;
+    let finalPrizePool = totalCollected - platformFee;
+
+    if (!tournament.isCommunityMode && tournament.escrowRequiredAmount > finalPrizePool) {
+      finalPrizePool = tournament.escrowRequiredAmount;
+    }
 
     let finalBudget = finalPrizePool;
     if (!tournament.isCommunityMode && (tournament as any).escrow) {
@@ -198,6 +208,7 @@ export default class TournamentService {
     templateId?: string;
     phases?: any[];
     isCommunityMode?: boolean;
+    customPrizePool?: number;
     discordUrl?: string;
     sponsors?: any;
   }) {
@@ -258,7 +269,7 @@ export default class TournamentService {
       }
     }
 
-    const { phases, ...restOfData } = data;
+    const { phases, customPrizePool, ...restOfData } = data;
 
     return prisma.tournament.create({
       data: {
@@ -270,6 +281,7 @@ export default class TournamentService {
         prizeStructure: (templateData as any).prizeStructure || {},
         expectedParticipants: (templateData as any).expectedParticipants || 0,
         isCommunityMode: data.isCommunityMode || false,
+        escrowRequiredAmount: customPrizePool || 0,
       },
       include: { phases: { orderBy: { phaseNumber: 'asc' } } }
     }).then(async (tournament) => {
@@ -354,6 +366,11 @@ export default class TournamentService {
           delete data.phases;
         }
       }
+    }
+
+    if (data.customPrizePool !== undefined) {
+      data.escrowRequiredAmount = data.customPrizePool;
+      delete data.customPrizePool;
     }
 
     const tournament = await prisma.tournament.update({ 

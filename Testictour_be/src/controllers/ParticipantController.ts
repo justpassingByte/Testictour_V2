@@ -23,8 +23,16 @@ export const ParticipantController = {
       try {
         const page = parseInt(req.query.page as string) || 1;
         const limit = parseInt(req.query.limit as string) || 10;
-        const participants = await ParticipantService.list(req.params.tournamentId, page, limit);
-        res.json({ participants });
+        const result = await ParticipantService.list(req.params.tournamentId, page, limit);
+        res.json({ participants: result.data, total: result.total });
+      } catch (err) {
+        next(err);
+      }
+    },
+    async leaderboard(req: Request, res: Response, next: NextFunction) {
+      try {
+        const leaderboard = await ParticipantService.leaderboard(req.params.tournamentId);
+        res.json({ leaderboard });
       } catch (err) {
         next(err);
       }

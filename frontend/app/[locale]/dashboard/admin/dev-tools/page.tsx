@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import {
   Loader2, Zap, AlertCircle, FlaskConical, Database, FileDigit,
@@ -64,23 +65,24 @@ interface EscrowState {
 // ─── Status badge helper ──────────────────────────────────────────────────────
 
 function StatusBadge({ step }: { step: EscrowStep }) {
+  const t = useTranslations("common");
   const config: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
-    idle:               { label: "Chưa bắt đầu",     color: "border-white/20 text-muted-foreground bg-white/5",          icon: <Clock className="w-3 h-3" /> },
-    init:               { label: "Đã khởi tạo",      color: "border-blue-500/40 text-blue-400 bg-blue-500/10",           icon: <ShieldCheck className="w-3 h-3" /> },
-    not_funded:         { label: "Chưa nạp tiền",    color: "border-orange-500/40 text-orange-400 bg-orange-500/10",     icon: <ShieldCheck className="w-3 h-3" /> },
-    partially_funded:   { label: "Nạp thiếu",        color: "border-yellow-500/40 text-yellow-400 bg-yellow-500/10",     icon: <ShieldAlert className="w-3 h-3" /> },
-    funding_submitted:  { label: "Đang chờ thanh toán", color: "border-yellow-500/40 text-yellow-400 bg-yellow-500/10",   icon: <Clock className="w-3 h-3" /> },
-    webhook_funded:     { label: "Đã nạp tiền (Sim)", color: "border-emerald-500/40 text-emerald-400 bg-emerald-500/10", icon: <CheckCircle2 className="w-3 h-3" /> },
-    funded:             { label: "Đã đủ tiền",       color: "border-emerald-500/40 text-emerald-400 bg-emerald-500/10", icon: <CheckCircle2 className="w-3 h-3" /> },
-    locked:             { label: "Đã khóa (Đang thi đấu)", color: "border-cyan-500/40 text-cyan-400 bg-cyan-500/10",     icon: <Lock className="w-3 h-3" /> },
-    payout_requested:   { label: "Chờ duyệt chi",    color: "border-violet-500/40 text-violet-400 bg-violet-500/10", icon: <DollarSign className="w-3 h-3" /> },
-    payout_released:    { label: "Đã duyệt thưởng",   color: "border-emerald-500/40 text-emerald-400 bg-emerald-500/10", icon: <CheckCircle2 className="w-3 h-3" /> },
-    released:           { label: "Đã giải ngân",      color: "border-emerald-500/40 text-emerald-400 bg-emerald-500/10", icon: <CheckCircle2 className="w-3 h-3" /> },
-    disputed:           { label: "Đang tranh chấp",   color: "border-red-500/40 text-red-400 bg-red-500/10",             icon: <AlertTriangle className="w-3 h-3" /> },
-    dispute_resolved:   { label: "Đã giải quyết",     color: "border-emerald-500/40 text-emerald-400 bg-emerald-500/10", icon: <CheckCircle2 className="w-3 h-3" /> },
-    cancelled:          { label: "Đã hủy",           color: "border-red-500/40 text-red-400 bg-red-500/10",             icon: <XCircle className="w-3 h-3" /> },
+    idle: { label: t("not_started"), color: "border-white/20 text-muted-foreground bg-white/5", icon: <Clock className="w-3 h-3" /> },
+    init: { label: t("initialized"), color: "border-blue-500/40 text-blue-400 bg-blue-500/10", icon: <ShieldCheck className="w-3 h-3" /> },
+    not_funded: { label: t("not_funded"), color: "border-orange-500/40 text-orange-400 bg-orange-500/10", icon: <ShieldCheck className="w-3 h-3" /> },
+    partially_funded: { label: t("partially_funded"), color: "border-yellow-500/40 text-yellow-400 bg-yellow-500/10", icon: <ShieldAlert className="w-3 h-3" /> },
+    funding_submitted: { label: t("funding_submitted"), color: "border-yellow-500/40 text-yellow-400 bg-yellow-500/10", icon: <Clock className="w-3 h-3" /> },
+    webhook_funded: { label: "Đã nạp tiền (Sim)", color: "border-emerald-500/40 text-emerald-400 bg-emerald-500/10", icon: <CheckCircle2 className="w-3 h-3" /> },
+    funded: { label: t("funded"), color: "border-emerald-500/40 text-emerald-400 bg-emerald-500/10", icon: <CheckCircle2 className="w-3 h-3" /> },
+    locked: { label: "Đã khóa (Đang thi đấu)", color: "border-cyan-500/40 text-cyan-400 bg-cyan-500/10", icon: <Lock className="w-3 h-3" /> },
+    payout_requested: { label: t("payout_requested"), color: "border-violet-500/40 text-violet-400 bg-violet-500/10", icon: <DollarSign className="w-3 h-3" /> },
+    payout_released: { label: t("payout_released"), color: "border-emerald-500/40 text-emerald-400 bg-emerald-500/10", icon: <CheckCircle2 className="w-3 h-3" /> },
+    released: { label: t("released"), color: "border-emerald-500/40 text-emerald-400 bg-emerald-500/10", icon: <CheckCircle2 className="w-3 h-3" /> },
+    disputed: { label: t("disputed"), color: "border-red-500/40 text-red-400 bg-red-500/10", icon: <AlertTriangle className="w-3 h-3" /> },
+    dispute_resolved: { label: t("dispute_resolved"), color: "border-emerald-500/40 text-emerald-400 bg-emerald-500/10", icon: <CheckCircle2 className="w-3 h-3" /> },
+    cancelled: { label: t("cancelled"), color: "border-red-500/40 text-red-400 bg-red-500/10", icon: <XCircle className="w-3 h-3" /> },
   };
-  
+
   const c = config[step] || { label: step || "Unknown", color: "border-slate-500/40 text-slate-400 bg-slate-500/10", icon: <Clock className="w-3 h-3" /> };
   return (
     <Badge variant="outline" className={`flex items-center gap-1.5 px-2 py-1 text-xs font-medium ${c.color}`}>
@@ -92,6 +94,7 @@ function StatusBadge({ step }: { step: EscrowStep }) {
 // ─── Log viewer ──────────────────────────────────────────────────────────────
 
 function LogViewer({ logs }: { logs: LogEntry[] }) {
+  const t = useTranslations("common");
   const color = (l: LogEntry["level"]) =>
     l === "success" ? "text-emerald-400" : l === "error" ? "text-red-400" : l === "warn" ? "text-yellow-400" : "text-blue-300";
   return (
@@ -112,18 +115,20 @@ function LogViewer({ logs }: { logs: LogEntry[] }) {
 
 // ─── Flow diagram ────────────────────────────────────────────────────────────
 
-const FLOW_STEPS = [
-  { id: "init",              label: "Khởi tạo Escrow",        icon: ShieldCheck },
-  { id: "funding_submitted", label: "Gửi yêu cầu nạp",        icon: Banknote },
-  { id: "webhook_funded",    label: "Webhook xác nhận",        icon: Zap },
-  { id: "locked",            label: "Khóa khi bắt đầu",       icon: Lock },
-  { id: "payout_requested",  label: "Yêu cầu phát thưởng",    icon: DollarSign },
-  { id: "payout_released",   label: "Admin duyệt & phát",     icon: Send },
-  { id: "webhook_confirmed", label: "Webhook xác nhận payout", icon: CheckCircle2 },
-];
+// FLOW_STEPS moved to component
 
 function FlowDiagram({ current }: { current: EscrowStep }) {
-  const order: EscrowStep[] = ["init","funding_submitted","webhook_funded","locked","payout_requested","payout_released"];
+  const t = useTranslations("common");
+  const FLOW_STEPS = [
+    { id: "init", label: t("init_escrow"), icon: ShieldCheck },
+    { id: "funding_submitted", label: t("submit_funding"), icon: Banknote },
+    { id: "webhook_funded", label: t("webhook_confirm"), icon: Zap },
+    { id: "locked", label: t("lock_on_start"), icon: Lock },
+    { id: "payout_requested", label: t("request_payout"), icon: DollarSign },
+    { id: "payout_released", label: t("admin_approve_and_payout"), icon: Send },
+    { id: "webhook_confirmed", label: t("webhook_confirm_payout"), icon: CheckCircle2 },
+  ];
+  const order: EscrowStep[] = ["init", "funding_submitted", "webhook_funded", "locked", "payout_requested", "payout_released"];
   const currentIdx = order.indexOf(current);
 
   return (
@@ -135,11 +140,10 @@ function FlowDiagram({ current }: { current: EscrowStep }) {
         const Icon = step.icon;
         return (
           <div key={step.id} className="flex items-center gap-1">
-            <div className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-medium border transition-all ${
-              done   ? "border-emerald-500/40 text-emerald-400 bg-emerald-500/10" :
+            <div className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-medium border transition-all ${done ? "border-emerald-500/40 text-emerald-400 bg-emerald-500/10" :
               active ? "border-blue-500/40 text-blue-300 bg-blue-500/15 ring-1 ring-blue-500/30" :
-                       "border-white/10 text-muted-foreground/40 bg-white/[0.03]"
-            }`}>
+                "border-white/10 text-muted-foreground/40 bg-white/[0.03]"
+              }`}>
               <Icon className="w-3 h-3" />
               <span className="hidden sm:block">{step.label}</span>
             </div>
@@ -156,6 +160,7 @@ function FlowDiagram({ current }: { current: EscrowStep }) {
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function DevToolsPage() {
+  const t = useTranslations("common");
   const [gameName, setGameName] = useState("");
   const [tagLine, setTagLine] = useState("");
   const [region, setRegion] = useState("sea");
@@ -190,6 +195,11 @@ export default function DevToolsPage() {
   const [simTagLine4, setSimTagLine4] = useState("");
   const [simRegion, setSimRegion] = useState("sea");
   const [simTourPlayers, setSimTourPlayers] = useState("16");
+  const [simPhasesConfigRaw, setSimPhasesConfigRaw] = useState(JSON.stringify([
+    { name: "Vòng Sơ Loại 1", type: "elimination", matchesPerRound: 2, lobbySize: 8 },
+    { name: "Vòng Sơ Loại 2", type: "elimination", matchesPerRound: 1, lobbySize: 8 },
+    { name: "Vòng Bảng Thụy Sĩ", type: "swiss", matchesPerRound: 3, lobbySize: 8 }
+  ], null, 2));
 
   const getRiotRegion = (r: string) => {
     const rLower = r.toLowerCase();
@@ -222,7 +232,7 @@ export default function DevToolsPage() {
 
   function addLog(level: LogEntry["level"], message: string, data?: any) {
     const now = new Date();
-    const time = `${now.getHours().toString().padStart(2,"0")}:${now.getMinutes().toString().padStart(2,"0")}:${now.getSeconds().toString().padStart(2,"0")}`;
+    const time = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}:${now.getSeconds().toString().padStart(2, "0")}`;
     setEscrowLogs(prev => [...prev, { time, level, message, data }]);
   }
 
@@ -253,7 +263,7 @@ export default function DevToolsPage() {
     const tid = escrowTournamentId.trim();
     if (!tid) { addLog("error", "⚠️ Nhập Tournament ID trước"); return; }
 
-    const result = await escrowCall("Lấy thông tin Escrow", () =>
+    const result = await escrowCall(t("get_escrow_info"), () =>
       api.get(`/tournaments/${tid}/escrow`).then(r => r.data)
     );
     if (!result) return;
@@ -278,7 +288,7 @@ export default function DevToolsPage() {
     const tid = escrowTournamentId.trim();
     if (!tid) { addLog("error", "⚠️ Nhập Tournament ID trước"); return; }
 
-    const result = await escrowCall("Gửi yêu cầu nạp tiền Escrow", () =>
+    const result = await escrowCall(t("send_escrow_funding_request"), () =>
       api.post(`/tournaments/${tid}/escrow/funding`, {
         amount: parseFloat(escrowAmount),
         method: escrowProvider,
@@ -298,7 +308,7 @@ export default function DevToolsPage() {
       addLog("warn", `⏳ Cần Admin review thủ công. Dùng "Admin Duyệt Proof" bên dưới để xác nhận.`);
     } else {
       addLog("success", `✅ Payment intent tạo thành công. Checkout URL: ${result.paymentIntent?.checkoutUrl ?? "N/A"}`);
-      addLog("info", `ℹ️ Trong production, user sẽ redirect đến cổng thanh toán. Dev: dùng "Giả lập Webhook" để xác nhận.`);
+      addLog("info", `ℹ️ Trong production, user sẽ redirect đến cổng thanh toán. Dev: dùng t("simulate_webhook") để xác nhận.`);
     }
   }
 
@@ -307,7 +317,7 @@ export default function DevToolsPage() {
     const txId = escrowTransactionId.trim();
     if (!txId) { addLog("error", "⚠️ Cần Transaction ID. Thực hiện bước Submit Funding trước"); return; }
 
-    const result = await escrowCall("Admin duyệt manual proof", () =>
+    const result = await escrowCall(t("admin_approve_manual_proof"), () =>
       api.post(`/admin/escrow/transactions/${txId}/review`, {
         approved: true,
         proofUrl: escrowProofUrl,
@@ -353,7 +363,7 @@ export default function DevToolsPage() {
     const tid = escrowTournamentId.trim();
     if (!tid) { addLog("error", "⚠️ Cần Tournament ID"); return; }
 
-    const result = await escrowCall("Khóa Escrow khi tournament bắt đầu", () =>
+    const result = await escrowCall(t("lock_escrow_tournament_start"), () =>
       api.post(`/dev/escrow/assert-start`, { tournamentId: tid }).then(r => r.data)
     );
     if (!result) return;
@@ -371,16 +381,16 @@ export default function DevToolsPage() {
     let recipients: any[];
     try {
       recipients = JSON.parse(escrowPayoutRecipients);
-      if (!Array.isArray(recipients) || recipients.length === 0) throw new Error("Cần ít nhất 1 người nhận");
+      if (!Array.isArray(recipients) || recipients.length === 0) throw new Error(t("at_least_1_recipient_required"));
     } catch (e: any) {
       addLog("error", `⚠️ JSON recipients không hợp lệ: ${e.message}`);
       return;
     }
 
-    const result = await escrowCall("Organizer yêu cầu phát thưởng", () =>
+    const result = await escrowCall(t("organizer_request_payout_label"), () =>
       api.post(`/tournaments/${tid}/payouts/request-release`, {
         recipients,
-        note: "Phát thưởng từ Escrow Simulator",
+        note: t("payout_from_escrow_emulator"),
       }).then(r => r.data)
     );
     if (!result) return;
@@ -396,7 +406,7 @@ export default function DevToolsPage() {
     const tid = escrowTournamentId.trim();
     if (!tid) { addLog("error", "⚠️ Cần Tournament ID"); return; }
 
-    const result = await escrowCall("Admin duyệt và phát thưởng", () =>
+    const result = await escrowCall(t("admin_approve_and_distribute"), () =>
       api.post(`/admin/tournaments/${tid}/payouts/release`, {
         paymentMethod: "gateway",
         note: "Admin duyệt qua Escrow Simulator (dev)",
@@ -444,7 +454,7 @@ export default function DevToolsPage() {
 
   // Get health
   async function stepGetHealth() {
-    const result = await escrowCall("Lấy Reconciliation Health", () =>
+    const result = await escrowCall(t("get_reconciliation_health"), () =>
       api.get(`/admin/escrow/health`).then(r => r.data)
     );
     if (!result) return;
@@ -456,7 +466,7 @@ export default function DevToolsPage() {
 
   // Bulk retry
   async function stepBulkRetry() {
-    const result = await escrowCall("Bulk Retry stale transactions", () =>
+    const result = await escrowCall(t("bulk_retry_stale_transactions"), () =>
       api.post(`/admin/escrow/bulk-retry`, {}).then(r => r.data)
     );
     if (!result) return;
@@ -541,12 +551,6 @@ export default function DevToolsPage() {
           <TabsTrigger value="escrow" className="flex items-center gap-2">
             <ShieldCheck className="h-4 w-4" /> Escrow Simulator
           </TabsTrigger>
-          <TabsTrigger value="single" className="flex items-center gap-2">
-            <FlaskConical className="h-4 w-4" /> Single Match Test
-          </TabsTrigger>
-          <TabsTrigger value="full" className="flex items-center gap-2">
-            <PlaySquare className="h-4 w-4" /> Seed Full Tournament
-          </TabsTrigger>
           <TabsTrigger value="automation" className="flex items-center gap-2">
             <Bot className="h-4 w-4" /> Automation Flow
           </TabsTrigger>
@@ -618,7 +622,7 @@ export default function DevToolsPage() {
               <div className="md:col-span-2 space-y-1">
                 <Label className="text-xs text-muted-foreground">Tournament ID</Label>
                 <Input
-                  placeholder="cuid hoặc uuid của tournament"
+                  placeholder={t("tournament_id_placeholder")}
                   value={escrowTournamentId}
                   onChange={e => setEscrowTournamentId(e.target.value)}
                   className="bg-black/30 border-white/10 font-mono text-xs h-9"
@@ -632,8 +636,8 @@ export default function DevToolsPage() {
                 <div className="md:col-span-3 grid grid-cols-3 gap-2 mt-1">
                   {[
                     { label: "Required", val: `$${escrowState.lastEscrow.requiredAmount ?? 0}`, color: "text-yellow-400" },
-                    { label: "Funded",   val: `$${escrowState.lastEscrow.fundedAmount ?? 0}`,   color: "text-emerald-400" },
-                    { label: "Released", val: `$${escrowState.lastEscrow.releasedAmount ?? 0}`,  color: "text-blue-400" },
+                    { label: "Funded", val: `$${escrowState.lastEscrow.fundedAmount ?? 0}`, color: "text-emerald-400" },
+                    { label: "Released", val: `$${escrowState.lastEscrow.releasedAmount ?? 0}`, color: "text-blue-400" },
                   ].map(item => (
                     <div key={item.label} className="rounded-lg border border-white/5 bg-black/20 px-3 py-2">
                       <p className="text-[10px] text-muted-foreground">{item.label}</p>
@@ -860,129 +864,7 @@ export default function DevToolsPage() {
         </TabsContent>
 
         {/* ═══════════════════════════════════════════════════════════════════
-            TAB: SINGLE MATCH TEST (unchanged)
-            ═══════════════════════════════════════════════════════════════════ */}
-        <TabsContent value="single" className="space-y-6 animate-in slide-in-from-bottom-2 duration-300">
-          <Card className="border-white/10 bg-card/60 backdrop-blur-lg">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Fetch Single Match</CardTitle>
-              <CardDescription>Fetches ONE real match from Grimoire API and shows the MatchCompPanel.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid md:grid-cols-4 gap-4 items-end">
-                <div className="space-y-1.5">
-                  <Label>Game Name</Label>
-                  <Input placeholder="e.g. Faker" value={gameName} onChange={e => setGameName(e.target.value)} className="bg-black/30 border-white/10" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Tag Line</Label>
-                  <Input placeholder="e.g. KR1" value={tagLine} onChange={e => setTagLine(e.target.value)} className="bg-black/30 border-white/10" />
-                </div>
-                <div className="space-y-0 relative top-0.5 max-w-[200px]">
-                  <RegionSelector label="Region" value={region} onChange={setRegion} allowSubRegion />
-                </div>
-                <Button onClick={fetchSingleMatch} disabled={loading1} className="bg-primary hover:bg-primary/90 gap-2">
-                  {loading1 ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-                  {loading1 ? "Fetching..." : "Fetch Match"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-          {error1 && (
-            <div className="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-400">
-              <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
-              <div><p className="font-semibold">Error</p><p className="text-sm">{error1}</p></div>
-            </div>
-          )}
-          {matchData && (
-            <Card className="border-white/10 bg-card/60 backdrop-blur-lg">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <CardTitle className="text-base flex items-center gap-2">✅ Match Retrieved</CardTitle>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="font-mono text-[10px]">{matchData.matchId}</Badge>
-                    <Badge variant="secondary">Set {matchData.tftSetNumber}</Badge>
-                    <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => setRaw(r => !r)}>
-                      {raw ? "Show UI" : "Show Raw JSON"}
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {raw ? (
-                  <pre className="text-[10px] bg-black/40 rounded-lg p-4 overflow-auto max-h-[60vh] border border-white/5">{JSON.stringify(matchData, null, 2)}</pre>
-                ) : (
-                  <MatchCompPanel matchData={matchData} />
-                )}
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        {/* ═══════════════════════════════════════════════════════════════════
-            TAB: SEED FULL TOURNAMENT (unchanged)
-            ═══════════════════════════════════════════════════════════════════ */}
-        <TabsContent value="full" className="space-y-6 animate-in slide-in-from-bottom-2 duration-300">
-          <Card className="border-white/10 bg-card/60 backdrop-blur-lg">
-            <CardHeader className="pb-3 flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-base line-clamp-1">Seed Full Tournament</CardTitle>
-                <CardDescription>Clears old generic match data and re-seeds multiple historical matches.</CardDescription>
-              </div>
-              <Badge className="bg-orange-500/20 text-orange-400 shrink-0 border-none px-3 py-1 font-semibold uppercase tracking-wider">Destructive Action</Badge>
-            </CardHeader>
-            <CardContent>
-              <div className="grid md:grid-cols-4 lg:grid-cols-5 gap-4 items-end">
-                <div className="space-y-1.5 lg:col-span-1">
-                  <Label>Game Name</Label>
-                  <Input placeholder="e.g. Faker" value={gameName} onChange={e => setGameName(e.target.value)} className="bg-black/30 border-white/10" />
-                </div>
-                <div className="space-y-1.5 lg:col-span-1">
-                  <Label>Tag Line</Label>
-                  <Input placeholder="e.g. KR1" value={tagLine} onChange={e => setTagLine(e.target.value)} className="bg-black/30 border-white/10" />
-                </div>
-                <div className="space-y-0 lg:col-span-1 relative top-0.5">
-                  <RegionSelector label="Region" value={region} onChange={setRegion} allowSubRegion />
-                </div>
-                <div className="space-y-1.5 lg:col-span-1">
-                  <Label>Matches (Max 4)</Label>
-                  <Select value={matchCount} onValueChange={setMatchCount}>
-                    <SelectTrigger className="bg-black/30 border-white/10"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {["1","2","3","4"].map(v => <SelectItem key={v} value={v}>{v} Match{v !== "1" ? "es" : ""}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button onClick={seedFullTournament} disabled={loading2} className="bg-orange-600 hover:bg-orange-700 gap-2 lg:col-span-1">
-                  {loading2 ? <Loader2 className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
-                  {loading2 ? "Seeding..." : "Seed Database"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-          {error2 && (
-            <div className="flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-400">
-              <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
-              <div><p className="font-semibold">Error</p><p className="text-sm">{error2}</p></div>
-            </div>
-          )}
-          {seedResult && (
-            <div className="flex items-start gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-400">
-              <FileDigit className="w-5 h-5 mt-0.5 shrink-0" />
-              <div>
-                <p className="font-semibold">Successfully Seeded Tournament: {seedResult.tournamentId}</p>
-                <ul className="list-disc list-inside mt-2 text-sm opacity-90 space-y-1">
-                  <li>Fetched {seedResult.matchesFetched} unique matches from Grimoire API</li>
-                  <li>Injected data into {seedResult.matchesSeeded} individual matches</li>
-                  <li>Populated user data and updated participant scores</li>
-                </ul>
-              </div>
-            </div>
-          )}
-        </TabsContent>
-
-        {/* ═══════════════════════════════════════════════════════════════════
-            TAB: AUTOMATION FLOW (unchanged content, same as before)
+            TAB: AUTOMATION FLOW
             ═══════════════════════════════════════════════════════════════════ */}
         <TabsContent value="automation" className="space-y-6 animate-in slide-in-from-bottom-2 duration-300">
           {/* Real Players PUUID Seeding */}
@@ -1019,12 +901,12 @@ export default function DevToolsPage() {
               </div>
             </div>
             <div className="flex items-center gap-4 mt-2">
-               <div className="w-[180px]">
-                 <RegionSelector value={simRegion} onChange={setSimRegion} allowSubRegion />
-               </div>
-               <p className="text-[10px] text-muted-foreground flex-1">
-                 Mỗi player sẽ được dùng để lấy 1 trận gần nhất (gồm 8 người chơi thật). 4 players = 4 trận = 32 PUUID thật rải vào tournament.
-               </p>
+              <div className="w-[180px]">
+                <RegionSelector value={simRegion} onChange={setSimRegion} allowSubRegion />
+              </div>
+              <p className="text-[10px] text-muted-foreground flex-1">
+                Mỗi player sẽ được dùng để lấy 1 trận gần nhất (gồm 8 người chơi thật). 4 players = 4 trận = 32 PUUID thật rải vào tournament.
+              </p>
             </div>
           </div>
 
@@ -1074,9 +956,9 @@ export default function DevToolsPage() {
                   </CardHeader>
                   <CardContent className="space-y-3 pt-2">
                     {[
-                      { label: "1. Seed Users + MiniTour Lobby (7/8)", color: "emerald", payload: { type: 'minitour', gameName: simGameName||undefined, tagLine: simTagLine||undefined, gameName2: simGameName2||undefined, tagLine2: simTagLine2||undefined, gameName3: simGameName3||undefined, tagLine3: simTagLine3||undefined, gameName4: simGameName4||undefined, tagLine4: simTagLine4||undefined, region: getRiotRegion(simRegion) }, ep: 'seed-env' },
-                      { label: "2. Force Start (WAITING → IN_PROGRESS)", color: "white", payload: { type: 'minitour', lobbyId: lobbyId||undefined }, ep: 'auto-start' },
-                      { label: "3. Simulate Match Results (Riot Data)", color: "blue", payload: { type: 'minitour', lobbyId: lobbyId||undefined, gameName: simGameName||undefined, tagLine: simTagLine||undefined, region: getRiotRegion(simRegion) }, ep: 'simulate-match' },
+                      { label: "1. Seed Users + MiniTour Lobby (7/8)", color: "emerald", payload: { type: 'minitour', gameName: simGameName || undefined, tagLine: simTagLine || undefined, gameName2: simGameName2 || undefined, tagLine2: simTagLine2 || undefined, gameName3: simGameName3 || undefined, tagLine3: simTagLine3 || undefined, gameName4: simGameName4 || undefined, tagLine4: simTagLine4 || undefined, region: getRiotRegion(simRegion) }, ep: 'seed-env' },
+                      { label: "2. Force Start (WAITING → IN_PROGRESS)", color: "white", payload: { type: 'minitour', lobbyId: lobbyId || undefined }, ep: 'auto-start' },
+                      { label: "3. Simulate Match Results (Riot Data)", color: "blue", payload: { type: 'minitour', lobbyId: lobbyId || undefined, gameName: simGameName || undefined, tagLine: simTagLine || undefined, region: getRiotRegion(simRegion) }, ep: 'simulate-match' },
                     ].map(a => (
                       <Button key={a.label} size="sm" variant="outline"
                         className={`w-full justify-start border-${a.color}-500/30 text-${a.color}-400 bg-${a.color}-500/10 hover:bg-${a.color}-500/20`}
@@ -1093,25 +975,69 @@ export default function DevToolsPage() {
                     <CardDescription>Auto-targets the latest WAITING or IN_PROGRESS Tournament Lobby</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3 pt-2">
-                    <div className="flex gap-2">
-                      <Select value={simTourPlayers} onValueChange={setSimTourPlayers}>
-                        <SelectTrigger className="w-[120px] bg-black/30 border-white/10 h-8 text-xs shrink-0"><SelectValue /></SelectTrigger>
-                        <SelectContent>{["8","16","24","32","64"].map(v => <SelectItem key={v} value={v}>{v} Players</SelectItem>)}</SelectContent>
-                      </Select>
-                      <Button size="sm" variant="outline" className="flex-1 justify-start border-purple-500/30 text-purple-400 bg-purple-500/10 hover:bg-purple-500/20"
-                        onClick={() => handleAutomation('seed-env', { type:'tournament', gameName:simGameName||undefined, tagLine:simTagLine||undefined, gameName2:simGameName2||undefined, tagLine2:simTagLine2||undefined, gameName3:simGameName3||undefined, tagLine3:simTagLine3||undefined, gameName4:simGameName4||undefined, tagLine4:simTagLine4||undefined, region:getRiotRegion(simRegion), numPlayers:parseInt(simTourPlayers) })}>
-                        1. Seed Tournament (Pending)
+                    <div className="space-y-2 mb-4 p-3 bg-black/20 border border-white/5 rounded-md">
+                      <Label className="text-[10px] text-purple-300 font-semibold uppercase tracking-wider">Tournament Config</Label>
+                      <div className="flex gap-2">
+                        <Select value={simTourPlayers} onValueChange={setSimTourPlayers}>
+                          <SelectTrigger className="w-[120px] bg-black/30 border-white/10 h-8 text-xs shrink-0"><SelectValue /></SelectTrigger>
+                          <SelectContent>{["8", "16", "24", "32", "64", "128"].map(v => <SelectItem key={v} value={v}>{v} Players</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1 mt-2">
+                        <Label className="text-[10px] text-muted-foreground flex justify-between">
+                          <span>Phases Configuration (JSON)</span>
+                          <span onClick={() => {
+                            setSimPhasesConfigRaw(JSON.stringify([
+                              { name: "Sơ Loại 1", type: "elimination", matchesPerRound: 1, lobbySize: 8 },
+                              { name: "Sơ Loại 2", type: "elimination", matchesPerRound: 1, lobbySize: 8 },
+                              { name: "Swiss Chung Kết", type: "swiss", matchesPerRound: 3, lobbySize: 8 }
+                            ], null, 2))
+                          }} className="text-purple-400 hover:text-purple-300 cursor-pointer underline">Reset</span>
+                        </Label>
+                        <textarea 
+                          value={simPhasesConfigRaw}
+                          onChange={(e) => setSimPhasesConfigRaw(e.target.value)}
+                          rows={6}
+                          className="w-full bg-black/40 border border-white/10 rounded-md p-2 font-mono text-[10px] text-purple-200 resize-none focus:outline-none focus:ring-1 focus:ring-purple-500/50"
+                          placeholder={'[\n  { "type": "elimination", "matchesPerRound": 1 }\n]'}
+                        />
+                      </div>
+                      <Button size="sm" variant="outline" className="w-full justify-start border-purple-500/40 text-purple-300 bg-purple-500/15 hover:bg-purple-500/25 mt-2"
+                        onClick={() => {
+                          let parsedPhases = undefined;
+                          try {
+                            parsedPhases = JSON.parse(simPhasesConfigRaw);
+                          } catch (e) {
+                            addLog('error', 'Invalid JSON config in Phases Configuration.');
+                            return;
+                          }
+                          handleAutomation('seed-env', { 
+                            type: 'tournament', gameName: simGameName || undefined, tagLine: simTagLine || undefined, 
+                            gameName2: simGameName2 || undefined, tagLine2: simTagLine2 || undefined, 
+                            region: getRiotRegion(simRegion), numPlayers: parseInt(simTourPlayers),
+                            phasesConfig: parsedPhases
+                          });
+                        }}>
+                        1. Seed Configured Tournament (Pending)
                       </Button>
                     </div>
                     {[
-                      { label: "2. Pre-assign Groups", color: "yellow", onClick: () => handleAutomation('pre-assign-groups', { tournamentId: seededTournamentId }) },
-                      { label: "3. Start Tournament", color: "green", onClick: () => handleAutomation('assign-lobby', { tournamentId: seededTournamentId, lobbyId }) },
+                      { label: "2. Pre-assign Groups (Phase 1)", color: "yellow", onClick: () => handleAutomation('pre-assign-groups', { tournamentId: seededTournamentId }) },
+                      { label: "3. Start Tournament (Phase 1)", color: "green", onClick: () => handleAutomation('assign-lobby', { tournamentId: seededTournamentId, lobbyId }) },
                       { label: "4. Toggle Ready", color: "white", onClick: () => handleAutomation('ready-toggle', { lobbyId }) },
-                      { label: "5. Auto Advance & Reshuffle", color: "pink", onClick: () => handleAutomation('advance-round', { roundId }) },
-                      { label: "6. Simulate Match", color: "blue", onClick: () => handleAutomation('simulate-match', { type:'tournament', gameName:simGameName||undefined, tagLine:simTagLine||undefined, region:getRiotRegion(simRegion), lobbyId:lobbyId||undefined }) },
+                      { label: "5. Auto Advance (Next Round/Phase)", color: "pink", onClick: () => handleAutomation('advance-round', { roundId }) },
+                      { label: "6. Simulate Match (via Grimoire/Riot API)", color: "blue", onClick: () => handleAutomation('simulate-match', { type: 'tournament', gameName: simGameName || undefined, tagLine: simTagLine || undefined, region: getRiotRegion(simRegion), lobbyId: lobbyId || undefined }) },
                     ].map(a => (
                       <Button key={a.label} size="sm" variant="outline" className={`w-full justify-start border-${a.color}-500/30 text-${a.color}-400 bg-${a.color}-500/10 hover:bg-${a.color}-500/20`} onClick={a.onClick}>{a.label}</Button>
                     ))}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full justify-start border-orange-500/30 text-orange-400 bg-orange-500/10 hover:bg-orange-500/20 font-semibold"
+                      onClick={() => handleAutomation('simulate-match-mock', {})}
+                    >
+                      🎲 6b. Simulate Match (Mock — No Riot API)
+                    </Button>
                   </CardContent>
                 </Card>
               )}

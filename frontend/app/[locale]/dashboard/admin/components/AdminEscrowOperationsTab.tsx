@@ -1,4 +1,5 @@
 "use client";
+import { useTranslations } from "next-intl";
 
 import { useState, useEffect, useCallback } from "react";
 import {
@@ -199,6 +200,7 @@ function ReviewModal({
 
 // ---------- Main Component ----------
 export default function AdminEscrowOperationsTab() {
+  const t = useTranslations("common");
   const [queues, setQueues] = useState<OperationQueues | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
@@ -484,7 +486,7 @@ export default function AdminEscrowOperationsTab() {
                               {tx.user?.discordId && (
                                 <div className="flex items-center gap-1 cursor-pointer group" onClick={() => {
                                   navigator.clipboard.writeText(tx.user!.discordId!);
-                                  toast({ description: "Đã copy Discord ID" });
+                                  toast({ description: t("copied_discord_id") });
                                 }}>
                                   <span className="font-mono text-[10px] text-[#5865F2] px-1.5 py-0.5 rounded bg-[#5865F2]/10 border border-[#5865F2]/20">Discord: {tx.user.discordId}</span>
                                   <Copy className="h-3 w-3 text-muted-foreground opacity-50 group-hover:opacity-100 transition-opacity" />
@@ -493,7 +495,7 @@ export default function AdminEscrowOperationsTab() {
                               {tx.user?.puuid && (
                                 <div className="flex items-center gap-1 cursor-pointer group" onClick={() => {
                                   navigator.clipboard.writeText(tx.user!.puuid!);
-                                  toast({ description: "Đã copy PUUID" });
+                                  toast({ description: t("copied_puuid") });
                                 }}>
                                   <span className="font-mono text-[10px] text-red-400 px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20">PUUID: {tx.user.puuid.slice(0, 4)}...{tx.user.puuid.slice(-4)}</span>
                                   <Copy className="h-3 w-3 text-muted-foreground opacity-50 group-hover:opacity-100 transition-opacity" />

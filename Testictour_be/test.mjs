@@ -1,1 +1,0 @@
-import { PrismaClient } from '@prisma/client'; const prisma = new PrismaClient(); async function main() { const p = await prisma.participant.findMany({ include: { user: true } }); console.log(JSON.stringify(p.map(x => x.user.region), null, 2)); } main().finally(() => prisma.$disconnect());

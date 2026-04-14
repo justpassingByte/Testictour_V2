@@ -28,6 +28,10 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
   const [sortBy, setSortBy] = useState<string>("total")
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
 
+  // Show all columns up to numMatches (which is controlled by the parent limitMatch or max completed match)
+  // This ensures that 'in-progress' matches safely show a TBD placeholder column instead of disappearing
+  const actualMatchColumns = [...Array(numMatches).keys()];
+
   const currentPhase = tournament.phases.find(p => p.id === round.phaseId)
   // Keep track of checkmate type but don't use it to change display mode
   const isCheckmate = currentPhase?.type === 'checkmate';
@@ -39,16 +43,37 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
     return matchesSearch && matchesLobby && matchesStatus
   })
 
+  /**
+   * Swiss tiebreak comparator (used when total points are equal):
+   * 1. Total points (primary — handled by caller)
+   * 2. Sum of placements lower = better (e.g. 1+2+3=6 beats 3+4+5=12)
+   * 3. Count of 1st-place finishes (more = better)
+   * 4. Best single-match placement (lower = better)
+   */
+  const swissTiebreak = (a: PlayerRoundStats, b: PlayerRoundStats): number => {
+    // TB1: Sum of placements (ascending — lower total placement = better average)
+    const sumA = a.placements.reduce((s, p) => s + p, 0);
+    const sumB = b.placements.reduce((s, p) => s + p, 0);
+    if (sumA !== sumB) return sumA - sumB;
+
+    // TB2: Count of 1st-place finishes (descending)
+    const wins = (p: PlayerRoundStats) => p.placements.filter(pl => pl === 1).length;
+    const winDiff = wins(b) - wins(a);
+    if (winDiff !== 0) return winDiff;
+
+    // TB3: Best single placement (ascending)
+    const bestA = a.placements.length > 0 ? Math.min(...a.placements) : Infinity;
+    const bestB = b.placements.length > 0 ? Math.min(...b.placements) : Infinity;
+    return bestA - bestB;
+  };
+
   const sortedPlayers = [...filteredPlayers].sort((a, b) => {
     if (sortBy === 'total') {
       const multiplier = sortOrder === 'desc' ? 1 : -1;
       const scoreDiff = b.total - a.total;
-      if (scoreDiff !== 0) {
-        return scoreDiff * multiplier;
-      }
-      // Scores are equal, use last placement as tie-breaker (lower is better)
-      const placementDiff = a.lastPlacement - b.lastPlacement;
-      return placementDiff * multiplier;
+      if (scoreDiff !== 0) return scoreDiff * multiplier;
+      // Scores equal → apply Swiss tiebreak (direction preserved by multiplier)
+      return swissTiebreak(a, b) * multiplier;
     }
 
     // Fallback for other columns
@@ -130,8 +155,8 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
                     <ArrowUpDown className="ml-1 h-3 w-3" />
                   </Button>
                 </TableHead>
-                {/* Always display individual matches, regardless of phase type */}
-                {[...Array(numMatches).keys()].map(i => (
+                {/* Only render match columns that have actual score data */}
+                {actualMatchColumns.map(i => (
                   <TableHead key={i} className="text-center">
                     {isCheckmate && i === 0 ? (
                       <div className="flex items-center justify-center">
@@ -169,8 +194,8 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
                     <Badge variant="outline">{player.region}</Badge>
                   </TableCell>
                   <TableCell className="text-center font-bold">{player.total}</TableCell>
-                  {/* Always display individual matches, regardless of phase type */}
-                  {[...Array(numMatches).keys()].map(i => (
+                  {/* Only render match columns that have actual score data */}
+                  {actualMatchColumns.map(i => (
                     <TableCell key={i} className="text-center">
                       {player.placements[i] !== undefined ? (
                         <div className="flex flex-col items-center">
@@ -193,7 +218,7 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
                           )}
                         </div>
                       ) : (
-                        <span>-</span>
+                        <Badge variant="outline" className="text-muted-foreground opacity-50 bg-transparent uppercase text-[10px]">TBD</Badge>
                       )}
                     </TableCell>
                   ))}

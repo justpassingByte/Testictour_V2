@@ -110,6 +110,7 @@ export interface IPhase {
 
 export interface IRound {
   id: string;
+  name?: string;
   phaseId: string;
   roundNumber: number;
   startTime: Date;
@@ -156,6 +157,7 @@ export interface ILobby {
   participants: string[]; // This will be participant IDs
   participantDetails?: IParticipant[];
   matches?: IMatch[];
+  completedMatchesCount?: number;
   matchId: string | null;
   fetchedResult: boolean;
   // State machine fields

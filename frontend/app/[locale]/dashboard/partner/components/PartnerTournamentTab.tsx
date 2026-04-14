@@ -71,7 +71,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
   }
 
   const [phases, setPhases] = useState([
-    { name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "top_n_scores", advancementValue: 4 }
+    { name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "top_n_scores", advancementValue: 4, matchesPerRound: 1 }
   ])
 
   const addPhase = () => {
@@ -82,6 +82,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
       numberOfRounds: 1,
       advancementType: "top_n_scores",
       advancementValue: 4,
+      matchesPerRound: 1,
     }])
   }
 
@@ -127,6 +128,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
         type: p.type,
         lobbySize: p.lobbySize,
         numberOfRounds: p.numberOfRounds,
+        matchesPerRound: p.matchesPerRound,
         advancementCondition: { type: p.advancementType, value: p.advancementValue },
       }))
 
@@ -175,7 +177,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
       setCreateOpen(false)
       setForm({ name: "", description: "", region: "APAC", maxPlayers: 32, entryFee: 0, hostFeePercent: 0.1, startTime: "", registrationDeadline: "", image: "", isCommunityMode: false, discordUrl: "" })
       setSponsors([])
-      setPhases([{ name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "top_n_scores", advancementValue: 4 }])
+      setPhases([{ name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "top_n_scores", advancementValue: 4, matchesPerRound: 1 }])
       setImageFile(null)
       setImagePreview(null)
       fetchMyTournaments()
@@ -569,22 +571,31 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                             <Select value={phase.type} onValueChange={(v) => updatePhase(index, "type", v)}>
                               <SelectTrigger className="bg-black/40"><SelectValue /></SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="elimination">Elimination</SelectItem>
-                                <SelectItem value="points">Points</SelectItem>
-                                <SelectItem value="swiss">Swiss</SelectItem>
-                                <SelectItem value="round_robin">Round Robin</SelectItem>
-                                <SelectItem value="checkmate">Checkmate</SelectItem>
+                                <SelectItem value="elimination">Elimination (Loại trực tiếp)</SelectItem>
+                                <SelectItem value="points">Points (Tính điểm)</SelectItem>
+                                <SelectItem value="swiss">Swiss (Thụy Sĩ / Tích luỹ)</SelectItem>
+                                <SelectItem value="round_robin">Round Robin (Vòng tròn)</SelectItem>
+                                <SelectItem value="checkmate">Checkmate (Ngưỡng điểm)</SelectItem>
                               </SelectContent>
                             </Select>
+                            <p className="text-[9px] text-muted-foreground mt-1 px-1">
+                              {phase.type === 'elimination' && "Loại trực tiếp những người bét bảng sau khi đánh xong."}
+                              {phase.type === 'points' && "Chơi nhiều trận, sau khi xong thi tính tổng điểm để đi tiếp."}
+                              {phase.type === 'swiss' && "Thi đấu nhiều trận, cộng dồn điểm, xào lobby sau mỗi trận."}
+                              {phase.type === 'round_robin' && "Thi đấu vòng tròn tính điểm."}
+                              {phase.type === 'checkmate' && "Người chơi phải đạt đủ số điểm ngưỡng, sau đó dành Top 1 để vô địch."}
+                            </p>
                           </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-[11px] uppercase tracking-wide">Lobby Size</Label>
-                            <Input type="number" min={2} max={8} value={phase.lobbySize} onChange={(e) => updatePhase(index, "lobbySize", parseInt(e.target.value))} className="bg-black/40" />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-[11px] uppercase tracking-wide">Total Rounds</Label>
-                            <Input type="number" min={1} value={phase.numberOfRounds} onChange={(e) => updatePhase(index, "numberOfRounds", parseInt(e.target.value))} className="bg-black/40" />
-                          </div>
+
+                          {(phase.type === 'swiss' || phase.type === 'points') && (
+                            <div className="space-y-1.5">
+                              <Label className="text-[11px] uppercase tracking-wide text-orange-400">Matches to Play (Số Trận Đấu)</Label>
+                              <Input type="number" min={1} value={phase.matchesPerRound} onChange={(e) => updatePhase(index, "matchesPerRound", parseInt(e.target.value))} className="bg-black/40 border-orange-500/50 focus-visible:ring-orange-500/50" />
+                              <p className="text-[9px] text-muted-foreground mt-1 px-1">
+                                Sẽ xào lobby liên tục cho đến khi đủ số trận.
+                              </p>
+                            </div>
+                          )}
                           <div className="space-y-1.5">
                             <Label className="text-[11px] uppercase tracking-wide">Advancement Mechanism</Label>
                             <Select value={phase.advancementType} onValueChange={(v) => updatePhase(index, "advancementType", v)}>

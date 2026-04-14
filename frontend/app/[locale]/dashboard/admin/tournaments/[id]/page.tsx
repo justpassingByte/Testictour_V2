@@ -50,6 +50,10 @@ export default function TournamentManagePage() {
 
   const [tournament, setTournament] = useState<ITournament | null>(null)
   const [participants, setParticipants] = useState<IParticipant[]>([])
+  const [totalParticipants, setTotalParticipants] = useState(0)
+  const [listPage, setListPage] = useState(1)
+  const LIMIT = 10
+
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
@@ -76,10 +80,11 @@ export default function TournamentManagePage() {
     try {
       const [t, p] = await Promise.all([
         TournamentService.detail(tournamentId),
-        TournamentService.listParticipants(tournamentId, 1, 100).catch(() => ({ participants: [] })),
+        TournamentService.listParticipants(tournamentId, listPage, LIMIT).catch(() => ({ participants: [], total: 0 })),
       ])
       setTournament(t)
       setParticipants(p.participants || [])
+      setTotalParticipants(p.total || 0)
       setEditForm({
         name: t.name,
         description: t.description || "",
@@ -95,6 +100,7 @@ export default function TournamentManagePage() {
         type: p.type,
         lobbySize: p.lobbySize || 8,
         numberOfRounds: p.numberOfRounds || 1,
+        matchesPerRound: p.matchesPerRound || 1,
         advancementType: p.advancementCondition?.type || "top_n_scores",
         advancementValue: p.advancementCondition?.value || 4,
       })) || [])
@@ -137,6 +143,22 @@ export default function TournamentManagePage() {
     }
   }, [tournamentId])
 
+  const fetchParticipants = async (page: number) => {
+    try {
+      const res = await TournamentService.listParticipants(tournamentId, page, LIMIT)
+      setParticipants(res.participants || [])
+      setTotalParticipants(res.total || 0)
+    } catch {
+      toast({ title: "Error", description: "Failed to load participants.", variant: "destructive" })
+    }
+  }
+
+  useEffect(() => {
+    if (!loading) {
+      fetchParticipants(listPage)
+    }
+  }, [listPage])
+
   const handleSave = async () => {
     setSaving(true)
     try {
@@ -157,7 +179,7 @@ export default function TournamentManagePage() {
       }
       
       const { budget, ...restForm } = editForm
-      const payload: any = { ...restForm }
+      const payload: any = { ...restForm, customPrizePool: budget }
       const phasePayload: any = {}
       
       if (editPhases.length > 0) {
@@ -168,6 +190,7 @@ export default function TournamentManagePage() {
             type: p.type,
             lobbySize: p.lobbySize,
             numberOfRounds: p.numberOfRounds,
+            matchesPerRound: p.matchesPerRound,
             advancementCondition: { type: p.advancementType, value: p.advancementValue }
           }
         }))
@@ -281,7 +304,7 @@ export default function TournamentManagePage() {
 
   const statusCfg = STATUS_CONFIG[tournament.status] || STATUS_CONFIG.pending
   const StatusIcon = statusCfg.icon
-  const registeredCount = tournament.registered || participants.length
+  const registeredCount = tournament.registered || totalParticipants
   const fillPercent = (registeredCount / tournament.maxPlayers) * 100
   const prizePool = tournament.budget || (registeredCount * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)))
 
@@ -615,6 +638,17 @@ export default function TournamentManagePage() {
                 </Table>
               )}
             </CardContent>
+            {totalParticipants > LIMIT && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-white/10">
+                <div className="text-sm text-muted-foreground">
+                  Showing {(listPage - 1) * LIMIT + 1} to {Math.min(listPage * LIMIT, totalParticipants)} of {totalParticipants}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setListPage(p => Math.max(1, p - 1))} disabled={listPage === 1}>Previous</Button>
+                  <Button variant="outline" size="sm" onClick={() => setListPage(p => p + 1)} disabled={listPage * LIMIT >= totalParticipants}>Next</Button>
+                </div>
+              </div>
+            )}
           </Card>
         </TabsContent>
 
@@ -910,26 +944,33 @@ export default function TournamentManagePage() {
                               <Label className="text-[11px] uppercase tracking-wide">Name</Label>
                               <Input value={phase.name} onChange={(e) => setEditPhases(prev => prev.map((p, i) => i === index ? { ...p, name: e.target.value } : p))} placeholder="Phase name" className="bg-black/40" />
                             </div>
-                            <div className="space-y-1.5">
+                            <div className="space-y-1.5 md:col-span-2">
                               <Label className="text-[11px] uppercase tracking-wide">Type</Label>
                               <Select value={phase.type} onValueChange={(v) => setEditPhases(prev => prev.map((p, i) => i === index ? { ...p, type: v } : p))}>
                                 <SelectTrigger className="bg-black/40"><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="elimination">Elimination</SelectItem>
-                                  <SelectItem value="points">Points</SelectItem>
-                                  <SelectItem value="swiss">Swiss</SelectItem>
-                                  <SelectItem value="round_robin">Round Robin</SelectItem>
-                                  <SelectItem value="checkmate">Checkmate</SelectItem>
+                                  <SelectItem value="elimination">Group Elimination (Loại theo bảng - BO1/BO2..)</SelectItem>
+                                  <SelectItem value="points">Global Points (Sảnh chung tính điểm)</SelectItem>
+                                  <SelectItem value="swiss">Swiss (Thụy Sĩ / Tính điểm tích luỹ)</SelectItem>
+                                  <SelectItem value="round_robin">Round Robin (Vòng tròn)</SelectItem>
+                                  <SelectItem value="checkmate">Checkmate (Tới ngưỡng checkmate)</SelectItem>
                                 </SelectContent>
                               </Select>
+                              <p className="text-[9px] text-muted-foreground mt-1 px-1">
+                                {phase.type === 'elimination' && "Chia bảng đấu cố định trống suốt số vòng. Cuối cùng loại những người bét bảng."}
+                                {phase.type === 'points' && "Gom tất cả người chơi vào sảnh chung, xào lại sau mỗi trận, tính tổng điểm."}
+                                {phase.type === 'swiss' && "Thi đấu nhiều trận, cộng dồn điểm, ưu tiên bắt cặp đồng điểm."}
+                                {phase.type === 'round_robin' && "Thi đấu vòng tròn tính điểm."}
+                                {phase.type === 'checkmate' && "Người chơi phải đạt đủ số điểm ngưỡng, sau đó dành Top 1 để vô địch."}
+                              </p>
                             </div>
+                            
                             <div className="space-y-1.5">
-                              <Label className="text-[11px] uppercase tracking-wide">Lobby Size</Label>
-                              <Input type="number" min={2} max={8} value={phase.lobbySize} onChange={(e) => setEditPhases(prev => prev.map((p, i) => i === index ? { ...p, lobbySize: parseInt(e.target.value) || 8 } : p))} className="bg-black/40" />
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-[11px] uppercase tracking-wide">Total Rounds</Label>
-                              <Input type="number" min={1} value={phase.numberOfRounds} onChange={(e) => setEditPhases(prev => prev.map((p, i) => i === index ? { ...p, numberOfRounds: parseInt(e.target.value) || 1 } : p))} className="bg-black/40" />
+                              <Label className="text-[11px] uppercase tracking-wide text-orange-400">Matches to Play (Thể thức thi đấu)</Label>
+                              <Input type="number" min={1} value={phase.matchesPerRound || phase.numberOfRounds} onChange={(e) => setEditPhases(prev => prev.map((p, i) => i === index ? { ...p, matchesPerRound: parseInt(e.target.value) || 1, numberOfRounds: parseInt(e.target.value) || 1 } : p))} className="bg-black/40 border-orange-500/50" />
+                              <p className="text-[9px] text-muted-foreground mt-0.5 px-1">
+                                {phase.type === 'elimination' ? "Số trận mỗi bảng (1 = BO1, 2 = BO2)." : "Sẽ xào lobby sau mỗi trận cho đến khi đủ số trận."}
+                              </p>
                             </div>
                             <div className="space-y-1.5">
                               <Label className="text-[11px] uppercase tracking-wide">Advancement Mechanism</Label>
@@ -945,6 +986,18 @@ export default function TournamentManagePage() {
                               <Label className="text-[11px] uppercase tracking-wide">Advance Target</Label>
                               <Input type="number" min={1} value={phase.advancementValue} onChange={(e) => setEditPhases(prev => prev.map((p, i) => i === index ? { ...p, advancementValue: parseInt(e.target.value) || 4 } : p))} className="bg-black/40" />
                             </div>
+                            {index > 0 && (
+                              <div className="space-y-1.5">
+                                <Label className="text-[11px] uppercase tracking-wide">Carry Over Scores</Label>
+                                <Select value={phase.carryOverScores ? "true" : "false"} onValueChange={(v) => setEditPhases(prev => prev.map((p, i) => i === index ? { ...p, carryOverScores: v === "true" } : p))}>
+                                  <SelectTrigger className="bg-black/40"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="false">Reset Points (Về 0 điểm)</SelectItem>
+                                    <SelectItem value="true">Keep Points (Cộng dồn điểm)</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            )}
                           </div>
                         </CardContent>
                       </Card>

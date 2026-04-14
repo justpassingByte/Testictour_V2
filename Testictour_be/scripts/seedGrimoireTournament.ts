@@ -244,6 +244,7 @@ async function clearAllTournaments() {
   await prisma.userTournamentSummary.deleteMany({ where: { tournamentId: { in: tourIds } } });
   await prisma.reward.deleteMany({ where: { tournamentId: { in: tourIds } } });
   await prisma.participant.deleteMany({ where: { tournamentId: { in: tourIds } } });
+  await prisma.escrow.deleteMany({ where: { tournamentId: { in: tourIds } } });
   await prisma.tournament.deleteMany();
 
   console.log(`✅  Cleared ${tourIds.length} tournament(s) and all related data.\n`);
@@ -260,12 +261,27 @@ async function main() {
   const admin = await prisma.user.findFirst({ where: { role: 'admin' } });
   if (!admin) { console.error('❌  No admin found'); process.exit(1); }
 
-  // ── Grab 16 users ──────────────────────────────────────────────────────
-  const users = await prisma.user.findMany({ take: 16, orderBy: { createdAt: 'asc' } });
-  if (users.length < 8) {
-    console.error('❌  Need at least 8 users. Run seedUsers.ts first.'); process.exit(1);
+  // ── Grab or create 128 users ───────────────────────────────────────────
+  let users = await prisma.user.findMany({ take: 128, orderBy: { createdAt: 'asc' } });
+  
+  if (users.length < 128) {
+    console.log(`Missing users. Generating ${128 - users.length} dummy users...`);
+    for (let i = users.length; i < 128; i++) {
+        const newUser = await prisma.user.create({
+            data: {
+                username: `DummyPlayer_${i}`,
+                email: `dummy_${i}@test.com`,
+                password: 'abc',
+                riotGameName: `Dummy_VCS_${i}`,
+                riotGameTag: 'VN',
+                region: 'VN'
+            }
+        });
+        users.push(newUser);
+    }
   }
-  const allUsers = users.slice(0, 16);
+
+  const allUsers = users.slice(0, 128);
   console.log(`👥  Using ${allUsers.length} players.`);
 
   // ── Create tournament ───────────────────────────────────────────────────
@@ -284,11 +300,11 @@ async function main() {
       endTime:                fiveDA,
       registrationDeadline:   sevenDA,
       entryFee:               50,
-      maxPlayers:             16,
-      status:                 'completed',
+      maxPlayers:             128,
+      status:                 'pending',
       organizerId:            admin.id,
       prizeStructure:         [{ rank: 1, percent: 50 }, { rank: 2, percent: 30 }, { rank: 3, percent: 20 }],
-      expectedParticipants:   16,
+      expectedParticipants:   128,
       actualParticipantsCount: allUsers.length,
       hostFeePercent:         0.1,
     },
@@ -306,7 +322,7 @@ async function main() {
   });
   console.log(`👤  ${participants.length} participants enrolled.\n`);
 
-  // ── Helper: seed one completed round ────────────────────────────────────
+  // ── Helper: seed one pending round ────────────────────────────────────
   async function seedRound(
     phaseId:      string,
     roundNumber:  number,
@@ -317,116 +333,82 @@ async function main() {
       data: {
         phaseId,
         roundNumber,
-        status:    'COMPLETED',
+        status:    'pending',
         startTime: new Date(now.getTime() - hoursAgo * 3_600_000),
-        endTime:   new Date(now.getTime() - (hoursAgo - 1) * 3_600_000),
       },
     });
 
     for (const [li, group] of groups.entries()) {
-      const placements = shuffledPlacements(group.length);
-      const riotId     = `VN_GC_R${roundNumber}_L${li + 1}_${uuidv4()}`;
-      const grimoireData = buildGrimoireMatch(riotId, group, placements, hoursAgo * 3_600_000);
-
       const lobby = await prisma.lobby.create({
         data: {
           roundId:              round.id,
           name:                 `Lobby ${li + 1}`,
           participants:         group.map(p => ({ participantId: p.id, userId: p.userId, username: p.user.username })),
-          completedMatchesCount: 1,
-          fetchedResult:        true,
-          state:                'FINISHED',
+          completedMatchesCount: 0,
+          fetchedResult:        false,
+          state:                'WAITING',
           phaseStartedAt:       round.startTime,
         },
       });
-
-      const match = await prisma.match.create({
-        data: {
-          lobbyId:        lobby.id,
-          matchIdRiotApi: riotId,
-          matchData:      grimoireData,   // ← stored as GrimoireMatchData directly
-          fetchedAt:      new Date(),
-        },
-      });
-
-      for (let j = 0; j < group.length; j++) {
-        const p         = group[j];
-        const placement = placements[j];
-        const points    = pts(placement);
-
-        await prisma.matchResult.create({ data: { matchId: match.id, userId: p.userId, placement, points } });
-        await prisma.participant.update({ where: { id: p.id }, data: { scoreTotal: { increment: points } } });
-        await prisma.userTournamentSummary.upsert({
-          where:  { userId_tournamentId: { userId: p.userId, tournamentId: tournament.id } },
-          update: { points: { increment: points }, placement },
-          create: { userId: p.userId, tournamentId: tournament.id, joinedAt: new Date(), points, placement },
-        });
-        await prisma.playerMatchSummary.upsert({
-          where:  { userId_matchId: { userId: p.userId, matchId: match.id } },
-          update: { placement, points, playedAt: round.startTime },
-          create: { userId: p.userId, matchId: match.id, tournamentId: tournament.id, tournamentName: tournament.name, roundNumber, placement, points, playedAt: round.startTime },
-        });
-        await prisma.roundOutcome.create({ data: { participantId: p.id, roundId: round.id, status: 'advanced', scoreInRound: points } });
-      }
-
-      console.log(`  ✅  Round ${roundNumber} | Lobby ${li + 1} seeded (riotId: ${riotId.slice(-12)})`);
+      console.log(`  ✅  Round ${roundNumber} | Lobby ${li + 1} skeleton seeded (WAITING)`);
     }
     return round;
   }
 
-  // ── PHASE 1 — Group Stage (3 rounds, 2 lobbies of 8) ────────────────────
+  // ── PHASE 1 — Elimination (128 players -> Top 64) ────────────────────
   const phase1 = await prisma.phase.create({
     data: {
       tournamentId:   tournament.id,
-      name:           'Group Stage',
+      name:           'Vòng Sơ Loại 1',
       phaseNumber:    1,
-      type:           'swiss',
-      status:         'COMPLETED',
-      lobbySize:      8,
-      matchesPerRound: 1,
-      numberOfRounds: 3,
-      pointsMapping:  [8, 7, 6, 5, 4, 3, 2, 1],
-    },
-  });
-  console.log('\n📋  Phase 1: Group Stage');
-
-  // Round 1 — random split
-  const r1g1 = participants.slice(0, 8);
-  const r1g2 = participants.slice(8, 16);
-  await seedRound(phase1.id, 1, [r1g1, r1g2], 36);
-
-  // Round 2 — re-rank, top-8 vs bottom-8
-  const updR2 = await prisma.participant.findMany({
-    where: { tournamentId: tournament.id }, include: { user: true }, orderBy: { scoreTotal: 'desc' },
-  });
-  await seedRound(phase1.id, 2, [updR2.slice(0, 8), updR2.slice(8, 16)], 33);
-
-  // Round 3
-  const updR3 = await prisma.participant.findMany({
-    where: { tournamentId: tournament.id }, include: { user: true }, orderBy: { scoreTotal: 'desc' },
-  });
-  await seedRound(phase1.id, 3, [updR3.slice(0, 8), updR3.slice(8, 16)], 30);
-
-  // ── PHASE 2 — Finals (1 round, 1 lobby top-8) ───────────────────────────
-  const phase2 = await prisma.phase.create({
-    data: {
-      tournamentId:   tournament.id,
-      name:           'Grand Finals',
-      phaseNumber:    2,
       type:           'elimination',
-      status:         'COMPLETED',
+      status:         'pending',
       lobbySize:      8,
       matchesPerRound: 1,
       numberOfRounds: 1,
       pointsMapping:  [8, 7, 6, 5, 4, 3, 2, 1],
     },
   });
-  console.log('\n🏅  Phase 2: Grand Finals');
+  console.log('\n📋  Phase 1: Elimination Stage 1 (128 players)');
 
-  const finalists = await prisma.participant.findMany({
-    where: { tournamentId: tournament.id }, include: { user: true }, orderBy: { scoreTotal: 'desc' }, take: 8,
+  // Round 1 — random split 16 lobbies of 8
+  const chunks = [];
+  for (let i = 0; i < participants.length; i += 8) {
+    chunks.push(participants.slice(i, i + 8));
+  }
+  await seedRound(phase1.id, 1, chunks, 36);
+
+  // ── PHASE 2 — Elimination (64 players -> Top 32) ────────────────────
+  const phase2 = await prisma.phase.create({
+    data: {
+      tournamentId:   tournament.id,
+      name:           'Vòng Sơ Loại 2',
+      phaseNumber:    2,
+      type:           'elimination',
+      status:         'pending',
+      lobbySize:      8,
+      matchesPerRound: 1,
+      numberOfRounds: 1,
+      pointsMapping:  [8, 7, 6, 5, 4, 3, 2, 1],
+    },
   });
-  await seedRound(phase2.id, 1, [finalists], 27);
+  console.log('\n⚔️   Phase 2: Elimination Stage 2 config seeded (64 players)');
+
+  // ── PHASE 3 — Swiss (32 players, 3 rounds) ───────────────────────────
+  const phase3 = await prisma.phase.create({
+    data: {
+      tournamentId:   tournament.id,
+      name:           'Vòng Bảng Thụy Sĩ (Swiss)',
+      phaseNumber:    3,
+      type:           'swiss',
+      status:         'pending',
+      lobbySize:      8,
+      matchesPerRound: 1,
+      numberOfRounds: 3,
+      pointsMapping:  [8, 7, 6, 5, 4, 3, 2, 1],
+    },
+  });
+  console.log('\n🏅  Phase 3: Swiss config seeded (32 players)');
 
   // ── Final leaderboard ────────────────────────────────────────────────────
   const final = await prisma.participant.findMany({

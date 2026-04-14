@@ -82,8 +82,7 @@ const miniTourMatchDataWorker = new Worker(
 miniTourMatchDataWorker.on('failed', (job, err) => {
   logger.error(`MiniTourMatchDataWorker: Job ${job?.id} failed with error: ${err.message}`, err);
 });
-
-logger.info('MiniTourMatchDataWorker started. Waiting for jobs...');
+logger.info('MiniTourMatchDataWorker started. Waiting for jobs...');
 
 // Worker for advancing rounds
 const autoAdvanceRoundWorker = new Worker(
@@ -91,7 +90,56 @@ const autoAdvanceRoundWorker = new Worker(
   async job => {
     const { roundId } = job.data;
     logger.info(`AutoAdvanceRoundWorker: Processing job for round ${roundId}`);
-    return RoundService.autoAdvance(roundId);
+    const result = await RoundService.autoAdvance(roundId);
+
+    // Process deferred post-commit actions
+    if (result && typeof result === 'object' && '_action' in result) {
+      if (result._action === 'payout_prizes' && result.tournamentId) {
+        logger.info(`AutoAdvanceRoundWorker: Handling deferred payout_prizes for tournament: ${result.tournamentId}`);
+        try {
+          // DO NOT distribute prizes automatically!
+          // We have an Escrow system. The host must trigger the payout manually via the EscrowService.
+          logger.info(`AutoAdvanceRoundWorker: Skipped automatic payout for tournament ${result.tournamentId} (Delegating to Escrow System).`);
+          
+          if ((global as any).io) {
+            (global as any).io.to(`tournament:${result.tournamentId}`).emit('leaderboard_update', { tournamentId: result.tournamentId });
+            (global as any).io.to(`tournament:${result.tournamentId}`).emit('tournament_update', { type: 'tournament_completed' });
+          }
+        } catch (err) {
+          logger.error(`Failed to distribute prizes for completed tournament ${result.tournamentId}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      } else if (result._action === 'create_next_phase_rounds' && result.completedPhaseId && result.nextPhaseId) {
+        logger.info(`AutoAdvanceRoundWorker: Handling deferred round creation for phase: ${result.nextPhaseId}`);
+        // Create rounds for next phase
+        const { prisma } = await import('./services/prisma');
+        const numberOfRounds = result.numberOfRounds || 1;
+        
+        try {
+          const newRounds = [];
+          for (let i = 1; i <= numberOfRounds; i++) {
+            const newRound = await prisma.round.create({
+              data: {
+                phaseId: result.nextPhaseId,
+                roundNumber: i,
+                startTime: new Date(Date.now() + 5 * 60 * 1000), // Start in 5 minutes
+                status: 'pending'
+              }
+            });
+            newRounds.push(newRound);
+          }
+          logger.info(`Successfully created ${newRounds.length} rounds for phase ${result.nextPhaseId}`);
+          
+          if ((global as any).io && result.tournamentId) {
+            (global as any).io.to(`tournament:${result.tournamentId}`).emit('bracket_update', { tournamentId: result.tournamentId });
+            (global as any).io.to(`tournament:${result.tournamentId}`).emit('tournament_update', { type: 'phase_started' });
+          }
+        } catch (err) {
+          logger.error(`Failed to create rounds for phase ${result.nextPhaseId}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+    }
+
+    return result;
   },
   {
     connection: redisConnectionOptions,

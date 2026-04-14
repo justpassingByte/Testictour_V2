@@ -47,6 +47,7 @@ export const TournamentService = {
     templateId?: string;
     config?: { phases: IPhaseConfig[] };
     isCommunityMode?: boolean;
+    customPrizePool?: number;
   }): Promise<ITournament> {
     try {
       const response = await api.post('/tournaments', {
@@ -83,10 +84,10 @@ export const TournamentService = {
     }
   },
 
-  async listParticipants(tournamentId: string, page: number = 1, limit: number = 10): Promise<{ participants: IParticipant[] }> {
+  async listParticipants(tournamentId: string, page: number = 1, limit: number = 10): Promise<{ participants: IParticipant[], total?: number }> {
     try {
       const response = await api.get(`/tournaments/${tournamentId}/participants?page=${page}&limit=${limit}`);
-      return response.data; // This should contain { participants: IParticipant[] }
+      return response.data; // This should contain { participants: IParticipant[], total: number }
     } catch  {
       console.error('Error fetching tournament participants:');
       throw new Error('Error fetching tournament participants');

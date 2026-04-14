@@ -27,13 +27,40 @@ export const TournamentTabsContent = memo(({
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab}>
-      <TabsList className="grid grid-cols-3 sm:grid-cols-5 mb-4 bg-muted/30 p-1 rounded-xl h-auto flex-wrap">
-        <TabsTrigger value="phase" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm py-2">{t("phases")}</TabsTrigger>
-        <TabsTrigger value="bracket" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm py-2">{t("bracket")}</TabsTrigger>
-        <TabsTrigger value="players" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm py-2">{t("participants")}</TabsTrigger>
-        <TabsTrigger value="rules" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm py-2">{t("rules")}</TabsTrigger>
-        <TabsTrigger value="details" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg transition-all text-xs sm:text-sm py-2">{t("details")}</TabsTrigger>
-      </TabsList>
+      <div className="border-b border-white/10 mb-6 w-full">
+        <TabsList className="w-full justify-start h-auto bg-transparent p-0 flex overflow-x-auto gap-6">
+          <TabsTrigger 
+            value="phase" 
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-1 py-3 text-sm font-medium transition-all shadow-none hover:text-primary/80 text-muted-foreground data-[state=active]:shadow-none"
+          >
+            {t("phases")}
+          </TabsTrigger>
+          <TabsTrigger 
+            value="bracket" 
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-1 py-3 text-sm font-medium transition-all shadow-none hover:text-primary/80 text-muted-foreground data-[state=active]:shadow-none"
+          >
+            {t("bracket")}
+          </TabsTrigger>
+          <TabsTrigger 
+            value="players" 
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-1 py-3 text-sm font-medium transition-all shadow-none hover:text-primary/80 text-muted-foreground data-[state=active]:shadow-none"
+          >
+            {t("participants")}
+          </TabsTrigger>
+          <TabsTrigger 
+            value="rules" 
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-1 py-3 text-sm font-medium transition-all shadow-none hover:text-primary/80 text-muted-foreground data-[state=active]:shadow-none"
+          >
+            {t("rules")}
+          </TabsTrigger>
+          <TabsTrigger 
+            value="details" 
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-1 py-3 text-sm font-medium transition-all shadow-none hover:text-primary/80 text-muted-foreground data-[state=active]:shadow-none"
+          >
+            {t("details")}
+          </TabsTrigger>
+        </TabsList>
+      </div>
       <TabsContent value="bracket" className="space-y-4">
         <TournamentBracketTab tournamentId={tournament.id} />
       </TabsContent>
@@ -57,7 +84,7 @@ export const TournamentTabsContent = memo(({
         )}
       </TabsContent>
       <TabsContent value="rules" className="space-y-4">
-        <TournamentRulesTab />
+        <TournamentRulesTab tournament={tournament} />
       </TabsContent>
       <TabsContent value="details" className="space-y-4">
         <TournamentDetailsTab tournament={tournament} />

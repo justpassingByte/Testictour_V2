@@ -130,6 +130,9 @@ export default class LobbyStateService {
       if (fetchMatchDataQueue) {
         await fetchMatchDataQueue.add('fetchMatchData', { lobbyId, region: '' }, {
           delay: 1_200_000, // 20 minutes — first poll after game likely ends
+          jobId: `fetch-init-${lobbyId}-${Date.now()}`,
+          removeOnComplete: true,
+          removeOnFail: 100,
           attempts: 120,
           backoff: { type: 'fixed', delay: 0 }, // Smart polling re-queues itself
         });
@@ -192,7 +195,7 @@ export default class LobbyStateService {
 
     // 2. Acquire distributed lock
     const lockKey = LOCK_KEY(lobbyId);
-    const lockToken = await acquireRedisLock(redis, lockKey, 5000);
+    const lockToken = await acquireRedisLock(redis, lockKey, 10000);
     if (!lockToken) throw new Error('Could not acquire lobby lock — retry in a moment');
 
     try {

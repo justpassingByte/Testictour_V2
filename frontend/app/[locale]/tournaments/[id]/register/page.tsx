@@ -348,13 +348,13 @@ export default function TournamentRegistration({ params }: { params: { id: strin
                 </div>
                 <div className="flex items-center gap-1.5 bg-[#18181b]/95 px-2.5 py-1 rounded-md border border-[#3f3f46] shadow-sm">
                   <DollarSign className="h-4 w-4 text-amber-400" />
-                  <span className="text-amber-400 font-bold">{tournament.entryFee.toLocaleString()} VNĐ</span>
+                  <span className="text-amber-400 font-bold">{tournament.entryFee.toLocaleString()}</span>
                 </div>
                 <div className="flex items-center gap-1.5 bg-[#18181b]/95 px-2.5 py-1 rounded-md border border-[#3f3f46] shadow-sm">
                   <Trophy className="h-4 w-4 text-yellow-400" />
                   <span className="text-yellow-400 font-bold">
                     {(tournament.budget && tournament.budget > 0)
-                      ? `${tournament.budget.toLocaleString()} VNĐ`
+                      ? `${tournament.budget.toLocaleString()} `
                       : t("tbd_prize_pool") || "TBD Prize Pool"}
                   </span>
                 </div>
@@ -487,16 +487,16 @@ export default function TournamentRegistration({ params }: { params: { id: strin
                                   </>
                                 )}
                               </div>
-                                {(!tournament.sponsors || tournament.sponsors.length === 0) ? (
-                                  <>
-                                    <img src="/vng.png" alt="VNG" className="h-[14px] w-auto object-contain brightness-0 invert opacity-90" />
-                                    <img src="/riot.svg" alt="Riot" className="h-[15px] w-auto object-contain brightness-0 invert opacity-90" />
-                                  </>
-                                ) : (
-                                  tournament.sponsors.slice(0, 3).map((sponsor: any, idx: number) => (
-                                    <img key={idx} src={sponsor.url} alt={sponsor.name} className="h-[15px] w-auto object-contain brightness-0 invert opacity-90" crossOrigin="anonymous" />
-                                  ))
-                                )}
+                              {(!tournament.sponsors || tournament.sponsors.length === 0) ? (
+                                <>
+                                  <img src="/vng.png" alt="VNG" className="h-[14px] w-auto object-contain brightness-0 invert opacity-90" />
+                                  <img src="/riot.svg" alt="Riot" className="h-[15px] w-auto object-contain brightness-0 invert opacity-90" />
+                                </>
+                              ) : (
+                                tournament.sponsors.slice(0, 3).map((sponsor: any, idx: number) => (
+                                  <img key={idx} src={sponsor.url} alt={sponsor.name} className="h-[15px] w-auto object-contain brightness-0 invert opacity-90" crossOrigin="anonymous" />
+                                ))
+                              )}
                             </div>
                           </div>
                         </div>

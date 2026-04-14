@@ -229,8 +229,27 @@ export default function LobbyPageClient({ lobbyId, tournamentId, initialState, l
       socket.emit('join', { tournamentId, lobbyId });
     });
 
-    socket.on('tournament_update', () => {
-      if (isSubscribed) checkUpdates();
+    socket.on('tournament_update', (data: any) => {
+      if (data && data.type === 'lobbies_reshuffled') {
+        // When lobbies shuffle, explicitly check for new lobby assignment
+        if (!userId) return;
+        setTimeout(async () => {
+          try {
+            const nextLobbyRes = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'}/api/players/${userId}/incoming-matches?t=${Date.now()}`, { credentials: 'include' });
+            const json = await nextLobbyRes.json();
+            if (json.success && json.data) {
+              const match = json.data.find((m: any) => m.tournamentId === tournamentId);
+              if (match && match.lobbyId && match.lobbyId !== lobbyId) {
+                router.push(`/tournaments/${tournamentId}/lobbies/${match.lobbyId}`);
+              } else if (isSubscribed) {
+                checkUpdates(); // same lobby, just refresh state
+              }
+            }
+          } catch (e) {}
+        }, 500); // Small delay to let DB settle
+      } else if (isSubscribed) {
+        checkUpdates();
+      }
     });
 
     // Also trigger update on lobby state changes in case tournament_update is missed
@@ -372,91 +391,91 @@ export default function LobbyPageClient({ lobbyId, tournamentId, initialState, l
               </TabsContent>
 
               <TabsContent value="matches" className="space-y-4 pt-4">
-                {['PLAYING', 'FINISHED'].includes(state.state) ? (
-                  <div className="space-y-3">
-                    {Array.from({ length: Math.max(liveLobbyData?.round?.phase?.matchesPerRound || 1, liveLobbyData?.matches?.length || 0) }).map((_, idx: number) => {
-                      const match = liveLobbyData?.matches?.[idx];
-                      const isSynced = match && !!match.fetchedAt && (match.matchResults?.length > 0 || match.miniTourMatchResults?.length > 0);
-                      const hasGrimoire = match && isGrimoireMatchData(match.matchData);
-                      const key = match?.id || `pending-${idx}`;
-                      
-                      return (
-                        <Collapsible key={key} className="border border-white/10 rounded-xl bg-card/60 backdrop-blur-lg overflow-hidden" defaultOpen={isSynced}>
-                          <CollapsibleTrigger className="flex items-center justify-between w-full p-4 hover:bg-muted/50 transition-colors">
-                            <div className="text-left flex items-center gap-3">
-                              <Badge variant="outline" className="text-xs">Match {idx + 1}</Badge>
-                              <div>
-                                <p className="font-semibold text-sm">Match Results</p>
-                                <div className="text-xs text-muted-foreground mt-0.5">
-                                  Status: <Badge variant={isSynced ? 'default' : 'secondary'} className="text-[10px] ml-1">{isSynced ? 'Completed' : (state.state === 'PLAYING' ? 'In Progress' : 'Pending Riot Sync')}</Badge>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              {match?.matchIdRiotApi && (
-                                <Badge variant="outline" className="text-[10px] font-mono opacity-50 hidden sm:inline-flex">
-                                  Riot ID: {match.matchIdRiotApi}
+                <div className="space-y-3">
+                  {Array.from({ length: Math.max(liveLobbyData?.round?.phase?.matchesPerRound || 1, liveLobbyData?.matches?.length || 0) }).map((_, idx: number) => {
+                    const match = liveLobbyData?.matches?.[idx];
+                    const isSynced = match && !!match.fetchedAt && (match.matchResults?.length > 0 || match.miniTourMatchResults?.length > 0);
+                    const hasGrimoire = match && isGrimoireMatchData(match.matchData);
+                    const key = match?.id || `pending-${idx}`;
+                    
+                    return (
+                      <Collapsible key={key} className="border border-white/10 rounded-xl bg-card/60 backdrop-blur-lg overflow-hidden" defaultOpen={isSynced}>
+                        <CollapsibleTrigger className="flex items-center justify-between w-full p-4 hover:bg-muted/50 transition-colors">
+                          <div className="text-left flex items-center gap-3">
+                            <Badge variant="outline" className="text-xs">Match {idx + 1}</Badge>
+                            <div>
+                              <p className="font-semibold text-sm">Match Results</p>
+                              <div className="text-xs text-muted-foreground mt-0.5">
+                                Status: <Badge variant={isSynced ? 'default' : 'secondary'} className="text-[10px] ml-1">
+                                  {isSynced ? 'Completed' : (idx === (liveLobbyData?.completedMatchesCount || 0) && state.state === 'PLAYING' ? 'In Progress' : (idx > (liveLobbyData?.completedMatchesCount || 0) ? 'Scheduled' : 'Pending Start'))}
                                 </Badge>
-                              )}
-                              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 [[data-state=open]>&]:-rotate-180" />
+                              </div>
                             </div>
-                          </CollapsibleTrigger>
-                          <CollapsibleContent className="px-4 pb-4">
-                            {isSynced && hasGrimoire ? (
-                              <div className="mt-2 bg-zinc-950/50 rounded-xl overflow-hidden border border-zinc-800">
-                                <MatchCompPanel
-                                  matchData={match.matchData as GrimoireMatchData}
-                                  resultMap={Object.fromEntries(
-                                    (match.matchResults ?? []).map((r: any) => [
-                                      r.user?.puuid ?? r.userId,
-                                      { placement: r.placement, points: r.points }
-                                    ])
-                                  )}
-                                />
-                              </div>
-                            ) : (
-                              <div className="space-y-3 pt-2">
-                                {!isSynced && ['PLAYING', 'FINISHED'].includes(state.state) ? (
-                                  <div className="flex flex-col items-center justify-center gap-3 py-8 bg-blue-500/5 rounded-xl border border-blue-500/20 text-center">
-                                    <Loader2 className="h-10 w-10 animate-spin text-blue-500 opacity-80" />
-                                    <div>
-                                      <p className="text-sm font-semibold text-blue-400">Waiting for Riot APIs...</p>
-                                      <p className="text-xs text-muted-foreground mt-1 text-blue-400/80 max-w-[250px]">
-                                        System is actively polling Riot for match completion.
-                                      </p>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="flex flex-col items-center justify-center gap-3 py-8 bg-muted/20 rounded-xl border border-dashed border-white/10 text-center">
-                                    <Zap className="h-10 w-10 text-blue-400 opacity-40" />
-                                    <div>
-                                      <p className="text-sm font-semibold text-foreground/80">No details available</p>
-                                      <p className="text-xs text-muted-foreground mt-1 max-w-[250px]">
-                                        {isSynced && !hasGrimoire 
-                                          ? "Results are synced, but full match data is unavailable." 
-                                          : "Match data is currently unavailable."}
-                                      </p>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            {match?.matchIdRiotApi && (
+                              <Badge variant="outline" className="text-[10px] font-mono opacity-50 hidden sm:inline-flex">
+                                Riot ID: {match.matchIdRiotApi}
+                              </Badge>
                             )}
-                          </CollapsibleContent>
-                        </Collapsible>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <Card className="border-white/10 bg-card/60 backdrop-blur-lg shadow-inner">
-                    <CardContent className="p-0">
-                      <div className="flex flex-col items-center text-sm text-muted-foreground text-center py-12 px-4 rounded-lg bg-black/20">
-                        <Timer className="h-8 w-8 text-muted-foreground/50 mb-3" />
-                        <p className="font-medium text-foreground/80">Match is not started yet.</p>
-                        <p className="text-xs mt-1">Results will appear here automatically after the match concludes.</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
+                            <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 [[data-state=open]>&]:-rotate-180" />
+                          </div>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="px-4 pb-4">
+                          {isSynced && hasGrimoire ? (
+                            <div className="mt-2 bg-zinc-950/50 rounded-xl overflow-hidden border border-zinc-800">
+                              <MatchCompPanel
+                                matchData={match.matchData as GrimoireMatchData}
+                                resultMap={Object.fromEntries(
+                                  (match.matchResults ?? []).map((r: any) => [
+                                    r.user?.puuid ?? r.userId,
+                                    { placement: r.placement, points: r.points }
+                                  ])
+                                )}
+                              />
+                            </div>
+                          ) : (
+                            <div className="space-y-3 pt-2">
+                              {idx > (liveLobbyData?.completedMatchesCount || 0) ? (
+                                <div className="flex flex-col items-center justify-center gap-3 py-8 bg-muted/10 rounded-xl border border-dashed border-white/5 text-center">
+                                  <Timer className="h-10 w-10 text-muted-foreground opacity-30" />
+                                  <div>
+                                    <p className="text-sm font-semibold text-muted-foreground">Scheduled Match</p>
+                                    <p className="text-xs text-muted-foreground/70 mt-1 max-w-[250px]">
+                                      Will begin after previous matches are completed.
+                                    </p>
+                                  </div>
+                                </div>
+                              ) : !isSynced && idx === (liveLobbyData?.completedMatchesCount || 0) && ['PLAYING', 'FINISHED'].includes(state.state) ? (
+                                <div className="flex flex-col items-center justify-center gap-3 py-8 bg-blue-500/5 rounded-xl border border-blue-500/20 text-center">
+                                  <Loader2 className="h-10 w-10 animate-spin text-blue-500 opacity-80" />
+                                  <div>
+                                    <p className="text-sm font-semibold text-blue-400">Waiting for Riot APIs...</p>
+                                    <p className="text-xs text-muted-foreground mt-1 text-blue-400/80 max-w-[250px]">
+                                      Match {idx + 1} is in progress. Actively polling Riot for completion.
+                                    </p>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex flex-col items-center justify-center gap-3 py-8 bg-muted/20 rounded-xl border border-dashed border-white/10 text-center">
+                                  <Zap className="h-10 w-10 text-blue-400 opacity-40" />
+                                  <div>
+                                    <p className="text-sm font-semibold text-foreground/80">No details available</p>
+                                    <p className="text-xs text-muted-foreground mt-1 max-w-[250px]">
+                                      {isSynced && !hasGrimoire 
+                                        ? "Results are synced, but full match data is unavailable." 
+                                        : (idx === (liveLobbyData?.completedMatchesCount || 0) ? "Match not started yet." : "Match data is currently unavailable.")}
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </CollapsibleContent>
+                      </Collapsible>
+                    );
+                  })}
+                </div>
               </TabsContent>
             </Tabs>
           </div>

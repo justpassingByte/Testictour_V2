@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, TrendingUp, Sword, PieChart as PieChartIcon } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, PieChart as RechartsPieChart, Pie } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, PieChart as RechartsPieChart, Pie, Legend, LineChart, Line } from 'recharts';
 import api from '@/app/lib/apiConfig';
 import { useSocket } from '@/components/SocketProvider';
 import { Badge } from '@/components/ui/badge';
@@ -27,7 +27,7 @@ const getSubRegionConfig = (regionStr: string) => {
 };
 
 export function TournamentStatisticsTab({ tournamentId, hideGeneralStats = false }: { tournamentId: string, hideGeneralStats?: boolean }) {
-  const t = useTranslations("Common");
+  const t = useTranslations("common");
   const [stats, setStats] = useState<any>(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const socket = useSocket();
@@ -215,39 +215,49 @@ export function TournamentStatisticsTab({ tournamentId, hideGeneralStats = false
         <Card className="bg-card/40 backdrop-blur-md border border-white/5 shadow-sm">
           <CardContent className="p-5">
             <h3 className="font-bold text-sm text-blue-300 mb-1 flex items-center gap-2">
-              <PieChartIcon className="w-4 h-4" /> Mật độ vị trí
+              <PieChartIcon className="w-4 h-4" /> Hiệu suất thứ hạng (Top Users)
             </h3>
-            <p className="text-xs text-muted-foreground mb-6">Mật độ thường xuyên mỗi vị trí diễn ra trong tất cả các trận</p>
+            <p className="text-xs text-muted-foreground mb-6">Mật độ đạt được các thứ hạng của những người chơi xuất sắc nhất</p>
             <div className="h-[200px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={stats.placementDensity?.map((val: number, idx: number) => ({ name: `#${idx + 1}`, value: val })) || []}>
+                <BarChart data={stats.playerPerformance || []} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
                    <XAxis dataKey="name" stroke="rgba(255,255,255,0.4)" fontSize={11} tickLine={false} axisLine={false} />
-                   <YAxis stroke="rgba(255,255,255,0.4)" fontSize={11} tickLine={false} axisLine={false} />
+                   <YAxis stroke="rgba(255,255,255,0.4)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(val) => Math.floor(val).toString()} />
                    <RechartsTooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ backgroundColor: 'rgba(9, 9, 11, 0.95)', borderColor: 'rgba(255,255,255,0.1)' }} />
-                   <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                   <Legend iconType="circle" wrapperStyle={{ fontSize: '10px' }} />
+                   <Bar dataKey="Top 1" stackId="a" fill="#eab308" radius={[0, 0, 0, 0]} maxBarSize={40} />
+                   <Bar dataKey="Top 2" stackId="a" fill="#94a3b8" radius={[0, 0, 0, 0]} maxBarSize={40} />
+                   <Bar dataKey="Top 3" stackId="a" fill="#b45309" radius={[0, 0, 0, 0]} maxBarSize={40} />
+                   <Bar dataKey="Top 4" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} maxBarSize={40} />
+                   <Bar dataKey="Bot 4" stackId="a" fill="#475569" radius={[4, 4, 0, 0]} maxBarSize={40} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </CardContent>
         </Card>
 
-        {/* Score Details */}
+        {/* EV Trajectory Chart */}
         <Card className="bg-card/40 backdrop-blur-md border border-white/5 shadow-sm">
           <CardContent className="p-5">
             <h3 className="font-bold text-sm text-emerald-300 mb-1 flex items-center gap-2">
-              <TrendingUp className="w-4 h-4" /> Chi tiết điểm số
+              <TrendingUp className="w-4 h-4" /> Điểm số kỳ vọng (EV Chart)
             </h3>
-            <p className="text-xs text-muted-foreground mb-6">Điểm số của các người chơi đứng top</p>
+            <p className="text-xs text-muted-foreground mb-6">Tiến trình tích lũy điểm số của các người chơi xuất sắc nhất qua từng ván</p>
             <div className="h-[200px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={stats.topPlayersPoints?.map((p: any) => ({ name: p.name.substring(0, 8), value: p.score })) || []}>
+                <LineChart data={stats.playerTrajectories || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
                    <XAxis dataKey="name" stroke="rgba(255,255,255,0.4)" fontSize={11} tickLine={false} axisLine={false} />
-                   <YAxis stroke="rgba(255,255,255,0.4)" fontSize={11} tickLine={false} axisLine={false} />
-                   <RechartsTooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ backgroundColor: 'rgba(9, 9, 11, 0.95)', borderColor: 'rgba(255,255,255,0.1)' }} />
-                   <Bar dataKey="value" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                </BarChart>
+                   <YAxis stroke="rgba(255,255,255,0.4)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(val) => Math.floor(val).toString()} />
+                   <RechartsTooltip cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1, strokeDasharray: '3 3' }} contentStyle={{ backgroundColor: 'rgba(9, 9, 11, 0.95)', borderColor: 'rgba(255,255,255,0.1)' }} />
+                   <Legend iconType="plainline" wrapperStyle={{ fontSize: '10px' }} />
+                   <Line type="monotone" name={stats.playerPerformance?.[0]?.name || "Player 1"} dataKey="p0" stroke="#eab308" strokeWidth={2} dot={{ r: 2, fill: '#eab308' }} activeDot={{ r: 4 }} />
+                   <Line type="monotone" name={stats.playerPerformance?.[1]?.name || "Player 2"} dataKey="p1" stroke="#94a3b8" strokeWidth={2} dot={{ r: 2, fill: '#94a3b8' }} activeDot={{ r: 4 }} />
+                   <Line type="monotone" name={stats.playerPerformance?.[2]?.name || "Player 3"} dataKey="p2" stroke="#b45309" strokeWidth={2} dot={{ r: 2, fill: '#b45309' }} activeDot={{ r: 4 }} />
+                   <Line type="monotone" name={stats.playerPerformance?.[3]?.name || "Player 4"} dataKey="p3" stroke="#10b981" strokeWidth={2} dot={{ r: 2, fill: '#10b981' }} activeDot={{ r: 4 }} />
+                   <Line type="monotone" name={stats.playerPerformance?.[4]?.name || "Player 5"} dataKey="p4" stroke="#475569" strokeWidth={2} dot={{ r: 2, fill: '#475569' }} activeDot={{ r: 4 }} />
+                </LineChart>
               </ResponsiveContainer>
             </div>
           </CardContent>

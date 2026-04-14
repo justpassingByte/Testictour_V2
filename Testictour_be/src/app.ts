@@ -108,13 +108,27 @@ io.on('connection', (socket) => {
   });
 
   socket.on('worker_lobby_update', (data) => {
-    const { tournamentId, lobbyId, ...lobbyData } = data;
-    logger.info(`Received worker_lobby_update for tournament ${tournamentId}, lobby ${lobbyId}. Re-emitting to clients.`);
-    io.to(`tournament:${tournamentId}`).emit('tournament_update', lobbyData);
-    if (lobbyId) {
-      io.to(`lobby:${lobbyId}`).emit('lobby:state_update', lobbyData);
+    const { tournamentId, lobbyId, type, matchResults, ...rest } = data;
+    logger.info(`Received worker_lobby_update for tournament ${tournamentId}, lobby ${lobbyId}, type: ${type}.`);
+
+    // Tournament room: lightweight signal only — clients refetch bracket via HTTP/SWR
+    io.to(`tournament:${tournamentId}`).emit('tournament_update', {
+      type: type || 'lobby_updated',
+      lobbyId,
+      roundId: rest.roundId,
+      fetchedResult: rest.fetchedResult,
+    });
+
+    // Lobby room: lean match results (placement/points only, no matchData)
+    if (lobbyId && matchResults) {
+      io.to(`lobby:${lobbyId}`).emit('lobby:match_result', {
+        lobbyId,
+        matchResults,
+        fetchedResult: rest.fetchedResult,
+      });
     }
-    // Also notify player profile pages — emit globally (filtered on frontend by userId)
+
+    // Notify player profile pages
     io.emit('player_profile_update', {});
   });
 

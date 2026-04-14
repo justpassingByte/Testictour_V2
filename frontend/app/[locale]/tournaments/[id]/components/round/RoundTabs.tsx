@@ -14,7 +14,6 @@ import { Button } from "@/components/ui/button"
 
 import { ResultsTab } from "./tabs/ResultsTab"
 import { LobbiesTab } from "./tabs/LobbiesTab"
-import { TournamentStatisticsTab } from "@/app/[locale]/tournaments/[id]/components/TournamentStatisticsTab"
 import { useTranslations } from "next-intl"
 import { MatchCompPanel, isGrimoireMatchData } from "@/components/match/MatchCompPanel"
 import { GrimoireMatchData } from "@/app/types/riot"
@@ -124,7 +123,6 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
         <TabsTrigger value="results">{t("round_results")}</TabsTrigger>
         <TabsTrigger value="matches">{t("match_details")}</TabsTrigger>
         <TabsTrigger value="lobbies">{t("lobby_breakdown")}</TabsTrigger>
-        <TabsTrigger value="statistics">{t("statistics")}</TabsTrigger>
       </TabsList>
       <TabsContent value="results">
         <ResultsTab round={round} tournament={tournament} allPlayers={allPlayers} numMatches={numMatches} />
@@ -377,9 +375,6 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
       </TabsContent>
       <TabsContent value="lobbies">
         <LobbiesTab round={round} allPlayers={allPlayers} numMatches={numMatches} tournamentId={tournament.id} />
-      </TabsContent>
-      <TabsContent value="statistics">
-        <TournamentStatisticsTab tournamentId={tournament.id} />
       </TabsContent>
     </Tabs>
   )

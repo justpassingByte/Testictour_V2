@@ -116,11 +116,13 @@ export default function TournamentSidebarClient({ initialTournament }: Tournamen
             </li>
           </ul>
           <div className="grid gap-3">
-            {tournament.status === "in_progress" && (
+            {(tournament.status === "in_progress" || tournament.status === "COMPLETED" || tournament.status === "completed") && (
               <>
-                <TournamentLobbyButton tournamentId={tournament.id} />
+                {tournament.status === "in_progress" && <TournamentLobbyButton tournamentId={tournament.id} />}
                 <Button asChild variant="secondary" className="w-full">
-                  <Link href={`/tournaments/${tournament.id}/live`}>{t("view_live_scoreboard")}</Link>
+                  <Link href={`/tournaments/${tournament.id}/live`}>
+                    {tournament.status === "in_progress" ? t("view_live_scoreboard") : t("view_scoreboard")}
+                  </Link>
                 </Button>
               </>
             )}

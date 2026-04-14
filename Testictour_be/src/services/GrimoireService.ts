@@ -1,6 +1,18 @@
 import axios from 'axios';
 import logger from '../utils/logger';
 import ApiError from '../utils/ApiError';
+import { getGrimoireRateLimiter } from '../lib/rateLimiter';
+
+/**
+ * Acquire a rate-limit token before making an external API call.
+ * If Redis is not available, this is a no-op (fail-open).
+ */
+async function acquireApiToken(): Promise<void> {
+  const limiter = getGrimoireRateLimiter();
+  if (limiter) {
+    await limiter.consume();
+  }
+}
 
 const GRIMOIRE_API_URL = process.env.GRIMOIRE_API_URL || 'http://localhost:3001';
 
@@ -77,6 +89,7 @@ export default class GrimoireService {
     try {
       logger.info(`[GrimoireService] Calling Grimoire API to fetch latest match for ${puuids.length} PUUIDs`);
 
+      await acquireApiToken();
       const response = await axios.post(`${GRIMOIRE_API_URL}/api/internal/match/fetch-latest`, {
         puuids,
         region,
@@ -122,6 +135,7 @@ export default class GrimoireService {
     try {
       logger.info(`[GrimoireService] Fetching PUUID for ${gameName}#${tagLine} from Grimoire API`);
 
+      await acquireApiToken();
       const response = await axios.post(`${GRIMOIRE_API_URL}/api/internal/summoner/puuid`, {
         gameName,
         tagLine,
@@ -159,6 +173,7 @@ export default class GrimoireService {
     try {
       logger.info(`[GrimoireService] Fetching raw Riot match data for ${matchId} from Grimoire API`);
 
+      await acquireApiToken();
       const response = await axios.post(`${GRIMOIRE_API_URL}/api/internal/riot/match`, {
         matchId,
         region,
@@ -207,6 +222,7 @@ export default class GrimoireService {
     try {
       logger.info(`[GrimoireService] Calling Grimoire /validate for ${puuids.length} PUUIDs, region=${region}, lobbyStartTime=${lobbyStartTime}`);
 
+      await acquireApiToken();
       const response = await axios.post(`${GRIMOIRE_API_URL}/api/internal/match/validate`, {
         puuids,
         lobbyStartTime,

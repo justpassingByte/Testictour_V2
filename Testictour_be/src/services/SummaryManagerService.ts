@@ -202,7 +202,7 @@ class SummaryManagerService {
   /**
    * Tạo PlayerMatchSummary cho tất cả người chơi trong một trận
    */
-  static async createMatchSummaries(matchId: string, results: any[]) {
+  static async createMatchSummaries(matchId: string, results: any[], skipQueue: boolean = false) {
     try {
       // Lấy thông tin match và tournament
       const match = await prisma.match.findUnique({
@@ -232,8 +232,8 @@ class SummaryManagerService {
       const tournament = match.lobby.round.phase.tournament;
       const round = match.lobby.round;
 
-      // Tạo hoặc cập nhật summary cho mỗi người chơi
-      for (const result of results) {
+      // Tạo hoặc cập nhật summary cho mỗi người chơi đồng thời
+      const summaryPromises = results.map(async (result) => {
         await prisma.playerMatchSummary.upsert({
           where: {
             userId_matchId: {
@@ -258,12 +258,18 @@ class SummaryManagerService {
           }
         });
 
-        // Đưa vào queue cập nhật thống kê người chơi
-        await this.queuePlayerStats(result.userId);
-      }
+        if (!skipQueue) {
+          // Đưa vào queue cập nhật thống kê người chơi
+          await this.queuePlayerStats(result.userId);
+        }
+      });
 
-      // Đưa vào queue cập nhật tournament summary
-      await this.queueTournamentSummary(tournament.id);
+      await Promise.all(summaryPromises);
+
+      if (!skipQueue) {
+        // Đưa vào queue cập nhật tournament summary
+        await this.queueTournamentSummary(tournament.id);
+      }
       logger.debug(`Created ${results.length} match summaries for match ${matchId}`);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -483,7 +489,7 @@ class SummaryManagerService {
           for (const lobby of round.lobbies) {
             for (const match of lobby.matches) {
               if (match.matchResults && match.matchResults.length > 0) {
-                await this.createMatchSummaries(match.id, match.matchResults);
+                await this.createMatchSummaries(match.id, match.matchResults, true);
                 matchCount++;
               }
             }

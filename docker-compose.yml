@@ -13,7 +13,7 @@ services:
       - NODE_ENV=production
       - DATABASE_URL=${DATABASE_URL}
       - JWT_SECRET=${JWT_SECRET}
-      - FRONTEND_URL=http://${VPS_IP:-localhost}
+      - FRONTEND_URL=https://testictour.com
       - BACKEND_SERVICE_URL=http://testictour-backend:4000
       - GRIMOIRE_API_URL=http://grimoire-backend:3001
       # Gateway Variables
@@ -25,6 +25,7 @@ services:
       - MOMO_SECRET_KEY=${MOMO_SECRET_KEY}
       # Email (Resend)
       - RESEND_API_KEY=${RESEND_API_KEY}
+      - RESEND_WEBHOOK_SECRET=${RESEND_WEBHOOK_SECRET}
       - EMAIL_FROM_ADDRESS=${EMAIL_FROM_ADDRESS:-noreply@testictour.com}
       # Uncomment when Redis is available:
       - REDIS_URL=redis://redis:6379
@@ -39,8 +40,8 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.frontend
       args:
-        - NEXT_PUBLIC_API_URL=http://${VPS_IP:-localhost}:4000
-        - NEXT_PUBLIC_BACKEND_URL=http://${VPS_IP:-localhost}:4000
+        - NEXT_PUBLIC_API_URL=https://api.testictour.com
+        - NEXT_PUBLIC_BACKEND_URL=https://api.testictour.com
     container_name: testictour-frontend
     restart: unless-stopped
     # Đưa lại về port 80 để truy cập IP là vào web luôn
@@ -48,8 +49,8 @@ services:
       - "80:3000" 
     environment:
       - INTERNAL_BACKEND_URL=http://testictour-backend:4000/api
-      - NEXT_PUBLIC_API_URL=http://${VPS_IP:-localhost}:4000
-      - NEXT_PUBLIC_BACKEND_URL=http://${VPS_IP:-localhost}:4000
+      - NEXT_PUBLIC_API_URL=https://api.testictour.com
+      - NEXT_PUBLIC_BACKEND_URL=https://api.testictour.com
     depends_on:
       - backend
     networks:

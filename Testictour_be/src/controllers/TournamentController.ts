@@ -141,6 +141,7 @@ const TournamentController = {
         hostFeePercent: req.body.hostFeePercent,
         expectedParticipants: req.body.expectedParticipants,
         isCommunityMode: req.body.isCommunityMode,
+        customPrizePool: req.body.customPrizePool,
       });
       res.json({ tournament: data });
     } catch (err) {
@@ -248,6 +249,59 @@ const TournamentController = {
       data: {
         matchesQueued: result.matchesQueued
       }
+    });
+  }),
+
+  recentResults: asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    const { id } = req.params;
+    
+    const matches = await prisma.match.findMany({
+      where: {
+        lobby: {
+          round: {
+            phase: {
+              tournamentId: id
+            }
+          }
+        },
+        fetchedAt: {
+          not: null
+        }
+      },
+      orderBy: {
+        fetchedAt: 'desc'
+      },
+      take: 10,
+      include: {
+        lobby: {
+          include: {
+            round: true
+          }
+        },
+        matchResults: {
+          orderBy: {
+            placement: 'asc'
+          },
+          include: {
+            user: {
+              select: { 
+                username: true, 
+                riotGameName: true, 
+                riotGameTag: true,
+                participants: {
+                  where: { tournamentId: id },
+                  select: { scoreTotal: true }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      matches
     });
   }),
 

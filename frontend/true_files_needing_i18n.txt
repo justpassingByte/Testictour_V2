@@ -1,0 +1,14 @@
+app/[locale]/dashboard/admin/components/AdminEscrowOperationsTab.tsx
+app/[locale]/dashboard/admin/dev-tools/page.tsx
+app/[locale]/dashboard/admin/partners/page.tsx
+app/[locale]/dashboard/admin/players/page.tsx
+app/[locale]/dashboard/admin/tournaments/create/page.tsx
+app/[locale]/dashboard/admin/tournaments/[id]/page.tsx
+app/[locale]/dashboard/partner/components/EscrowManagementTab.tsx
+app/[locale]/dashboard/partner/components/PartnerServerComponents.tsx
+app/[locale]/dashboard/partner/lobbies/page.tsx
+app/[locale]/dashboard/partner/tournaments/[id]/page.tsx
+app/[locale]/minitour/lobbies/[id]/hooks/useMiniTourSocket.ts
+app/[locale]/terms/escrow/page.tsx
+app/[locale]/tournaments/[id]/components/TournamentStatisticsTab.tsx
+app/[locale]/tournaments/[id]/register/page.tsx

@@ -23,6 +23,8 @@ interface PhaseFormData {
   numberOfRounds: number
   advancementType: string
   advancementValue: number
+  matchesPerRound: number
+  carryOverScores: boolean
 }
 
 export default function CreateTournamentPage() {
@@ -37,6 +39,7 @@ export default function CreateTournamentPage() {
     region: "APAC",
     maxPlayers: 32,
     entryFee: 0,
+    customPrizePool: 0,
     hostFeePercent: 0.1,
     startTime: "",
     registrationDeadline: "",
@@ -62,7 +65,7 @@ export default function CreateTournamentPage() {
   }
 
   const [phases, setPhases] = useState<PhaseFormData[]>([
-    { name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "top_n_scores", advancementValue: 4 }
+    { name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "top_n_scores", advancementValue: 4, matchesPerRound: 1, carryOverScores: false }
   ])
 
   const updateForm = (field: string, value: any) => {
@@ -77,6 +80,8 @@ export default function CreateTournamentPage() {
       numberOfRounds: 1,
       advancementType: "top_n_scores",
       advancementValue: 4,
+      matchesPerRound: 1,
+      carryOverScores: false,
     }])
   }
 
@@ -102,7 +107,10 @@ export default function CreateTournamentPage() {
         type: p.type,
         lobbySize: p.lobbySize,
         numberOfRounds: p.numberOfRounds,
+        matchesPerRound: p.matchesPerRound,
         advancementCondition: { type: p.advancementType, value: p.advancementValue },
+        lobbyAssignment: p.type === 'swiss' ? 'swiss' : 'random',
+        carryOverScores: p.carryOverScores,
       }))
 
       await TournamentService.create({
@@ -114,6 +122,7 @@ export default function CreateTournamentPage() {
         organizerId: currentUser?.id || "",
         roundsTotal: phases.reduce((sum, p) => sum + p.numberOfRounds, 0),
         entryFee: form.entryFee,
+        customPrizePool: form.customPrizePool > 0 ? form.customPrizePool : undefined,
         registrationDeadline: new Date(form.registrationDeadline),
         hostFeePercent: form.hostFeePercent,
         expectedParticipants: form.maxPlayers,
@@ -247,18 +256,24 @@ export default function CreateTournamentPage() {
                 <Input id="entryFee" type="number" min={0} value={form.entryFee} onChange={(e) => updateForm("entryFee", parseFloat(e.target.value))} />
               </div>
               <div className="space-y-2">
+                <Label htmlFor="customPrizePool">Manual Prize Pool</Label>
+                <Input id="customPrizePool" type="number" min={0} value={form.customPrizePool} onChange={(e) => updateForm("customPrizePool", parseFloat(e.target.value))} placeholder="Use entry fees if 0" />
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="hostFeePercent">Host Fee (%)</Label>
                 <Input id="hostFeePercent" type="number" min={0} max={1} step={0.01} value={form.hostFeePercent} onChange={(e) => updateForm("hostFeePercent", parseFloat(e.target.value))} />
               </div>
             </div>
-            {form.entryFee > 0 && (
-              <div className="text-sm text-muted-foreground bg-violet-500/5 border border-violet-500/10 rounded-lg p-3">
-                Estimated prize pool: <strong className="text-violet-400">
-                  {(form.maxPlayers * form.entryFee * (1 - form.hostFeePercent)).toLocaleString()} Credits
-                </strong>
-                {" "}(at full registration)
-              </div>
-            )}
+            
+            <div className="text-sm text-muted-foreground bg-violet-500/5 border border-violet-500/10 rounded-lg p-3">
+              Estimated prize pool: <strong className="text-violet-400">
+                {form.customPrizePool > (form.maxPlayers * form.entryFee * (1 - form.hostFeePercent)) 
+                  ? form.customPrizePool.toLocaleString() 
+                  : (form.maxPlayers * form.entryFee * (1 - form.hostFeePercent)).toLocaleString()} Credits
+              </strong>
+              {" "}(at full registration)
+            </div>
+            
           </CardContent>
         </Card>
 
@@ -276,8 +291,8 @@ export default function CreateTournamentPage() {
                  <h4 className="font-semibold">{form.isCommunityMode ? 'Community Mode' : 'Escrow Secured'}</h4>
                  <p className="text-sm text-muted-foreground mt-1">
                    {form.isCommunityMode 
-                     ? 'Giải đấu tự do. Không có quỹ Escrow bảo lãnh từ nền tảng. Phù hợp đánh giao hữu.' 
-                     : 'Giải đấu bảo trợ Escrow. Yêu cầu tạo quỹ tiền thưởng trước khi bắt đầu để đảm bảo an toàn, minh bạch.'}
+                     ? t("community_mode_desc") 
+                     : t("escrow_mode_desc")}
                  </p>
                </div>
                <Button 
@@ -325,21 +340,32 @@ export default function CreateTournamentPage() {
                       <Select value={phase.type} onValueChange={(v) => updatePhase(index, "type", v)}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="elimination">Elimination</SelectItem>
-                          <SelectItem value="points">Points</SelectItem>
-                          <SelectItem value="swiss">Swiss</SelectItem>
-                          <SelectItem value="round_robin">Round Robin</SelectItem>
-                          <SelectItem value="checkmate">Checkmate</SelectItem>
+                          <SelectItem value="elimination">Group Elimination (Loại theo bảng - BO1/BO2..)</SelectItem>
+                          <SelectItem value="points">Global Points (Sảnh chung tính điểm)</SelectItem>
+                          <SelectItem value="swiss">Swiss (Thụy Sĩ / Tính điểm tích luỹ)</SelectItem>
+                          <SelectItem value="round_robin">Round Robin (Vòng tròn)</SelectItem>
+                          <SelectItem value="checkmate">Checkmate (Tới ngưỡng checkmate)</SelectItem>
                         </SelectContent>
                       </Select>
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        {phase.type === 'elimination' && "Chia bảng đấu cố định trống suốt số vòng. Cuối cùng loại những người bét bảng."}
+                        {phase.type === 'points' && "Gom tất cả người chơi vào sảnh chung, xào lại sau mỗi trận, tính tổng điểm."}
+                        {phase.type === 'swiss' && "Thi đấu nhiều trận, cộng dồn điểm, ưu tiên bắt cặp đồng điểm."}
+                        {phase.type === 'round_robin' && "Thi đấu vòng tròn tính điểm."}
+                        {phase.type === 'checkmate' && "Người chơi phải đạt đủ số điểm ngưỡng, sau đó dành Top 1 để vô địch."}
+                      </p>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Lobby Size</Label>
-                      <Input type="number" min={2} max={8} value={phase.lobbySize} onChange={(e) => updatePhase(index, "lobbySize", parseInt(e.target.value))} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Rounds</Label>
-                      <Input type="number" min={1} value={phase.numberOfRounds} onChange={(e) => updatePhase(index, "numberOfRounds", parseInt(e.target.value))} />
+
+                    <div className="space-y-2 relative">
+                      <Label className="text-orange-400 font-medium tracking-wide">Matches to Play (Thể thức thi đấu)</Label>
+                      <Input type="number" min={1} value={phase.matchesPerRound || phase.numberOfRounds} onChange={(e) => {
+                        const val = parseInt(e.target.value);
+                        updatePhase(index, "matchesPerRound", val);
+                        updatePhase(index, "numberOfRounds", val);
+                      }} className="border-orange-500/50 focus-visible:ring-orange-500/30" />
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        {phase.type === 'elimination' ? "Số trận mỗi bảng (1 = BO1, 2 = BO2)." : "Sẽ xào lobby sau mỗi trận cho đến khi đủ số trận."}
+                      </p>
                     </div>
                     <div className="space-y-2">
                       <Label>Advancement</Label>
@@ -355,6 +381,18 @@ export default function CreateTournamentPage() {
                       <Label>Advance Top</Label>
                       <Input type="number" min={1} value={phase.advancementValue} onChange={(e) => updatePhase(index, "advancementValue", parseInt(e.target.value))} />
                     </div>
+                    {index > 0 && (
+                      <div className="space-y-2">
+                        <Label>Carry Over Scores</Label>
+                        <Select value={phase.carryOverScores ? "true" : "false"} onValueChange={(v) => updatePhase(index, "carryOverScores", v === "true")}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="false">Reset Points (Về 0 điểm)</SelectItem>
+                            <SelectItem value="true">Keep Points (Cộng dồn điểm)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

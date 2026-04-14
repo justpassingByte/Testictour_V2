@@ -23,7 +23,7 @@ interface LivePageClientProps {
 }
 
 export default function LivePageClient({ tournament: initialTournament }: LivePageClientProps) {
-  const t = useTranslations("Common");
+  const t = useTranslations("common");
   const router = useRouter()
   const fetchTournamentDetail = useTournamentStore(state => state.fetchTournamentDetail)
   const currentTournament = useTournamentStore(state => state.currentTournament)
@@ -55,29 +55,52 @@ export default function LivePageClient({ tournament: initialTournament }: LivePa
     };
   }, [fetchTournamentDetail, initialTournament.id, router]);
 
-  // Duration Timer (Count Up since tournament start, or if not started, 0)
+  // Duration Timer (Count Up elapsed time since tournament start, and stop at end)
   useEffect(() => {
-    if (!tournament.startTime || ['DRAFT', 'UPCOMING', 'REGISTRATION'].includes(tournament.status)) {
+    if (!tournament.startTime || ['DRAFT', 'UPCOMING', 'REGISTRATION'].includes(tournament.status.toUpperCase())) {
       setDuration(0);
       return;
     }
 
     const startTimestamp = new Date(tournament.startTime).getTime();
     
-    const updateTimer = () => {
-      let diff = 0;
-      if (tournament.status === 'COMPLETED' && tournament.endTime) {
-        diff = Math.floor((new Date(tournament.endTime).getTime() - startTimestamp) / 1000);
-      } else {
-        diff = Math.floor((Date.now() - startTimestamp) / 1000);
+    // Extract earliest lobby start time if available
+    const firstLobbyStart = tournament.phases?.[0]?.rounds?.[0]?.lobbies?.[0]?.phaseStartedAt;
+    
+    // Safety check: if tournament started early, just start from 0 instead of negative,
+    // or use the first lobby's start time if it was forced to start early.
+    const getElapsedSeconds = () => {
+      const now = Date.now();
+      let actualStart = startTimestamp;
+      
+      if (firstLobbyStart && new Date(firstLobbyStart).getTime() < startTimestamp) {
+         actualStart = new Date(firstLobbyStart).getTime();
+      } else if (now < startTimestamp && tournament.status.toUpperCase() === 'IN_PROGRESS') {
+         // Fallback if no precise timestamp, use updatedAt if available as the moment it was started
+         actualStart = tournament.lastSyncTime ? new Date(tournament.lastSyncTime).getTime() : now;
       }
-      setDuration(Math.max(0, diff));
+      
+      return now > actualStart ? Math.floor((now - actualStart) / 1000) : 0;
+    };
+    
+    const updateTimer = () => {
+      if (tournament.status.toUpperCase() === 'COMPLETED') {
+        const endTimestamp = tournament.endTime ? new Date(tournament.endTime).getTime() : Date.now();
+        let actualStart = startTimestamp;
+        if (firstLobbyStart && new Date(firstLobbyStart).getTime() < startTimestamp) {
+           actualStart = new Date(firstLobbyStart).getTime();
+        }
+        const finalDiff = Math.floor((endTimestamp - actualStart) / 1000);
+        setDuration(finalDiff > 0 ? finalDiff : 0);
+      } else {
+        setDuration(getElapsedSeconds());
+      }
     };
 
     updateTimer(); // Initial call
     
     // Only tick if currently in progress
-    if (tournament.status === 'in_progress') {
+    if (tournament.status.toUpperCase() === 'IN_PROGRESS') {
       const timer = setInterval(updateTimer, 1000);
       return () => clearInterval(timer);
     }
@@ -108,7 +131,9 @@ export default function LivePageClient({ tournament: initialTournament }: LivePa
           <ChevronRight className="h-4 w-4" />
           <Link href={`/tournaments/${tournament.id}`} className="hover:text-primary transition-colors">{tournament.name}</Link>
           <ChevronRight className="h-4 w-4" />
-          <span className="font-medium text-foreground">{t("live_updates") || "Live Scoreboard"}</span>
+          <span className="font-medium text-foreground">
+            {tournament.status === 'in_progress' ? (t("live_updates") || "Live Scoreboard") : (t("scoreboard") || "Scoreboard")}
+          </span>
         </div>
         <SyncStatus status={tournament.status === 'in_progress' ? "live" : "idle"} />
       </div>
@@ -117,7 +142,9 @@ export default function LivePageClient({ tournament: initialTournament }: LivePa
         {/* Header */}
         <div className="flex flex-col space-y-2">
           <div className="flex items-center space-x-3">
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">{tournament.name} - {t("live_updates") || "Live"}</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">
+              {tournament.name} - {tournament.status === 'in_progress' ? (t("live_updates") || "Live") : (t("scoreboard") || "Scoreboard")}
+            </h1>
             {tournament.status === 'in_progress' ? (
                <Badge className="bg-red-500/20 text-red-600 dark:text-red-500 animate-pulse border border-red-500/30 flex items-center gap-1.5 px-3 py-1">
                  <div className="h-2 w-2 rounded-full bg-red-500 animate-ping"></div> {t("live")}
@@ -188,7 +215,7 @@ export default function LivePageClient({ tournament: initialTournament }: LivePa
                 </TabsTrigger>
                 <TabsTrigger value="recent-results" className="data-[state=active]:bg-purple-500/20 data-[state=active]:text-purple-600 dark:data-[state=active]:text-purple-400 data-[state=active]:border-purple-500/50 border border-transparent px-6 py-2.5 rounded-full transition-all text-sm font-medium hover:bg-muted">
                   <Activity className="w-4 h-4 mr-2" />
-                  {t("recent_results") || "Recent Results"}
+                  {t("leaderboard_results") || "Leaderboard & Results"}
                 </TabsTrigger>
                 <TabsTrigger value="statistics" className="data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-600 dark:data-[state=active]:text-emerald-400 data-[state=active]:border-emerald-500/50 border border-transparent px-6 py-2.5 rounded-full transition-all text-sm font-medium hover:bg-muted">
                   <BarChart3 className="w-4 h-4 mr-2" />

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useTranslations } from "next-intl";
-import { Info, DollarSign, Wallet, Globe, Users, ScrollText } from "lucide-react"
+import { Info, DollarSign, Wallet, Globe, Users, ScrollText, ShieldCheck } from "lucide-react"
 import { ITournament } from '@/app/types/tournament';
 
 interface TournamentDetailsTabProps {
@@ -29,6 +29,8 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
     if (num % 10 === 3 && num % 100 !== 13) return `${num}rd`;
     return `${num}th`;
   };
+
+  const isEscrow = !tournament.isCommunityMode;
 
   return (
     <div className="space-y-4">
@@ -88,10 +90,11 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
             const prizePercentage = isArray 
               ? tournament.prizeStructure[parseInt(rank) - 1] 
               : tournament.prizeStructure?.[rank];
-            const normalizedPercentage = prizePercentage > 1 ? prizePercentage / 100 : prizePercentage;
-            const prizeAmount = prizePercentage !== undefined ? totalPrizePool * normalizedPercentage : undefined;
+            
+            if (prizePercentage === undefined) return null;
 
-            if (prizeAmount === undefined) return null;
+            const normalizedPercentage = prizePercentage > 1 ? prizePercentage / 100 : prizePercentage;
+            const prizeAmount = totalPrizePool * normalizedPercentage;
 
             return (
               <Card key={rank} className="flex flex-col items-center justify-center p-4 border shadow-sm bg-muted/40">
@@ -103,23 +106,34 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
         </CardContent>
       </Card>
 
-      {/* Additional Information */}
+      {/* Escrow and Additional Information */}
       <Card className="border shadow-sm">
         <CardHeader>
           <CardTitle className="text-lg flex items-center">
-            <ScrollText className="mr-2 h-5 w-5 text-primary" />
-            {t("additional_information")}
+            <ShieldCheck className="mr-2 h-5 w-5 text-primary" />
+            {isEscrow ? t("escrow_title") : t("community_title")}
           </CardTitle>
         </CardHeader>
-        <CardContent className="text-sm">
-          <p className="mb-2">{t("tournament_description")}</p>
-          <h4 className="font-bold mt-4 mb-2">{t("general_tournament_rules")}:</h4>
-          <ol className="list-decimal list-inside ml-4 space-y-1">
-            <li>{t("rule_1")}</li>
-            <li>{t("rule_2")}</li>
-            <li>{t("rule_3")}</li>
-            <li>{t("rule_4")}</li>
-          </ol>
+        <CardContent className="text-sm space-y-4">
+          <div className={`p-4 rounded-lg border ${isEscrow ? 'bg-green-500/5 border-green-500/20' : 'bg-blue-500/5 border-blue-500/20'}`}>
+            <p className="font-medium mb-1">{isEscrow ? t("escrow_title") : t("community_title")}</p>
+            <p className="text-muted-foreground">{isEscrow ? t("escrow_desc") : t("community_desc")}</p>
+            {isEscrow && tournament.escrowRequiredAmount && (
+                <p className="mt-2 font-bold text-green-600 dark:text-green-400">
+                  {t("guaranteed_pool")}: {formatCurrency(tournament.escrowRequiredAmount)}
+                </p>
+            )}
+          </div>
+          
+          {tournament.description && (
+            <div>
+              <h4 className="font-bold flex items-center gap-2 mb-2">
+                <ScrollText className="h-4 w-4 text-primary" />
+                {t("additional_information")}
+              </h4>
+              <p className="text-muted-foreground whitespace-pre-wrap">{tournament.description}</p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

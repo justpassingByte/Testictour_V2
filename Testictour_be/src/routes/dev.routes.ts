@@ -374,7 +374,7 @@ router.get('/tournament-statistics/:id', async (req: Request, res: Response) => 
         bestRegionName = region;
       }
     }
-    
+
     // Sort regions by avgScore descending
     regionStatsArray.sort((a, b) => parseFloat(b.avgScore) - parseFloat(a.avgScore));
 
@@ -394,9 +394,9 @@ router.get('/tournament-statistics/:id', async (req: Request, res: Response) => 
     for (const match of matches) {
       if (match.matchResults) {
         match.matchResults.forEach(r => {
-           if (r.placement >= 1 && r.placement <= 8) {
-              placementDensity[r.placement - 1]++;
-            }
+          if (r.placement >= 1 && r.placement <= 8) {
+            placementDensity[r.placement - 1]++;
+          }
         });
       }
 
@@ -448,28 +448,28 @@ router.get('/tournament-statistics/:id', async (req: Request, res: Response) => 
       ? `${Math.floor(totalDuration / durationCount / 60)}:${String(Math.round((totalDuration / durationCount) % 60)).padStart(2, '0')}`
       : null;
 
-    return res.json({ 
-      success: true, 
-      matchCount: matches.length, 
-      stats: { 
-        topUnits, 
-        topTraits, 
+    return res.json({
+      success: true,
+      matchCount: matches.length,
+      stats: {
+        topUnits,
+        topTraits,
         avgDuration,
         summary: {
-            totalPlayers,
-            activePlayers,
-            eliminatedPlayers,
-            avgScore,
-            totalScoreAll,
-            highestScore,
-            highestScorePlayer,
-            totalRegions: regionCounts.size,
-            bestRegionName
+          totalPlayers,
+          activePlayers,
+          eliminatedPlayers,
+          avgScore,
+          totalScoreAll,
+          highestScore,
+          highestScorePlayer,
+          totalRegions: regionCounts.size,
+          bestRegionName
         },
         placementDensity,
         topPlayersPoints,
         regionStats: regionStatsArray
-      } 
+      }
     });
   } catch (err: any) {
     console.error('[DevTools] error:', err.message);
@@ -489,49 +489,41 @@ router.post('/automation/seed-env', async (req: Request, res: Response) => {
   try {
     const { gameName, tagLine, region = 'sea', type = 'minitour' } = req.body;
 
-    // If no specific Riot ID given, use the old generic seed scripts
-    if (!gameName || !tagLine) {
-      const { execSync } = require('child_process');
-      execSync('npx ts-node scripts/seedUsers.ts', { stdio: 'inherit' });
-      execSync('npx ts-node scripts/seedGrimoireTournament.ts', { stdio: 'inherit' });
-      execSync('npx ts-node scripts/testMiniTourLobby.ts', { stdio: 'inherit' });
-      return res.json({ success: true, message: "Generic environment seeded successfully" });
+    let riotPlayers: any[] = [];
+    if (gameName && tagLine) {
+      const { gameName2, tagLine2, gameName3, tagLine3, gameName4, tagLine4 } = req.body;
+      riotPlayers = [
+        { gameName, tagLine },
+        { gameName: gameName2, tagLine: tagLine2 },
+        { gameName: gameName3, tagLine: tagLine3 },
+        { gameName: gameName4, tagLine: tagLine4 },
+      ].filter(p => p.gameName && p.tagLine);
     }
 
     const { prisma } = require('../services/prisma');
     const GrimoireSvc = require('../services/GrimoireService').default;
-
-    const { gameName2, tagLine2, gameName3, tagLine3, gameName4, tagLine4 } = req.body;
-    const riotPlayers = [
-      { gameName, tagLine },
-      { gameName: gameName2, tagLine: tagLine2 },
-      { gameName: gameName3, tagLine: tagLine3 },
-      { gameName: gameName4, tagLine: tagLine4 },
-    ].filter(p => p.gameName && p.tagLine);
 
     const startTime = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
     let allRealParticipants: any[] = [];
     let allMatchIds: string[] = [];
     let fetchedAny = false;
 
-    for (const p of riotPlayers) {
-      try {
-        const puuid = await GrimoireSvc.fetchPuuid(p.gameName, p.tagLine, region);
-        const result = await GrimoireSvc.fetchLatestMatch([puuid], region, startTime, undefined, undefined);
-        if (result.match) {
-          fetchedAny = true;
-          if (result.match.participants) allRealParticipants = allRealParticipants.concat(result.match.participants);
-          const mIds = result.matchIds || [];
-          if (!mIds.includes(result.match.matchId)) mIds.unshift(result.match.matchId);
-          allMatchIds = allMatchIds.concat(mIds.filter((id: string) => id !== result.match.matchId));
+    if (riotPlayers.length > 0) {
+      for (const p of riotPlayers) {
+        try {
+          const puuid = await GrimoireSvc.fetchPuuid(p.gameName, p.tagLine, region);
+          const result = await GrimoireSvc.fetchLatestMatch([puuid], region, startTime, undefined, undefined);
+          if (result.match) {
+            fetchedAny = true;
+            if (result.match.participants) allRealParticipants = allRealParticipants.concat(result.match.participants);
+            const mIds = result.matchIds || [];
+            if (!mIds.includes(result.match.matchId)) mIds.unshift(result.match.matchId);
+            allMatchIds = allMatchIds.concat(mIds.filter((id: string) => id !== result.match.matchId));
+          }
+        } catch (err) {
+          console.warn(`Failed to fetch for ${p.gameName}#${p.tagLine}:`, err);
         }
-      } catch (err) {
-        console.warn(`Failed to fetch for ${p.gameName}#${p.tagLine}:`, err);
       }
-    }
-
-    if (!fetchedAny) {
-      throw new Error(`No recent match found for any provided Riot IDs. Cannot seed realistic environment.`);
     }
 
     const numPlayers = req.body.numPlayers || (type === 'minitour' ? 8 : 16);
@@ -654,46 +646,68 @@ router.post('/automation/seed-env', async (req: Request, res: Response) => {
       }
       const participants = await prisma.participant.findMany({ where: { tournamentId: tour.id }, include: { user: true } });
 
-      const phase1 = await prisma.phase.create({
-        data: {
-          tournamentId: tour.id,
-          name: 'Group Stage',
-          phaseNumber: 1,
-          type: 'elimination',
-          status: 'WAITING',
-          lobbySize: 8,
-          matchesPerRound: 1,
-          numberOfRounds: numberOfGroups,
-          advancementCondition: { type: 'placement', value: 4 }
+      const phasesConfig = req.body.phasesConfig;
+      
+      const firstPhaseId = [];
+      if (phasesConfig && Array.isArray(phasesConfig) && phasesConfig.length > 0) {
+        for (let i = 0; i < phasesConfig.length; i++) {
+          const config = phasesConfig[i];
+          // For elimination: user's numberOfRounds = BO count (matches per lobby), NOT group count.
+          // Groups are auto-calculated by preAssignGroups from player count.
+          // For swiss: numberOfRounds = actual rounds (reshuffle after each).
+          const isElimination = (config.type || 'elimination') === 'elimination';
+          const createdPhase = await prisma.phase.create({
+            data: {
+              tournamentId: tour.id,
+              name: config.name || `Phase ${i + 1}`,
+              phaseNumber: i + 1,
+              type: config.type || 'elimination',
+              status: 'WAITING',
+              lobbySize: config.lobbySize || 8,
+              matchesPerRound: isElimination
+                ? (config.numberOfRounds || config.matchesPerRound || 1)
+                : (config.matchesPerRound || 1),
+              numberOfRounds: isElimination
+                ? 1  // Will be auto-calculated by preAssignGroups based on player count
+                : (config.numberOfRounds || 1),
+              pointsMapping: config.pointsMapping || [8, 7, 6, 5, 4, 3, 2, 1],
+              advancementCondition: config.advancementCondition !== undefined ? config.advancementCondition : (isElimination ? { type: 'placement', value: 4 } : undefined)
+            }
+          });
+          if (i === 0) firstPhaseId.push(createdPhase.id);
         }
-      });
-
-      const firstRound = await prisma.round.create({
-        data: { phaseId: phase1.id, roundNumber: 1, status: 'pending', startTime: new Date(Date.now() + 6 * 60 * 1000) }
-      });
-
-      // Automatically seed a Phase 2 (Checkmate Finals) - DISABLED FOR 1 PHASE TESTING
-      /*
-      const phase2 = await prisma.phase.create({
-        data: {
-          tournamentId: tour.id,
-          name: 'Finals (Checkmate)',
-          phaseNumber: 2,
-          type: 'checkmate',
-          status: 'pending',
-          lobbySize: 8,
-          matchesPerRound: 1,
-          numberOfRounds: 1, // Will spawn infinitely until Checkmate is reached
-          advancementCondition: 'checkmate',
-          pointsMapping: { "1": 8, "2": 7, "3": 6, "4": 5, "5": 4, "6": 3, "7": 2, "8": 1 }
-        }
-      });
-      */
-      // automatically create rounds for the groups
-      for (let g = 2; g <= numberOfGroups; g++) {
-        await prisma.round.create({
-          data: { phaseId: phase1.id, roundNumber: g, status: 'pending', startTime: new Date(Date.now() + 6 * 60 * 1000) }
+      } else {
+        const phase1 = await prisma.phase.create({
+          data: {
+            tournamentId: tour.id,
+            name: 'Group Stage',
+            phaseNumber: 1,
+            type: 'elimination',
+            status: 'WAITING',
+            lobbySize: 8,
+            matchesPerRound: 1,
+            numberOfRounds: numberOfGroups,
+            advancementCondition: { type: 'placement', value: 4 }
+          }
         });
+        firstPhaseId.push(phase1.id);
+      }
+
+      // automatically create rounds for the groups ONLY FOR Phase 1 (firstPhaseId)
+      // Actually RoundService creates round 1 for phase 1 when we call start/seed
+      // but let's pre-seed Round 1 for Phase 1 as dev tools expect it
+      let firstRound;
+      if (firstPhaseId.length > 0) {
+         firstRound = await prisma.round.create({
+           data: { phaseId: firstPhaseId[0], roundNumber: 1, status: 'pending', startTime: new Date(Date.now() + 6 * 60 * 1000) }
+         });
+         
+         const roundsToCreate = phasesConfig ? (phasesConfig[0]?.numberOfRounds || 1) : numberOfGroups;
+         for (let g = 2; g <= roundsToCreate; g++) {
+           await prisma.round.create({
+             data: { phaseId: firstPhaseId[0], roundNumber: g, status: 'pending', startTime: new Date(Date.now() + 6 * 60 * 1000) }
+           });
+         }
       }
 
       try {
@@ -721,12 +735,12 @@ router.post('/automation/seed-env', async (req: Request, res: Response) => {
 router.post('/automation/clear-env', async (req: Request, res: Response) => {
   try {
     const { prisma } = require('../services/prisma');
-    
+
     // Clear new Escrow and Financial records first to prevent foreign key constraint violations
     await prisma.transaction.deleteMany({});
     await prisma.reward.deleteMany({});
     await prisma.escrow.deleteMany({});
-    
+
     // Clear Core Tournament logic
     await prisma.playerMatchSummary.deleteMany({});
     await prisma.userTournamentSummary.deleteMany({});
@@ -1071,7 +1085,7 @@ router.post('/automation/simulate-match', async (req: Request, res: Response) =>
               lobbyMatchResults.set(lobby.id, lobbyResult.match);
               continue;
             }
-          } catch (_) {}
+          } catch (_) { }
         }
         // Fallback: use the original fetched match (already fetched above)
         lobbyMatchResults.set(lobby.id, result.match);
@@ -1080,10 +1094,10 @@ router.post('/automation/simulate-match', async (req: Request, res: Response) =>
       for (const lobby of lobbies) {
         // Delete any existing simulated matches to prevent spawning duplicates when clicking multiple times
         const existingMatches = await prisma.match.findMany({ where: { lobbyId: lobby.id } });
-        for (const m of existingMatches) {
+        await Promise.all(existingMatches.map(async (m: any) => {
           await prisma.matchResult.deleteMany({ where: { matchId: m.id } });
           await prisma.match.delete({ where: { id: m.id } });
-        }
+        }));
 
         // Use lobby-specific match data to ensure different lobbies get different results
         const lobbyMatchData = lobbyMatchResults.get(lobby.id) || result.match;
@@ -1102,8 +1116,7 @@ router.post('/automation/simulate-match', async (req: Request, res: Response) =>
           include: { user: true }
         });
 
-        for (let i = 0; i < participantsWithUsers.length; i++) {
-          const p = participantsWithUsers[i];
+        const matchRecordsPromises = participantsWithUsers.map(async (p: any, i: number) => {
           const realP = rawMatch.participants.find((rp: any) => rp.puuid === p.user.puuid) || rawMatch.participants[i];
 
           const pointsToAssign = ptsFormat[realP?.placement ? realP.placement - 1 : i] || 0;
@@ -1120,7 +1133,9 @@ router.post('/automation/simulate-match', async (req: Request, res: Response) =>
             where: { id: p.id },
             data: { scoreTotal: { increment: pointsToAssign } }
           });
-        }
+        });
+
+        await Promise.all(matchRecordsPromises);
 
         await prisma.lobby.update({
           where: { id: lobby.id },
@@ -1167,7 +1182,7 @@ router.post('/automation/simulate-match', async (req: Request, res: Response) =>
       try {
         const { checkAndAdvanceRound } = require('../jobs/roundCompletionWorker');
         const uniqueRoundIds = Array.from(new Set(lobbies.map((l: any) => l.roundId)));
-        
+
         for (const rId of uniqueRoundIds) {
           // Delay briefly to allow transactions and events to settle
           setTimeout(() => {
@@ -1197,25 +1212,200 @@ router.post('/automation/simulate-match', async (req: Request, res: Response) =>
 });
 
 /**
+ * POST /dev/automation/simulate-match-mock
+ * Simulates match results using random mock placements — NO Riot API required.
+ * Works with any players (including SimPlayer_ accounts with fake PUUIDs).
+ * Targets all PLAYING Tournament lobbies and immediately transitions them to FINISHED.
+ */
+router.post('/automation/simulate-match-mock', async (req: Request, res: Response) => {
+  try {
+    const { prisma } = require('../services/prisma');
+
+    const lobbies = await prisma.lobby.findMany({
+      where: { state: 'PLAYING' },
+      include: { round: { include: { phase: true } } }
+    });
+
+    if (lobbies.length === 0) {
+      return res.status(400).json({ success: false, error: 'No PLAYING Tournament lobbies found. Make sure lobbies are in PLAYING state before simulating.' });
+    }
+
+    const ptsFormat = [8, 7, 6, 5, 4, 3, 2, 1];
+
+    for (const lobby of lobbies) {
+      // Note: We no longer clear existing match data here.
+      // In multi-match phases (Swiss), the same lobby is reused for Match 1, Match 2, etc.
+      // Deleting existing matches causes FK constraint errors on PlayerMatchSummary and erases history.
+
+      // Create a mock match record (no Riot API data needed)
+      const mockMatchId = `MOCK_${lobby.id}_${Date.now()}`;
+      const newMatch = await prisma.match.create({
+        data: {
+          lobbyId: lobby.id,
+          matchIdRiotApi: mockMatchId,
+          matchData: { mock: true, generatedAt: new Date().toISOString() } as any,
+          fetchedAt: new Date()
+        }
+      });
+
+      // Get participants for this lobby
+      const participantsWithUsers = await prisma.participant.findMany({
+        where: {
+          userId: { in: lobby.participants as string[] },
+          tournamentId: lobby.round.phase.tournamentId
+        },
+        include: { user: true }
+      });
+
+      // Shuffle placements randomly
+      const placements = Array.from({ length: participantsWithUsers.length }, (_, i) => i + 1);
+      for (let i = placements.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [placements[i], placements[j]] = [placements[j], placements[i]];
+      }
+
+      const resultsForSummary: any[] = [];
+
+      const matchRecordsMockPromises = participantsWithUsers.map(async (p: any, i: number) => {
+        const placement = placements[i];
+        const pointsToAssign = ptsFormat[placement - 1] ?? 0;
+
+        await prisma.matchResult.create({
+          data: {
+            matchId: newMatch.id,
+            userId: p.userId,
+            placement,
+            points: pointsToAssign
+          }
+        });
+
+        await prisma.participant.update({
+          where: { id: p.id },
+          data: { scoreTotal: { increment: pointsToAssign } }
+        });
+
+        resultsForSummary.push({ userId: p.userId, placement, points: pointsToAssign });
+      });
+
+      await Promise.all(matchRecordsMockPromises);
+
+      await prisma.lobby.update({
+        where: { id: lobby.id },
+        data: { completedMatchesCount: { increment: 1 }, fetchedResult: true }
+      });
+
+      // Update player profile summaries
+      try {
+        const SummaryManagerService = require('../services/SummaryManagerService').default;
+        await SummaryManagerService.createMatchSummaries(newMatch.id, resultsForSummary);
+      } catch (err) {
+        console.error('[simulate-match-mock] Failed to create match summaries:', err);
+      }
+
+      // Transition lobby state PLAYING → FINISHED
+      const LobbyStateService = require('../services/LobbyStateService').default;
+      await LobbyStateService.transitionPhase(lobby.id, 'PLAYING', 'FINISHED');
+
+      try {
+        const io = (global as any).__io || (global as any).io;
+        if (io) {
+          const snapshot = await LobbyStateService.getLobbyState(lobby.id).catch(() => null);
+          if (snapshot) io.to(`lobby:${lobby.id}`).emit('lobby:state_update', snapshot);
+          io.to(`tournament:${lobby.round.phase.tournamentId}`).emit('tournament_update');
+          for (const p of participantsWithUsers) {
+            io.emit('player_profile_update', { userId: p.userId });
+          }
+        }
+      } catch (_) { }
+    }
+
+    // Trigger round advancement
+    try {
+      const { checkAndAdvanceRound } = require('../jobs/roundCompletionWorker');
+      const uniqueRoundIds = Array.from(new Set(lobbies.map((l: any) => l.roundId)));
+      for (const rId of uniqueRoundIds) {
+        setTimeout(() => {
+          checkAndAdvanceRound(rId).catch((err: any) => console.error('[simulate-match-mock] Round advance error:', err));
+        }, 500);
+      }
+    } catch (err) {
+      console.error('[simulate-match-mock] Failed to trigger checkAndAdvanceRound:', err);
+    }
+
+    try {
+      const io = (global as any).__io || (global as any).io;
+      if (io && lobbies.length > 0) {
+        io.to(`tournament:${lobbies[0].round.phase.tournamentId}`).emit('tournament_update');
+      }
+    } catch (_) { }
+
+    return res.json({
+      success: true,
+      message: `✅ Mock simulated ${lobbies.length} lobbies with random placements (no Riot API)`,
+      lobbiesProcessed: lobbies.length,
+      tournamentId: lobbies[0]?.round?.phase?.tournamentId,
+    });
+  } catch (err: any) {
+    console.error('[DevTools] simulate-match-mock error:', err.message, err.stack);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
  * POST /dev/automation/assign-lobby
  */
 router.post('/automation/assign-lobby', async (req: Request, res: Response) => {
   try {
     const { prisma } = require('../services/prisma');
     let targetRoundId = req.body.roundId;
+    let tournamentId = req.body.tournamentId;
     let targetRound: any = null;
 
     if (!targetRoundId) {
-      targetRound = await prisma.round.findFirst({
-        where: { lobbies: { none: {} } },
-        orderBy: { roundNumber: 'asc' }
-      });
+      if (tournamentId) {
+        targetRound = await prisma.round.findFirst({
+          where: { phase: { tournamentId }, status: 'pending' },
+          orderBy: [{ phase: { phaseNumber: 'asc' } }, { roundNumber: 'asc' }],
+          include: { phase: true }
+        });
+
+        if (!targetRound) {
+          try {
+            await RoundService.preAssignGroups(tournamentId);
+            targetRound = await prisma.round.findFirst({
+              where: { phase: { tournamentId }, status: 'pending' },
+              orderBy: [{ phase: { phaseNumber: 'asc' } }, { roundNumber: 'asc' }],
+              include: { phase: true }
+            });
+          } catch (e) {
+            console.warn('[assign-lobby] Auto preAssignGroups failed:', e);
+          }
+        }
+      } else {
+        targetRound = await prisma.round.findFirst({
+          where: { status: 'pending' },
+          orderBy: { roundNumber: 'asc' },
+          include: { phase: true }
+        });
+      }
       if (targetRound) targetRoundId = targetRound.id;
     } else {
-      targetRound = await prisma.round.findUnique({ where: { id: targetRoundId } });
+      targetRound = await prisma.round.findUnique({
+        where: { id: targetRoundId },
+        include: { phase: true }
+      });
     }
 
     if (!targetRound) throw new Error("No valid Round found to assign lobbies");
+
+    // DevTools convenience: Auto-fund escrow to avoid EscrowService blocking autoAdvance
+    if (tournamentId || targetRound.phase?.tournamentId) {
+      const tId = tournamentId || targetRound.phase.tournamentId;
+      await prisma.escrow.updateMany({
+        where: { tournamentId: tId },
+        data: { status: 'funded' }
+      });
+    }
 
     await RoundService.autoAdvance(targetRound.id);
     return res.json({ success: true, message: "Lobbies assigned / round advanced for " + targetRound.roundNumber, roundId: targetRound.id });
@@ -1386,6 +1576,27 @@ router.post('/escrow/assert-start', async (req: Request, res: Response) => {
       message: 'assertTournamentCanStart() BLOCKED tournament start.',
       reason: err.message,
     });
+  }
+});
+
+/**
+ * POST /dev/seed-128-ready
+ * Executes the standalone seed128TournamentReady script.
+ * Creates a ready-to-start 128 player tournament with Elimination and Swiss phases.
+ */
+router.post('/seed-128-ready', async (req: Request, res: Response) => {
+  try {
+    const { execSync } = require('child_process');
+    const path = require('path');
+    const scriptPath = path.resolve(__dirname, '../scripts/seed128TournamentReady.ts');
+
+    // Check if ts-node is available, fallback to npx
+    execSync(`npx ts-node --project tsconfig.json ${scriptPath}`, { stdio: 'inherit' });
+
+    return res.json({ success: true, message: '128-Player Dev Tournament successfully seeded.' });
+  } catch (err: any) {
+    console.error('[DevTools] seed-128 error:', err.message);
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 
