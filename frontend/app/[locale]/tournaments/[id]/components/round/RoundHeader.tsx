@@ -10,9 +10,10 @@ interface RoundHeaderProps {
   tournament: ITournament | null
   round: IRound | null
   limitMatch?: number | null
+  onSync?: () => Promise<void>
 }
 
-export function RoundHeader({ tournament, round, limitMatch }: RoundHeaderProps) {
+export function RoundHeader({ tournament, round, limitMatch, onSync }: RoundHeaderProps) {
   const t = useTranslations("common")
 
   if (!tournament || !round) return null
@@ -29,6 +30,8 @@ export function RoundHeader({ tournament, round, limitMatch }: RoundHeaderProps)
     title = t('group_results_title', { name: groupLetter });
   }
 
+  const syncStatus: "live" | "idle" = round.status === "completed" ? "idle" : "live"
+
   return (
     <>
       <div className="flex flex-col space-y-1 md:flex-row md:items-center md:justify-between md:space-y-0">
@@ -41,7 +44,7 @@ export function RoundHeader({ tournament, round, limitMatch }: RoundHeaderProps)
           <ChevronRight className="h-4 w-4" />
           <span className="font-medium text-foreground">{title}</span>
         </div>
-        <SyncStatus status="idle" />
+        <SyncStatus status={syncStatus} onSync={onSync} />
       </div>
 
       <div className="mt-6 flex flex-col space-y-2">
@@ -52,4 +55,5 @@ export function RoundHeader({ tournament, round, limitMatch }: RoundHeaderProps)
       </div>
     </>
   )
-} 
+}
+ 

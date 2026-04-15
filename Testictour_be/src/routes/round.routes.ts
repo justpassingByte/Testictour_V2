@@ -10,6 +10,7 @@ router.post('/:roundId/auto-advance',       auth('admin', 'partner'), RoundContr
 router.post('/:roundId/force-fetch-lobbies', auth('admin', 'partner'), RoundController.forceFetchLobbies);
 router.post('/:roundId/force-complete',      auth('admin', 'partner'), RoundController.forceComplete);
 router.get('/:roundId/lobbies',              RoundController.lobbies);
+router.get('/:roundId/scoreboard',           RoundController.getScoreboard);
 
 // ── Lobby-level overrides (grouped under /rounds for convenience) ─────────────
 router.post('/lobbies/:lobbyId/force-start', auth('admin', 'partner'), RoundController.forceStartLobby);

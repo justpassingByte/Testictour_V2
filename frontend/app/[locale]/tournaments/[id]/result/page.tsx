@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import Link from "next/link"
 import { ChevronRight, Trophy, Medal, Star, Download, Search, ArrowUpDown, Loader2 } from "lucide-react"
 
@@ -53,76 +53,80 @@ export default function TournamentResultsPage({ params }: { params: { id: string
   const [selectedRegion, setSelectedRegion] = useState<string>("all")
   const [sortBy, setSortBy] = useState<string>("rank")
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
+  // Track whether initial data has been loaded to avoid skeleton flash on manual sync
+  const hasLoadedRef = useRef(false)
+
+  const fetchData = useCallback(async () => {
+    try {
+      // Only show full-screen skeleton on very first load
+      if (!hasLoadedRef.current) setLoading(true)
+      const [tourRes, participantsRes] = await Promise.all([
+        api.get(`/tournaments/${params.id}`),
+        api.get(`/tournaments/${params.id}/participants`),
+      ])
+
+      const tour = tourRes.data?.data || tourRes.data
+      setTournament({
+        id: tour.id,
+        name: tour.name,
+        status: tour.status,
+        totalRounds: tour.phases?.reduce((acc: number, p: any) => acc + (p.rounds?.length || 0), 0) || 0,
+        totalPlayers: tour.participants?.length || 0,
+        prizePool: tour.prizePool || tour.entryFee * (tour.participants?.length || 0) || "N/A",
+      })
+
+      // Build final standings from participants sorted by scoreTotal
+      const parts: any[] = participantsRes.data?.data || participantsRes.data || []
+      const sorted = [...parts].sort((a, b) => (b.scoreTotal || 0) - (a.scoreTotal || 0))
+
+      setFinalResults(sorted.map((p, i) => ({
+        rank: i + 1,
+        userId: p.userId || p.id,
+        player: p.user?.riotGameName || p.user?.username || p.inGameName || "Unknown",
+        region: p.region || p.user?.region || "N/A",
+        totalPoints: p.scoreTotal || 0,
+        averagePlacement: p.stats?.averagePlacement || 0,
+        firstPlaces: p.stats?.firstPlaces || 0,
+        topFourRate: p.stats?.topFourRate ? p.stats.topFourRate * 100 : 0,
+        prize: undefined,
+      })))
+
+      // Build round-by-round from phases
+      if (tour.phases?.length) {
+        const rr: RoundResult[] = []
+        for (const phase of tour.phases) {
+          for (const round of phase.rounds || []) {
+            const matchRows: { match: number; lobby: string; winner: string; avgPlacement: number }[] = []
+            for (const lobby of round.lobbies || []) {
+              for (const match of lobby.matches || []) {
+                const winner = match.results?.find((r: any) => r.placement === 1)
+                const avgPlacement = match.results?.length
+                  ? (match.results.reduce((s: number, r: any) => s + r.placement, 0) / match.results.length).toFixed(2)
+                  : "N/A"
+                matchRows.push({
+                  match: matchRows.length + 1,
+                  lobby: lobby.name || `Lobby ${lobby.id?.slice(-4)}`,
+                  winner: winner?.user?.riotGameName || winner?.user?.username || "N/A",
+                  avgPlacement: typeof avgPlacement === "string" ? parseFloat(avgPlacement) : avgPlacement,
+                })
+              }
+            }
+            if (matchRows.length) rr.push({ round: round.roundNumber || rr.length + 1, matches: matchRows })
+          }
+        }
+        setRoundResults(rr)
+      }
+    } catch (err) {
+      console.error("Failed to load tournament results:", err)
+    } finally {
+      hasLoadedRef.current = true
+      setLoading(false)
+    }
+  }, [params.id])
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true)
-        const [tourRes, participantsRes] = await Promise.all([
-          api.get(`/tournaments/${params.id}`),
-          api.get(`/tournaments/${params.id}/participants`),
-        ])
-
-        const tour = tourRes.data?.data || tourRes.data
-        setTournament({
-          id: tour.id,
-          name: tour.name,
-          status: tour.status,
-          totalRounds: tour.phases?.reduce((acc: number, p: any) => acc + (p.rounds?.length || 0), 0) || 0,
-          totalPlayers: tour.participants?.length || 0,
-          prizePool: tour.prizePool || tour.entryFee * (tour.participants?.length || 0) || "N/A",
-        })
-
-        // Build final standings from participants sorted by scoreTotal
-        const parts: any[] = participantsRes.data?.data || participantsRes.data || []
-        const sorted = [...parts].sort((a, b) => (b.scoreTotal || 0) - (a.scoreTotal || 0))
-
-        setFinalResults(sorted.map((p, i) => ({
-          rank: i + 1,
-          userId: p.userId || p.id,
-          player: p.user?.riotGameName || p.user?.username || p.inGameName || "Unknown",
-          region: p.region || p.user?.region || "N/A",
-          totalPoints: p.scoreTotal || 0,
-          averagePlacement: p.stats?.averagePlacement || 0,
-          firstPlaces: p.stats?.firstPlaces || 0,
-          topFourRate: p.stats?.topFourRate ? p.stats.topFourRate * 100 : 0,
-          prize: undefined,
-        })))
-
-        // Build round-by-round from phases
-        const tour2 = tour
-        if (tour2.phases?.length) {
-          const rr: RoundResult[] = []
-          for (const phase of tour2.phases) {
-            for (const round of phase.rounds || []) {
-              const matchRows: { match: number; lobby: string; winner: string; avgPlacement: number }[] = []
-              for (const lobby of round.lobbies || []) {
-                for (const match of lobby.matches || []) {
-                  const winner = match.results?.find((r: any) => r.placement === 1)
-                  const avgPlacement = match.results?.length
-                    ? (match.results.reduce((s: number, r: any) => s + r.placement, 0) / match.results.length).toFixed(2)
-                    : "N/A"
-                  matchRows.push({
-                    match: matchRows.length + 1,
-                    lobby: lobby.name || `Lobby ${lobby.id?.slice(-4)}`,
-                    winner: winner?.user?.riotGameName || winner?.user?.username || "N/A",
-                    avgPlacement: typeof avgPlacement === "string" ? parseFloat(avgPlacement) : avgPlacement,
-                  })
-                }
-              }
-              if (matchRows.length) rr.push({ round: round.roundNumber || rr.length + 1, matches: matchRows })
-            }
-          }
-          setRoundResults(rr)
-        }
-      } catch (err) {
-        console.error("Failed to load tournament results:", err)
-      } finally {
-        setLoading(false)
-      }
-    }
     fetchData()
-  }, [params.id])
+  }, [fetchData])
 
   const filteredResults = finalResults.filter(r => {
     const matchesSearch = r.player.toLowerCase().includes(searchQuery.toLowerCase())
@@ -171,7 +175,10 @@ export default function TournamentResultsPage({ params }: { params: { id: string
           <ChevronRight className="h-4 w-4" />
           <span className="font-medium text-foreground">{t("results")}</span>
         </div>
-        <SyncStatus status="idle" />
+        <SyncStatus
+          status={tournament?.status === 'in_progress' ? 'live' : 'idle'}
+          onSync={fetchData}
+        />
       </div>
 
       <div className="mt-6 space-y-6">

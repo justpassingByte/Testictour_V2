@@ -20,8 +20,14 @@ async function checkAndAdvanceRound(roundId: string) {
     }
 
     if (round.status !== 'in_progress') {
-      logger.info(`Round ${roundId} is not in 'in_progress' state (${round.status}). Skipping completion check.`);
-      return;
+      // Allow recovery for completed rounds if their phase is stuck as 'in_progress'
+      if (round.status === 'completed' && round.phase.status === 'in_progress') {
+        logger.info(`[Recovery] Round ${roundId} is completed but phase ${round.phase.id} is stuck as 'in_progress'. Triggering recovery via autoAdvance.`);
+        // Fall through to trigger autoAdvance which has recovery logic
+      } else {
+        logger.info(`Round ${roundId} is not in 'in_progress' state (${round.status}). Skipping completion check.`);
+        return;
+      }
     }
 
     // ── PLACEMENT MODE: Eliminate per-lobby IMMEDIATELY (don't wait for all lobbies) ──
@@ -92,6 +98,8 @@ async function checkAndAdvanceRound(roundId: string) {
                       });
                     }
                     if ((global as any).io && result.tournamentId) {
+                      const { bracketCache } = await import('../services/BracketCacheService');
+                      await bracketCache.invalidate(result.tournamentId);
                       (global as any).io.to(`tournament:${result.tournamentId}`).emit('bracket_update', { tournamentId: result.tournamentId });
                       (global as any).io.to(`tournament:${result.tournamentId}`).emit('tournament_update', { type: 'phase_started' });
                     }

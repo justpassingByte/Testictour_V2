@@ -130,6 +130,8 @@ const autoAdvanceRoundWorker = new Worker(
           logger.info(`Successfully created ${newRounds.length} rounds for phase ${result.nextPhaseId}`);
           
           if ((global as any).io && result.tournamentId) {
+            const { bracketCache } = await import('./services/BracketCacheService');
+            await bracketCache.invalidate(result.tournamentId);
             (global as any).io.to(`tournament:${result.tournamentId}`).emit('bracket_update', { tournamentId: result.tournamentId });
             (global as any).io.to(`tournament:${result.tournamentId}`).emit('tournament_update', { type: 'phase_started' });
           }

@@ -28,4 +28,17 @@ export class RoundService {
       throw new Error('Error creating round');
     }
   }
+
+  /**
+   * Server-side computed scoreboard for a specific round.
+   * Returns pre-computed scoreboard, match results, summary, round data,
+   * and minimal tournament context — all in one request.
+   */
+  static async getScoreboard(roundId: string, limitMatch?: number | null) {
+    const params = new URLSearchParams();
+    if (limitMatch && limitMatch > 0) params.set('limitMatch', String(limitMatch));
+    const url = `/rounds/${roundId}/scoreboard${params.toString() ? `?${params}` : ''}`;
+    const response = await api.get(url);
+    return response.data;
+  }
 } 

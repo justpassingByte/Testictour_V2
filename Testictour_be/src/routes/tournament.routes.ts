@@ -55,6 +55,69 @@ router.post('/:id/sync', auth('admin', 'partner'), TournamentController.syncMatc
 // Recent Results (Public)
 router.get('/:id/recent-results', TournamentController.recentResults);
 
+// Live Summary (Public) — lightweight endpoint for Live page header/summary cards.
+// Returns only basic tournament info + lobby states. NO matches, NO matchResults, NO participants.
+// ~10ms vs ~500ms+ for the full detail endpoint.
+router.get('/:id/live-summary', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tournament = await prisma.tournament.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true, name: true, description: true, status: true,
+        startTime: true, endTime: true, image: true, region: true,
+        maxPlayers: true, entryFee: true, hostFeePercent: true,
+        isCommunityMode: true, prizeStructure: true,
+        lastSyncTime: true, syncStatus: true, discordUrl: true,
+        organizer: { select: { id: true, username: true } },
+        _count: { select: { participants: true } },
+        phases: {
+          orderBy: { phaseNumber: 'asc' },
+          select: {
+            id: true, name: true, type: true, phaseNumber: true,
+            status: true, matchesPerRound: true,
+            rounds: {
+              orderBy: { roundNumber: 'asc' },
+              select: {
+                id: true, roundNumber: true, status: true,
+                lobbies: {
+                  select: {
+                    id: true, name: true, state: true,
+                    completedMatchesCount: true,
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!tournament) {
+      return res.status(404).json({ success: false, message: 'Tournament not found' });
+    }
+
+    // Flatten to compute live stats server-side
+    const allLobbies = tournament.phases.flatMap(p => p.rounds.flatMap(r => r.lobbies));
+    const playingCount = allLobbies.filter(l => l.state === 'PLAYING').length;
+
+    res.json({
+      success: true,
+      tournament: {
+        ...tournament,
+        registered: tournament._count.participants,
+        _count: undefined,
+      },
+      liveStats: {
+        totalLobbies: allLobbies.length,
+        playingLobbies: playingCount,
+        finishedLobbies: allLobbies.filter(l => l.state === 'FINISHED').length,
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Bracket (Public) — get group bracket for tournament
 router.get('/:id/bracket', async (req: Request, res: Response, next: NextFunction) => {
   try {

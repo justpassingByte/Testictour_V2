@@ -1,7 +1,7 @@
 import { Suspense } from "react"
 import { notFound } from "next/navigation"
 import { TournamentService } from "@/app/services/TournamentService"
-import { TournamentHeader } from "@/app/[locale]/tournaments/[id]/components/TournamentHeader"
+import { TournamentHeaderClient } from "@/app/[locale]/tournaments/[id]/components/TournamentHeaderClient"
 import { TournamentScheduleCard } from "@/app/[locale]/tournaments/[id]/components/TournamentScheduleCard"
 import { TournamentFormatCard } from "@/app/[locale]/tournaments/[id]/components/TournamentFormatCard"
 import { PointSystemCard } from "@/app/[locale]/tournaments/[id]/components/PointSystemCard"
@@ -43,7 +43,7 @@ export default async function TournamentPage({ params }: { params: { id: string 
 
   return (
     <div className="container py-8">
-      <TournamentHeader tournament={tournament} />
+      <TournamentHeaderClient tournament={tournament} />
 
       <div className="mt-8 grid gap-8 md:grid-cols-3">
         <div className="col-span-3 md:col-span-2">

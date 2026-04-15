@@ -4,6 +4,7 @@ import LobbyService from './LobbyService';
 import logger from '../utils/logger';
 import { Prisma, Participant } from '@prisma/client';
 import EscrowService from './EscrowService';
+import { bracketCache } from './BracketCacheService';
 
 import { autoAdvanceRoundQueue } from '../lib/queues';
 import { fetchMatchDataQueue } from '../lib/queues';
@@ -191,6 +192,7 @@ export default class RoundService {
 
     // Emit socket event
     if ((global as any).io) {
+      await bracketCache.invalidate(tournamentId);
       (global as any).io.to(`tournament:${tournamentId}`).emit('bracket_update', { tournamentId });
       (global as any).io.to(`tournament:${tournamentId}`).emit('tournament_update', { type: 'bracket_assigned' });
     }
@@ -205,6 +207,10 @@ export default class RoundService {
    * This keeps the initial bracket load fast even for large tournaments.
    */
   static async getBracket(tournamentId: string) {
+    // ── Cache layer ────────────────────────────────────────────────────────────
+    const cached = await bracketCache.get(tournamentId);
+    if (cached) return cached;
+
     // Use `any` cast: Prisma struggles to infer deeply nested mixed include+select types.
     // All fields accessed are validated at runtime; shape is stable.
     const tournament = await prisma.tournament.findUnique({
@@ -360,7 +366,10 @@ export default class RoundService {
       };
     });
 
-    return { tournamentId, phases };
+    const result = { tournamentId, phases };
+    // Cache the computed bracket
+    await bracketCache.set(tournamentId, result);
+    return result;
   }
 
   /**
@@ -442,6 +451,322 @@ export default class RoundService {
       phase: lobby.round.phase,
       players,
       matchHistory,
+    };
+  }
+
+  /**
+   * Server-side scoreboard for a specific round.
+   * Replaces the old pattern of fetching the ENTIRE tournament on the frontend.
+   * Single query: Round → Lobbies → Matches → MatchResults + relevant Users/Participants.
+   * Returns pre-computed PlayerRoundStats ready for rendering.
+   *
+   * Frontend calls: GET /api/rounds/:roundId/scoreboard?limitMatch=N
+   */
+  static async getScoreboard(roundId: string, limitMatch?: number | null) {
+    // 1. Fetch the round with all data needed
+    const round = await prisma.round.findUnique({
+      where: { id: roundId },
+      include: {
+        phase: {
+          select: {
+            id: true, name: true, type: true, phaseNumber: true,
+            matchesPerRound: true, lobbySize: true, lobbyAssignment: true,
+            advancementCondition: true, pointsMapping: true, tournamentId: true,
+          }
+        },
+        lobbies: {
+          include: {
+            matches: {
+              orderBy: { createdAt: 'asc' },
+              include: {
+                matchResults: { orderBy: { placement: 'asc' } }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!round) throw new ApiError(404, 'Round not found');
+
+    const phase = round.phase;
+    const tournamentId = phase.tournamentId;
+
+    // 2. Collect all user IDs from lobbies
+    const allUserIds = new Set<string>();
+    for (const lobby of round.lobbies) {
+      const pIds = lobby.participants as string[];
+      if (Array.isArray(pIds)) pIds.forEach(id => allUserIds.add(id));
+      for (const match of lobby.matches) {
+        for (const r of match.matchResults) allUserIds.add(r.userId);
+      }
+    }
+
+    // 3. Batch fetch users + participants (with roundOutcomes for this round only)
+    const [users, participants] = await Promise.all([
+      allUserIds.size > 0
+        ? prisma.user.findMany({
+          where: { id: { in: Array.from(allUserIds) } },
+          select: { id: true, username: true, riotGameName: true, riotGameTag: true, rank: true, region: true }
+        })
+        : [],
+      prisma.participant.findMany({
+        where: { tournamentId, userId: { in: Array.from(allUserIds) } },
+        select: {
+          id: true, userId: true, eliminated: true, scoreTotal: true,
+          roundOutcomes: {
+            where: { roundId },
+            select: { status: true, scoreInRound: true }
+          }
+        }
+      })
+    ]);
+
+    const userMap = new Map(users.map(u => [u.id, u]));
+    const participantMap = new Map(participants.map(p => [p.userId, p]));
+
+    // 4. Build all matches sorted chronologically across ALL lobbies
+    const allMatches = round.lobbies.flatMap(l =>
+      l.matches.map(m => ({ ...m, lobbyId: l.id }))
+    ).sort((a, b) => {
+      const timeA = (a as any).gameCreation ?? new Date(a.createdAt).getTime();
+      const timeB = (b as any).gameCreation ?? new Date(b.createdAt).getTime();
+      return timeA - timeB;
+    });
+
+    // Build matchResults map for frontend compatibility
+    const matchResultsMap: Record<string, { matchId: string; participantId: string; placement: number; points: number }[]> = {};
+    for (const match of allMatches) {
+      matchResultsMap[match.id] = match.matchResults.map(r => ({
+        matchId: match.id,
+        participantId: r.userId,
+        placement: r.placement,
+        points: r.points || 0,
+      }));
+    }
+
+    // 5. Compute per-player stats (mirrors frontend logic exactly)
+    const isElimination = phase.type === 'elimination';
+    const advancementN = (phase.advancementCondition as any)?.value ?? null;
+    const matchesPerRound = phase.matchesPerRound || 1;
+
+    type RawPlayer = {
+      id: string; userId: string; lobbyId: string; lobbyName: string;
+      name: string; region: string; placements: number[]; points: number[];
+      lastPlacement: number; total: number;
+      roundOutcomeStatus: string | null; eliminatedGlobal: boolean;
+    };
+
+    const rawPlayers: RawPlayer[] = [];
+
+    for (const lobby of round.lobbies) {
+      const pIds = (lobby.participants as string[]) || [];
+      for (const userId of pIds) {
+        const user = userMap.get(userId);
+        const participant = participantMap.get(userId);
+        if (!user) continue;
+
+        // Find all match results for this player across ALL lobbies (reshuffling support)
+        const allPlayerResults = allMatches
+          .map(match => {
+            const result = match.matchResults.find(r => r.userId === userId);
+            return result ? { result, lobbyId: match.lobbyId } : null;
+          })
+          .filter((item): item is NonNullable<typeof item> => item !== null);
+
+        // Crop to limitMatch if specified
+        const displayResults = (limitMatch && limitMatch > 0)
+          ? allPlayerResults.slice(0, limitMatch)
+          : allPlayerResults;
+
+        // Determine displaying lobby (historical for limitMatch)
+        let finalLobbyId = lobby.id;
+        let finalLobbyName = lobby.name;
+        if (limitMatch && limitMatch > 0 && displayResults.length > 0) {
+          const historicalLobbyId = displayResults[displayResults.length - 1].lobbyId;
+          const hLobby = round.lobbies.find(l => l.id === historicalLobbyId);
+          if (hLobby) {
+            finalLobbyId = hLobby.id;
+            finalLobbyName = hLobby.name;
+          }
+        }
+
+        // Elimination: single-match score; other: cumulative
+        let effectiveMatchIndex: number | null = null;
+        if (isElimination) {
+          effectiveMatchIndex = (limitMatch && limitMatch > 0) ? limitMatch - 1 : displayResults.length - 1;
+        }
+
+        const specificResult = (isElimination && effectiveMatchIndex !== null)
+          ? displayResults[effectiveMatchIndex] ?? null
+          : null;
+
+        const calculatedScore = specificResult
+          ? (specificResult.result.points || 0)
+          : displayResults.reduce((sum, item) => sum + (item.result.points || 0), 0);
+
+        const placements = displayResults.map(item => item.result.placement);
+        const points = displayResults.map(item => item.result.points || 0);
+        const lastPlacement = placements.length > 0 ? placements[placements.length - 1] : Infinity;
+        const effectivePlacement = specificResult?.result.placement ?? lastPlacement;
+
+        const roundOutcome = participant?.roundOutcomes?.[0] ?? null;
+        const isHistoricalView = limitMatch && limitMatch > 0 && limitMatch < matchesPerRound;
+        const totalScore = (!isHistoricalView && roundOutcome?.scoreInRound != null)
+          ? roundOutcome.scoreInRound
+          : calculatedScore;
+
+        rawPlayers.push({
+          id: participant?.id || userId,
+          userId,
+          lobbyId: finalLobbyId,
+          lobbyName: finalLobbyName,
+          name: user.riotGameName || user.username || 'Unknown',
+          region: (user as any).region || 'N/A',
+          placements,
+          points,
+          lastPlacement: effectivePlacement,
+          total: isHistoricalView
+            ? calculatedScore
+            : ((!isElimination && roundOutcome?.scoreInRound != null) ? roundOutcome.scoreInRound : calculatedScore),
+          roundOutcomeStatus: roundOutcome?.status ?? null,
+          eliminatedGlobal: participant?.eliminated ?? false,
+        });
+      }
+    }
+
+    // Deduplicate: a player can appear in multiple lobbies (reshuffling), keep the one from their "final" lobby
+    const deduped = new Map<string, RawPlayer>();
+    for (const p of rawPlayers) {
+      if (!deduped.has(p.userId) || p.placements.length > (deduped.get(p.userId)!.placements.length)) {
+        deduped.set(p.userId, p);
+      }
+    }
+    const uniquePlayers = Array.from(deduped.values());
+
+    // 6. Derive status per lobby
+    const lobbyGroups = new Map<string, RawPlayer[]>();
+    for (const p of uniquePlayers) {
+      const key = p.lobbyId;
+      if (!lobbyGroups.has(key)) lobbyGroups.set(key, []);
+      lobbyGroups.get(key)!.push(p);
+    }
+
+    const scoreboard = uniquePlayers.map(player => {
+      let status: 'advanced' | 'eliminated' | 'pending';
+
+      if (player.roundOutcomeStatus) {
+        status = player.roundOutcomeStatus as 'advanced' | 'eliminated';
+      } else if (player.placements.length > 0 && advancementN !== null) {
+        const lobbyPlayers = lobbyGroups.get(player.lobbyId) ?? [];
+        const sorted = [...lobbyPlayers].sort((a, b) => {
+          const scoreDiff = b.total - a.total;
+          if (scoreDiff !== 0) return scoreDiff;
+          return a.lastPlacement - b.lastPlacement;
+        });
+        const rank = sorted.findIndex(p => p.id === player.id) + 1;
+        status = rank <= advancementN ? 'advanced' : 'eliminated';
+      } else if (player.placements.length > 0) {
+        status = player.eliminatedGlobal ? 'eliminated' : 'advanced';
+      } else {
+        status = 'pending';
+      }
+
+      return {
+        id: player.id,
+        name: player.name,
+        region: player.region,
+        lobbyName: player.lobbyName,
+        placements: player.placements,
+        lastPlacement: player.lastPlacement,
+        points: player.points,
+        total: player.total,
+        status,
+      };
+    });
+
+    // 7. Compute summary stats
+    const maxCompletedLobbyMatches = round.lobbies.reduce((max, l) =>
+      Math.max(max, l.completedMatchesCount || 0), 0);
+
+    let numMatchColumns: number;
+    if (limitMatch && limitMatch > 0 && limitMatch <= matchesPerRound) {
+      numMatchColumns = limitMatch;
+    } else {
+      numMatchColumns = Math.min(matchesPerRound, maxCompletedLobbyMatches + 1);
+    }
+
+    const isCheckmate = phase.type === 'checkmate';
+    const actualMatchesCount = round.lobbies.reduce((total, l) => total + l.matches.length, 0);
+    const totalMatchesForRound = isCheckmate
+      ? actualMatchesCount
+      : round.lobbies.length * matchesPerRound;
+
+    // 8. Minimal tournament context for the header
+    const tournament = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      select: {
+        id: true, name: true, status: true, entryFee: true, maxPlayers: true,
+        prizeStructure: true, image: true,
+        hostFeePercent: true, isCommunityMode: true,
+      }
+    });
+
+    // Build lightweight round object for FE (compatible with IRound type)
+    const roundForFE = {
+      id: round.id,
+      phaseId: round.phaseId,
+      roundNumber: round.roundNumber,
+      startTime: round.startTime,
+      endTime: round.endTime,
+      status: round.status,
+      lobbies: round.lobbies.map(l => ({
+        id: l.id,
+        roundId: l.roundId,
+        name: l.name,
+        participants: l.participants,
+        fetchedResult: l.fetchedResult,
+        completedMatchesCount: l.completedMatchesCount || 0,
+        state: l.state,
+        matches: l.matches.map(m => ({
+          id: m.id,
+          lobbyId: m.lobbyId,
+          matchIdRiotApi: m.matchIdRiotApi,
+          status: 'completed',
+          matchData: m.matchData,
+          createdAt: m.createdAt,
+          matchResults: m.matchResults.map(r => ({
+            matchId: r.matchId,
+            participantId: r.userId,
+            placement: r.placement,
+            points: r.points || 0,
+          }))
+        }))
+      }))
+    };
+
+    return {
+      success: true,
+      tournament: tournament || { id: tournamentId, name: 'Unknown' },
+      round: roundForFE,
+      phase: {
+        id: phase.id,
+        name: phase.name,
+        type: phase.type,
+        phaseNumber: phase.phaseNumber,
+        matchesPerRound,
+        advancementCondition: phase.advancementCondition,
+      },
+      scoreboard,
+      matchResults: matchResultsMap,
+      summary: {
+        totalMatches: totalMatchesForRound,
+        pointsAwarded: scoreboard.reduce((sum, p) => sum + p.total, 0),
+        playersAdvanced: scoreboard.filter(p => p.status === 'advanced').length,
+        playersEliminated: scoreboard.filter(p => p.status === 'eliminated').length,
+        numMatchColumns,
+        maxCompletedLobbyMatches,
+      }
     };
   }
 
@@ -559,6 +884,7 @@ export default class RoundService {
 
     // Emit bracket update
     if ((global as any).io) {
+      await bracketCache.invalidate(tournamentId);
       (global as any).io.to(`tournament:${tournamentId}`).emit('bracket_update', { tournamentId });
       (global as any).io.to(`tournament:${tournamentId}`).emit('tournament_update', { type: 'bracket_reshuffled' });
     }
@@ -691,6 +1017,7 @@ export default class RoundService {
 
           if ((global as any).io) {
             (global as any).io.to(`tournament:${currentRound.phase.tournamentId}`).emit('tournament_update', { type: 'round_started', round: { id: roundId } });
+            await bracketCache.invalidate(currentRound.phase.tournamentId);
             (global as any).io.to(`tournament:${currentRound.phase.tournamentId}`).emit('bracket_update', { tournamentId: currentRound.phase.tournamentId });
           }
           return { message: 'Round(s) started successfully', roundId };
@@ -802,6 +1129,7 @@ export default class RoundService {
               // Emit events for frontend
               if ((global as any).io) {
                 const tId = currentRound.phase.tournamentId;
+                await bracketCache.invalidate(tId);
                 (global as any).io.to(`tournament:${tId}`).emit('bracket_update', { tournamentId: tId });
                 (global as any).io.to(`tournament:${tId}`).emit('tournament_update', { type: 'lobbies_reshuffled', matchNumber: minCompletedMatches, matchesPerRound });
               }
@@ -915,7 +1243,120 @@ export default class RoundService {
           };
         }
 
-        // If status is neither pending nor in_progress, do nothing.
+        // ── RECOVERY: Round is 'completed' but phase may still be stuck as 'in_progress' ──
+        // This happens when the last group completes but the phase transition was interrupted
+        // (e.g. network timeout, server restart, BullMQ job failure, or race condition).
+        // Instead of silently returning, try to recover by re-running the phase transition.
+        if (currentRound.status === 'completed') {
+          const allPhases = await tx.phase.findMany({ where: { tournamentId: currentRound.phase.tournament.id }, orderBy: { phaseNumber: 'asc' } });
+          const currentPhase = allPhases.find(p => p.id === currentRound.phaseId);
+
+          if (!currentPhase) {
+            logger.warn(`[Recovery] Phase ${currentRound.phaseId} not found for completed round ${roundId}.`);
+            return { message: 'Round already completed, phase not found.' };
+          }
+
+          // Only attempt recovery if the phase is still in_progress (stuck)
+          if (currentPhase.status !== 'in_progress') {
+            logger.info(`[Recovery] Round ${roundId} already completed and phase ${currentPhase.id} is '${currentPhase.status}'. No recovery needed.`);
+            // Phase already advanced — check if there's a pending round in the next phase that needs starting
+            if (currentPhase.status === 'completed') {
+              const nextPhase = allPhases.find(p => p.status === 'in_progress' || p.status === 'pending');
+              if (nextPhase && nextPhase.status === 'in_progress') {
+                const pendingRound = await tx.round.findFirst({
+                  where: { phaseId: nextPhase.id, status: 'pending' },
+                  orderBy: { roundNumber: 'asc' }
+                });
+                if (pendingRound) {
+                  logger.info(`[Recovery] Found pending round ${pendingRound.id} in next phase ${nextPhase.id}. Queuing for start.`);
+                  return { _action: 'queue_next_round', nextRoundId: pendingRound.id, message: 'Recovery: queuing pending round in next phase.' };
+                }
+              }
+            }
+            return { message: 'Round already completed, no recovery needed.' };
+          }
+
+          // Phase is stuck in 'in_progress' — check if all rounds are completed
+          const totalRoundsInPhase = await tx.round.count({ where: { phaseId: currentPhase.id } });
+          const completedRoundsInPhase = await tx.round.count({ where: { phaseId: currentPhase.id, status: 'completed' } });
+
+          if (completedRoundsInPhase < totalRoundsInPhase) {
+            // Not all rounds are done — check if there are in_progress rounds that need advancing
+            const inProgressRound = await tx.round.findFirst({
+              where: { phaseId: currentPhase.id, status: 'in_progress' },
+              include: { lobbies: true }
+            });
+            if (inProgressRound) {
+              const allFetched = inProgressRound.lobbies.every(l => l.fetchedResult);
+              if (allFetched && inProgressRound.lobbies.length > 0) {
+                logger.info(`[Recovery] Found in_progress round ${inProgressRound.id} with all lobbies fetched. Queuing for advance.`);
+                return { _action: 'queue_next_round', nextRoundId: inProgressRound.id, message: 'Recovery: advancing stalled in_progress round.' };
+              }
+            }
+            logger.info(`[Recovery] Phase ${currentPhase.id}: ${completedRoundsInPhase}/${totalRoundsInPhase} rounds completed. Still waiting for remaining rounds.`);
+            return { message: `Round already completed. ${totalRoundsInPhase - completedRoundsInPhase} group(s) still running.` };
+          }
+
+          // ═══ ALL rounds completed but phase stuck as in_progress — RE-RUN PHASE TRANSITION ═══
+          logger.warn(`[Recovery] Phase ${currentPhase.id} stuck as 'in_progress' with ALL ${totalRoundsInPhase} rounds completed! Re-running phase transition.`);
+
+          // Apply advancement condition if it's score-based (placement was already applied per-round)
+          const advancementType = (currentPhase as any).advancementCondition?.type;
+          if (advancementType !== 'placement') {
+            try {
+              const advancementResult = await this._applyAdvancementCondition(tx, currentRound, currentPhase);
+              if (!advancementResult.continue) {
+                logger.info(`[Recovery] Advancement condition for phase ${currentPhase.id} returned continue=false.`);
+                return { message: 'Recovery: advancement condition prevents phase transition.' };
+              }
+            } catch (advErr) {
+              logger.warn(`[Recovery] Advancement condition failed (may have already been applied): ${advErr instanceof Error ? advErr.message : String(advErr)}`);
+              // Continue anyway — the advancement may have already been applied
+            }
+          }
+
+          // Proceed with phase transition
+          const nextPhaseIndex = allPhases.findIndex(p => p.id === currentPhase.id) + 1;
+          if (nextPhaseIndex < allPhases.length) {
+            const nextPhase = allPhases[nextPhaseIndex];
+            logger.info(`[Recovery] Advancing to next phase: ${nextPhase.name} (${nextPhase.id}).`);
+
+            if (nextPhase.carryOverScores === false) {
+              await tx.participant.updateMany({
+                where: { tournamentId: currentRound.phase.tournament.id, eliminated: false },
+                data: { scoreTotal: 0 }
+              });
+            }
+
+            await tx.phase.update({ where: { id: currentPhase.id }, data: { status: 'completed' } });
+            await tx.phase.update({ where: { id: nextPhase.id }, data: { status: 'in_progress' } });
+
+            return {
+              _action: 'create_next_phase_rounds',
+              completedPhaseId: currentPhase.id,
+              nextPhaseId: nextPhase.id,
+              numberOfRounds: (nextPhase as any).numberOfRounds || 1,
+              tournamentId: currentRound.phase.tournament.id,
+              message: `[Recovery] Phase ${currentPhase.id} completed. Next phase ${nextPhase.id} scheduled.`,
+            };
+          }
+
+          // Last phase — finalize tournament
+          logger.info(`[Recovery] Last phase completed. Finalizing tournament ${currentRound.phase.tournament.id}.`);
+          await tx.phase.update({ where: { id: currentPhase.id }, data: { status: 'completed' } });
+          await tx.tournament.update({
+            where: { id: currentRound.phase.tournament.id },
+            data: { status: 'COMPLETED', endTime: new Date() }
+          });
+
+          return {
+            _action: 'payout_prizes',
+            message: '[Recovery] Tournament completed via recovery. Prize payout deferred.',
+            tournamentId: currentRound.phase.tournament.id
+          };
+        }
+
+        // If status is truly unexpected (not pending, in_progress, or completed), warn
         logger.warn(`autoAdvance called for round ${roundId} with unexpected status: ${currentRound.status}`);
         return { message: 'Round in unexpected state, no action taken.' };
       }, { maxWait: 10000, timeout: 30000 }); // 30s timeout to handle large tournaments
@@ -969,6 +1410,7 @@ export default class RoundService {
 
         // Emit bracket update so frontend sees the new rounds immediately
         if ((global as any).io) {
+          await bracketCache.invalidate(tId);
           (global as any).io.to(`tournament:${tId}`).emit('bracket_update', { tournamentId: tId });
           (global as any).io.to(`tournament:${tId}`).emit('tournament_update', { type: 'phase_advanced' });
         }
@@ -1011,6 +1453,7 @@ export default class RoundService {
         // Emit tournament completed event to all connected clients
         if ((global as any).io) {
           (global as any).io.to(`tournament:${result.tournamentId}`).emit('tournament_update', { type: 'tournament_completed' });
+          await bracketCache.invalidate(result.tournamentId);
           (global as any).io.to(`tournament:${result.tournamentId}`).emit('bracket_update', { tournamentId: result.tournamentId });
         }
 
@@ -1728,6 +2171,7 @@ export default class RoundService {
       // Emit real-time update so frontend refreshes immediately
       if ((global as any).io) {
         (global as any).io.to(`tournament:${tournamentId}`).emit('tournament_update', { type: 'lobby_eliminated', lobbyId: lobby.id });
+        await bracketCache.invalidate(tournamentId);
         (global as any).io.to(`tournament:${tournamentId}`).emit('bracket_update', { tournamentId });
       }
     }

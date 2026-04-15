@@ -1440,6 +1440,8 @@ router.post('/automation/pre-assign-groups', async (req: Request, res: Response)
       const io = (global as any).__io || (global as any).io;
       if (io) {
         io.to(`tournament:${tournamentId}`).emit('tournament_update');
+        const { bracketCache } = require('../services/BracketCacheService');
+        bracketCache.invalidate(tournamentId);
         io.to(`tournament:${tournamentId}`).emit('bracket_update', { tournamentId });
       }
     } catch (_) { }
@@ -1461,19 +1463,54 @@ router.post('/automation/advance-round', async (req: Request, res: Response) => 
     let targetRound: any = null;
 
     if (!targetRoundId) {
+      // Priority 1: Find an in_progress round that has all lobbies fetched (ready to advance)
       targetRound = await prisma.round.findFirst({
-        where: { lobbies: { some: { state: 'FINISHED' } } },
-        orderBy: { roundNumber: 'desc' },
+        where: {
+          status: 'in_progress',
+          lobbies: { some: { fetchedResult: true } }
+        },
+        orderBy: { roundNumber: 'asc' },
         include: { phase: true }
       });
+
+      // Priority 2: Find a completed round whose phase is still in_progress (stuck phase)
+      if (!targetRound) {
+        targetRound = await prisma.round.findFirst({
+          where: {
+            status: 'completed',
+            phase: { status: 'in_progress' }
+          },
+          orderBy: { roundNumber: 'desc' },
+          include: { phase: true }
+        });
+      }
+
+      // Priority 3: Find a pending round that needs starting
+      if (!targetRound) {
+        targetRound = await prisma.round.findFirst({
+          where: { status: 'pending' },
+          orderBy: [{ phase: { phaseNumber: 'asc' } }, { roundNumber: 'asc' }],
+          include: { phase: true }
+        });
+      }
+
+      // Fallback: original logic — find any round with FINISHED lobbies
+      if (!targetRound) {
+        targetRound = await prisma.round.findFirst({
+          where: { lobbies: { some: { state: 'FINISHED' } } },
+          orderBy: { roundNumber: 'desc' },
+          include: { phase: true }
+        });
+      }
+
       if (targetRound) targetRoundId = targetRound.id;
     } else {
       targetRound = await prisma.round.findUnique({ where: { id: targetRoundId }, include: { phase: true } });
     }
 
     if (!targetRound) throw new Error("No valid Round found to advance");
-    await RoundService.autoAdvance(targetRound.id);
-    return res.json({ success: true, message: "Auto advance triggered for round " + targetRound.roundNumber });
+    const result = await RoundService.autoAdvance(targetRound.id);
+    return res.json({ success: true, message: "Auto advance triggered for round " + targetRound.roundNumber + " (status: " + targetRound.status + ", phase: " + targetRound.phase?.status + ")", result });
   } catch (err: any) {
     console.error('[DevTools] error:', err.message);
     return res.status(500).json({ success: false, error: err.message });

@@ -62,14 +62,6 @@ function stateConfig(state: LobbyState) {
 }
 
 // ── Trait tier → border color ────────────────────────────────────────────────
-const traitStyleBorder: Record<number, string> = {
-  0: 'border-zinc-700',
-  1: '#895b2e',   // bronze
-  2: '#b0b3b8',   // silver
-  3: '#e2c42c',   // gold
-  4: '#ab47ea',   // prismatic
-};
-
 const TRAIT_COLORS = ['border-zinc-700', 'border-amber-800', 'border-slate-400', 'border-yellow-400', 'border-purple-400'];
 
 // ── Star level icons ─────────────────────────────────────────────────────────
@@ -192,76 +184,52 @@ export default function LobbyPageClient({ lobbyId, tournamentId, initialState, l
 
   const [liveLobbyData, setLiveLobbyData] = useState(lobbyData);
 
+  // Fetch fresh lobby data (bypasses any cache safely)
+  const fetchLobbyData = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'}/api/lobbies/${lobbyId}?t=${Date.now()}`
+      );
+      const json = await res.json();
+      if (json.success) setLiveLobbyData(json.data);
+    } catch { /* non-critical */ }
+  }, [lobbyId]);
+
+  // Handle tournament_update: detect lobby reshuffle via the single socket in useLobbySocket
+  const handleTournamentUpdate = useCallback(async (data: any) => {
+    if (data?.type === 'lobbies_reshuffled' && userId) {
+      try {
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'}/api/players/${userId}/incoming-matches?t=${Date.now()}`,
+          { credentials: 'include' }
+        );
+        const json = await res.json();
+        if (json.success && json.data) {
+          const match = json.data.find((m: any) => m.tournamentId === tournamentId);
+          if (match?.lobbyId && match.lobbyId !== lobbyId) {
+            router.push(`/tournaments/${tournamentId}/lobbies/${match.lobbyId}`);
+            return;
+          }
+        }
+      } catch { /* ignore */ }
+    }
+    // Default: refresh lobby data
+    fetchLobbyData();
+  }, [userId, tournamentId, lobbyId, router, fetchLobbyData]);
+
   const { state, isConnected, error, toggleReady, requestDelay, isReadyToggling } = useLobbySocket({
     lobbyId,
     userId,
     tournamentId,
     initialState,
+    onTournamentUpdate: handleTournamentUpdate,
+    onLobbyDataRefresh: fetchLobbyData,
   });
 
-  // Fetch lobby data on WebSocket events (No teardown when state changes)
+  // Initial fetch on mount
   useEffect(() => {
-    let isSubscribed = true;
-    const checkUpdates = async () => {
-      try {
-        // Fetch fresh lobby data using timestamp to bypass all caches (browser/Next.js) safely without CORS issues
-        const lobbyRes = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'}/api/lobbies/${lobbyId}?t=${Date.now()}`);
-        const lobbyJson = await lobbyRes.json();
-        
-        // Ensure we actually got new data before updating
-        if (lobbyJson.success && isSubscribed) {
-          setLiveLobbyData(lobbyJson.data);
-        }
-      } catch (e) {
-        // Ignore fetch errors
-      }
-    };
-
-    checkUpdates(); // Initial fetch
-
-    const { io } = require('socket.io-client');
-    const socket = io(process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000', {
-      transports: ['websocket', 'polling'],
-      withCredentials: true,
-    });
-
-    socket.on('connect', () => {
-      socket.emit('join', { tournamentId, lobbyId });
-    });
-
-    socket.on('tournament_update', (data: any) => {
-      if (data && data.type === 'lobbies_reshuffled') {
-        // When lobbies shuffle, explicitly check for new lobby assignment
-        if (!userId) return;
-        setTimeout(async () => {
-          try {
-            const nextLobbyRes = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'}/api/players/${userId}/incoming-matches?t=${Date.now()}`, { credentials: 'include' });
-            const json = await nextLobbyRes.json();
-            if (json.success && json.data) {
-              const match = json.data.find((m: any) => m.tournamentId === tournamentId);
-              if (match && match.lobbyId && match.lobbyId !== lobbyId) {
-                router.push(`/tournaments/${tournamentId}/lobbies/${match.lobbyId}`);
-              } else if (isSubscribed) {
-                checkUpdates(); // same lobby, just refresh state
-              }
-            }
-          } catch (e) {}
-        }, 500); // Small delay to let DB settle
-      } else if (isSubscribed) {
-        checkUpdates();
-      }
-    });
-
-    // Also trigger update on lobby state changes in case tournament_update is missed
-    socket.on('lobby:state_update', () => {
-      if (isSubscribed) checkUpdates();
-    });
-
-    return () => {
-      isSubscribed = false;
-      socket.disconnect();
-    };
-  }, [lobbyId, tournamentId]); // Removed state?.state to prevent socket teardown
+    fetchLobbyData();
+  }, [fetchLobbyData]);
 
   // Auto navigate to new lobby if advanced
   useEffect(() => {

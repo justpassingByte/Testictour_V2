@@ -831,10 +831,27 @@ export default function TournamentManagePage() {
                                   {lobbyCount} lobbies · {fetchedCount}/{lobbyCount} fetched · {finishedCount}/{lobbyCount} finished
                                 </p>
                               </div>
-                              {round.status === 'completed' ? (
+                              {round.status === 'completed' && phase.status !== 'in_progress' ? (
                                 <span className="text-xs text-green-400 flex items-center gap-1 shrink-0 bg-green-400/10 px-3 py-1.5 rounded-md font-medium border border-green-400/20">
                                   <CheckCircle2 className="h-4 w-4" /> Đã xong
                                 </span>
+                              ) : round.status === 'completed' && phase.status === 'in_progress' ? (
+                                <div className="flex flex-col gap-1.5 shrink-0 justify-start">
+                                  <span className="text-[10px] text-amber-400/80 font-semibold flex items-center gap-1">
+                                    <ShieldAlert className="h-3 w-3" /> Phase bị kẹt
+                                  </span>
+                                  {/* Recovery: Force Advance to unstick the phase */}
+                                  <Button
+                                    size="icon"
+                                    variant="outline"
+                                    disabled={roundControlLoading[advanceKey]}
+                                    onClick={() => handleRoundControl(round.id, 'advance')}
+                                    className="border-amber-500/30 text-amber-500 bg-amber-500/10 hover:bg-amber-500/20 hover:text-amber-400 h-8 w-8 shadow-sm transition-colors"
+                                    title="Khôi Phục Phase — Ép chuyển sang Phase tiếp theo"
+                                  >
+                                    {roundControlLoading[advanceKey] ? <Loader2 className="h-4 w-4 animate-spin" /> : <SkipForward className="h-4 w-4" />}
+                                  </Button>
+                                </div>
                               ) : (
                                 <div className="flex flex-col gap-1.5 shrink-0 justify-start">
                                   {/* Step 1: Force Advance (normal trigger) */}

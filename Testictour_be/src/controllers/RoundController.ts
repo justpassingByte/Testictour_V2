@@ -140,4 +140,21 @@ export default {
       next(err);
     }
   },
+
+  /**
+   * GET /:roundId/scoreboard?limitMatch=N
+   * Server-side computed scoreboard for a specific round.
+   * Returns pre-computed PlayerRoundStats, match results, and summary in one call.
+   * Replaces the old pattern of fetching the entire tournament on the frontend.
+   */
+  async getScoreboard(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { roundId } = req.params;
+      const limitMatch = req.query.limitMatch ? parseInt(req.query.limitMatch as string, 10) : null;
+      const data = await RoundService.getScoreboard(roundId, limitMatch);
+      res.json(data);
+    } catch (err) {
+      next(err);
+    }
+  },
 };

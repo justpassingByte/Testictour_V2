@@ -11,6 +11,10 @@ interface UseLobbySocketOptions {
   userId?: string;
   tournamentId?: string;
   initialState?: ILobbyStateSnapshot | null;
+  /** Called when a tournament_update socket event fires */
+  onTournamentUpdate?: (data: any) => void;
+  /** Called when lobby:state_update fires (after setState, for side effects like data refetch) */
+  onLobbyDataRefresh?: () => void;
 }
 
 interface UseLobbySocketReturn {
@@ -27,6 +31,8 @@ export function useLobbySocket({
   userId,
   tournamentId,
   initialState = null,
+  onTournamentUpdate,
+  onLobbyDataRefresh,
 }: UseLobbySocketOptions): UseLobbySocketReturn {
   const [state, setState] = useState<ILobbyStateSnapshot | null>(initialState);
   const [isConnected, setIsConnected] = useState(false);
@@ -34,6 +40,11 @@ export function useLobbySocket({
   const [isReadyToggling, setIsReadyToggling] = useState(false);
 
   const socketRef = useRef<Socket | null>(null);
+  // Use refs for callbacks to avoid socket teardown when callbacks change
+  const onTournamentUpdateRef = useRef(onTournamentUpdate);
+  const onLobbyDataRefreshRef = useRef(onLobbyDataRefresh);
+  useEffect(() => { onTournamentUpdateRef.current = onTournamentUpdate; }, [onTournamentUpdate]);
+  useEffect(() => { onLobbyDataRefreshRef.current = onLobbyDataRefresh; }, [onLobbyDataRefresh]);
 
   useEffect(() => {
     const socket = io(BACKEND_URL, {
@@ -67,6 +78,8 @@ export function useLobbySocket({
     socket.on('lobby:state_update', (snapshot: ILobbyStateSnapshot) => {
       setState(snapshot);
       setIsReadyToggling(false);
+      // Notify consumer to refetch lobby REST data if needed
+      onLobbyDataRefreshRef.current?.();
     });
 
     socket.on('lobby:error', ({ message }: { message: string }) => {
@@ -77,6 +90,11 @@ export function useLobbySocket({
     socket.on('lobby:remade', () => {
       // Re-sync after remake
       socket.emit('lobby:sync', { lobbyId });
+    });
+
+    // Forward tournament-level events to consumer via callback ref (stable, no socket teardown)
+    socket.on('tournament_update', (data: any) => {
+      onTournamentUpdateRef.current?.(data);
     });
 
     return () => {
