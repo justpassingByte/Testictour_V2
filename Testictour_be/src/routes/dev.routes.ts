@@ -777,9 +777,9 @@ router.post('/automation/ready-toggle', async (req: Request, res: Response) => {
       return res.json({ success: true, state });
     }
 
-    // Toggle ALL waiting lobbies
+    // Toggle ALL pre-PLAYING lobbies (not just WAITING — lobbies may have advanced to READY_CHECK etc.)
     const waitingLobbies = await prisma.lobby.findMany({
-      where: { state: 'WAITING' },
+      where: { state: { in: ['WAITING', 'READY_CHECK', 'GRACE_PERIOD', 'STARTING'] } },
     });
 
     if (waitingLobbies.length > 0) {
@@ -787,10 +787,10 @@ router.post('/automation/ready-toggle', async (req: Request, res: Response) => {
         // Force start the lobby using actual service so it's fully synchronized via Redis and BullMQ
         await LobbyStateService.forceStart(lobby.id);
       }
-      return res.json({ success: true, message: `Forced Ready / Started ${waitingLobbies.length} WAITING lobbies.`, count: waitingLobbies.length });
+      return res.json({ success: true, message: `Forced Ready / Started ${waitingLobbies.length} lobbies.`, count: waitingLobbies.length });
     }
 
-    return res.json({ success: true, message: "No WAITING lobby found to ready" });
+    return res.json({ success: true, message: "No pre-PLAYING lobby found to ready" });
   } catch (err: any) {
     console.error('[DevTools] ready-toggle error:', err.message, err.stack);
     console.error('[DevTools] error:', err.message);
@@ -861,10 +861,10 @@ router.post('/automation/auto-start', async (req: Request, res: Response) => {
           throw new Error(`[Escrow Blocked] Không thể start Lobby ${lobby.id}: ${err.message}`);
         }
 
-        await prisma.lobby.update({
-          where: { id: lobby.id },
-          data: { state: 'PLAYING' }
-        });
+        // Use transitionPhase to handle state change + socket events atomically
+        // Do NOT do prisma.lobby.update before this — it breaks the optimistic lock
+        const LobbyStateService = require('../services/LobbyStateService').default;
+        await LobbyStateService.transitionPhase(lobby.id, lobby.state, 'PLAYING');
 
         await prisma.round.update({
           where: { id: lobby.roundId },
@@ -879,23 +879,16 @@ router.post('/automation/auto-start', async (req: Request, res: Response) => {
           data: { status: 'in_progress' }
         });
         tournamentIds.add(lobby.round.phase.tournamentId);
-
-        try {
-          const LobbyStateService = require('../services/LobbyStateService').default;
-          await LobbyStateService.transitionPhase(lobby.id, lobby.state, 'PLAYING');
-
-          const io = (global as any).__io || (global as any).io;
-          if (io) {
-            io.to(`lobby:${lobby.id}`).emit('lobby:state_update', await LobbyStateService.getLobbyState(lobby.id).catch(() => null));
-          }
-        } catch (_) { }
       }
 
       try {
         const io = (global as any).__io || (global as any).io;
+        const { bracketCache } = require('../services/BracketCacheService');
         if (io) {
           for (const tId of tournamentIds) {
+            await bracketCache.invalidate(tId);
             io.to(`tournament:${tId}`).emit('tournament_update');
+            io.to(`tournament:${tId}`).emit('bracket_update', { tournamentId: tId });
           }
           io.emit('tournaments_refresh');
         }
