@@ -157,4 +157,22 @@ export default {
       next(err);
     }
   },
-};
+
+  /**
+   * POST /phases/:phaseId/force-advance
+   * Force-advances an entire phase to the next phase.
+   * Use when all groups have finished but the phase transition didn't happen
+   * (e.g., due to race conditions between parallel groups).
+   * This is a phase-level nuclear option — safer and more targeted than per-group force-complete.
+   */
+  async forceAdvancePhase(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { phaseId } = req.params;
+      const result = await RoundService.forceAdvancePhase(phaseId);
+      res.json({ success: true, ...result });
+    } catch (err) {
+      next(err);
+    }
+  },
+};
+

@@ -6,7 +6,7 @@ import {
   ArrowLeft, Loader2, Save, Trophy, RefreshCw, Users, Play,
   Square, CheckCircle2, XCircle, Clock, AlertTriangle, Settings2,
   ChevronRight, MoreVertical, UserMinus, Crown, Skull, Image as ImageIcon,
-  ShieldAlert, ShieldCheck, Wrench, GitBranch, FastForward, SkipForward, Lock, Send, Trash2, Copy
+  ShieldAlert, ShieldCheck, Wrench, GitBranch, FastForward, SkipForward, Lock, Send, Trash2, Copy, Zap
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -257,6 +257,27 @@ export default function TournamentManagePage() {
       toast({
         title: 'Action Failed',
         description: error?.response?.data?.error || error?.response?.data?.message || error.message || 'Could not complete action.',
+        variant: 'destructive',
+      });
+    } finally {
+      setRoundControlLoading(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const handleForceAdvancePhase = async (phaseId: string) => {
+    const key = 'phase-advance-' + phaseId;
+    setRoundControlLoading(prev => ({ ...prev, [key]: true }));
+    try {
+      await api.post(`/rounds/phases/${phaseId}/force-advance`);
+      toast({
+        title: '✅ Phase Force-Advanced',
+        description: 'Phase has been force-advanced to the next phase. All groups marked completed.',
+      });
+      await refresh();
+    } catch (error: any) {
+      toast({
+        title: 'Phase Advance Failed',
+        description: error?.response?.data?.error || error?.response?.data?.message || error.message || 'Could not force-advance phase.',
         variant: 'destructive',
       });
     } finally {
@@ -791,7 +812,27 @@ export default function TournamentManagePage() {
                   <CardTitle className="text-sm flex items-center gap-2">
                     <GitBranch className="h-4 w-4 text-violet-400" />
                     Phase {phase.phaseNumber}: {phase.name}
-                    <Badge variant="outline" className="ml-auto text-[10px]">{phase.status}</Badge>
+                    <Badge variant="outline" className={`ml-auto text-[10px] ${
+                      phase.status === 'completed' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
+                      phase.status === 'in_progress' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
+                      'text-slate-400'
+                    }`}>{phase.status}</Badge>
+                    {/* Force Advance Phase button — only show when phase is in_progress */}
+                    {phase.status === 'in_progress' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={roundControlLoading['phase-advance-' + phase.id]}
+                        onClick={() => handleForceAdvancePhase(phase.id)}
+                        className="border-rose-500/30 text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 hover:text-rose-300 gap-1.5 h-7 px-3 font-semibold shadow-sm transition-colors text-[11px]"
+                        title="Ép chuyển Phase — Đánh dấu tất cả Group xong và chuyển sang Phase kế tiếp"
+                      >
+                        {roundControlLoading['phase-advance-' + phase.id]
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          : <><Zap className="h-3.5 w-3.5" /> Ép Chuyển Phase</>
+                        }
+                      </Button>
+                    )}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="px-5 pb-4">
@@ -939,6 +980,7 @@ export default function TournamentManagePage() {
                 <div className="flex items-start gap-2.5"><span className="text-blue-500 w-32 shrink-0 font-semibold bg-blue-500/10 px-2 py-0.5 rounded text-center">Tải Bảng Điểm</span>— Ép chuyển trạng thái <code className="bg-white/10 px-1 py-0.5 rounded">fetchedResult=true</code> cho các lobby bị kẹt đang lấy điểm lâu. Sau đó ấn Tiến Vòng.</div>
                 <div className="flex items-start gap-2.5"><span className="text-red-500 w-32 shrink-0 font-semibold bg-red-500/10 px-2 py-0.5 rounded text-center">Bỏ Qua & Xếp Vòng</span>— Phương án mạnh nhất: Ép tất cả lobbies thành đã tải điểm và ngay lập tức lấy TOP hiện tại để chuyển sang round kế tiếp. Dùng khi 2 nút trên gặp lỗi.</div>
                 <div className="flex items-start gap-2.5"><span className="text-emerald-500 w-32 shrink-0 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded text-center">Ép Bắt Đầu</span>— Bắt đầu trận ngay lập tức bỏ qua thời gian đếm ngược hoặc việc người chơi chưa ấn "Sẵn Sàng".</div>
+                <div className="flex items-start gap-2.5"><span className="text-rose-400 w-32 shrink-0 font-semibold bg-rose-500/10 px-2 py-0.5 rounded text-center">Ép Chuyển Phase</span>— <strong>Cấp Phase</strong>: Đánh dấu tất cả Group/Round xong và chuyển sang Phase tiếp theo. Dùng khi các Group đã xong nhưng Phase bị kẹt không tự chuyển.</div>
               </div>
             </div>
           </div>

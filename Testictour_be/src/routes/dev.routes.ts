@@ -526,7 +526,7 @@ router.post('/automation/seed-env', async (req: Request, res: Response) => {
       }
     }
 
-    const numPlayers = req.body.numPlayers || (type === 'minitour' ? 8 : 16);
+    let numPlayers = req.body.numPlayers || (type === 'minitour' ? 8 : 16);
     let uniqueParticipants = Array.from(new Map(allRealParticipants.map(item => [item.puuid, item])).values());
     allMatchIds = Array.from(new Set(allMatchIds)); // Unique queue of older matches
     let matchIdx = 0;
@@ -597,7 +597,7 @@ router.post('/automation/seed-env', async (req: Request, res: Response) => {
       return res.json({ success: true, message: `Realistic MiniTour seeded with history from ${gameName}`, lobbyId: lobby.id });
     } else {
       // Tournament mode realistic seed
-      const numPlayers = req.body.numPlayers || 8;
+      numPlayers = req.body.numPlayers || 8;
       const numberOfGroups = req.body.numberOfGroups || Math.ceil(numPlayers / 32);
 
       const admin = await prisma.user.findFirst({ where: { role: 'admin' } });

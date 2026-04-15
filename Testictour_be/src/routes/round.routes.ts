@@ -16,4 +16,8 @@ router.get('/:roundId/scoreboard',           RoundController.getScoreboard);
 router.post('/lobbies/:lobbyId/force-start', auth('admin', 'partner'), RoundController.forceStartLobby);
 router.get('/lobbies/:lobbyId/detail',                                  RoundController.getLobbyDetail);
 
+// ── Phase-level overrides ─────────────────────────────────────────────────────
+router.post('/phases/:phaseId/force-advance', auth('admin', 'partner'), RoundController.forceAdvancePhase);
+
 export default router;
+

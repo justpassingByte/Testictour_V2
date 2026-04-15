@@ -8,7 +8,7 @@ import {
   ArrowLeft, Loader2, Save, Trophy, RefreshCw, Users, Play,
   Square, CheckCircle2, XCircle, Clock, AlertTriangle, Settings2,
   ChevronRight, MoreVertical, UserMinus, Crown, Skull, Image as ImageIcon,
-  ShieldAlert, ShieldCheck, Wrench, GitBranch, FastForward, SkipForward, Trash2, Copy
+  ShieldAlert, ShieldCheck, Wrench, GitBranch, FastForward, SkipForward, Trash2, Copy, Lock, Zap
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -219,24 +219,75 @@ export default function TournamentManagePage() {
   }
 
   // ── Emergency manual round control (production-safe) ──────────────────────
-  const handleRoundControl = async (roundId: string, action: 'advance') => {
-    setRoundControlLoading(prev => ({ ...prev, [roundId + action]: true }));
+  const handleRoundControl = async (roundId: string, action: 'advance' | 'force-fetch' | 'force-complete') => {
+    const key = roundId + action;
+    setRoundControlLoading(prev => ({ ...prev, [key]: true }));
     try {
-      // Uses the production-safe, auth-protected RoundController endpoint
-      await api.post(`/rounds/${roundId}/auto-advance`);
+      const endpointMap = {
+        'advance': `/rounds/${roundId}/auto-advance`,
+        'force-fetch': `/rounds/${roundId}/force-fetch-lobbies`,
+        'force-complete': `/rounds/${roundId}/force-complete`,
+      };
+      const titleMap = {
+        'advance': '✅ Round Advanced',
+        'force-fetch': '✅ Lobbies Marked Fetched',
+        'force-complete': '✅ Round Force-Completed',
+      };
+      const descMap = {
+        'advance': 'Auto-advance triggered. Lobbies will be reassigned automatically.',
+        'force-fetch': 'All stuck lobbies marked as fetchedResult=true. Trigger Force Advance next.',
+        'force-complete': 'All lobbies marked fetched + auto-advance triggered.',
+      };
+      await api.post(endpointMap[action]);
+      toast({ title: titleMap[action], description: descMap[action] });
+      await refresh();
+    } catch (error: any) {
       toast({
-        title: '✅ Round Advanced',
-        description: 'Round advancement triggered. Lobbies will be assigned automatically.',
+        title: 'Action Failed',
+        description: error?.response?.data?.error || error?.response?.data?.message || error.message || 'Could not complete action.',
+        variant: 'destructive',
+      });
+    } finally {
+      setRoundControlLoading(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const handleForceAdvancePhase = async (phaseId: string) => {
+    const key = 'phase-advance-' + phaseId;
+    setRoundControlLoading(prev => ({ ...prev, [key]: true }));
+    try {
+      await api.post(`/rounds/phases/${phaseId}/force-advance`);
+      toast({
+        title: '✅ Phase Force-Advanced',
+        description: 'Phase has been force-advanced to the next phase. All groups marked completed.',
       });
       await refresh();
     } catch (error: any) {
       toast({
-        title: 'Failed',
-        description: error?.response?.data?.message || error.message || 'Could not advance round.',
+        title: 'Phase Advance Failed',
+        description: error?.response?.data?.error || error?.response?.data?.message || error.message || 'Could not force-advance phase.',
         variant: 'destructive',
       });
     } finally {
-      setRoundControlLoading(prev => ({ ...prev, [roundId + action]: false }));
+      setRoundControlLoading(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const handleForceStartLobby = async (lobbyId: string) => {
+    const key = 'lobby-' + lobbyId;
+    setRoundControlLoading(prev => ({ ...prev, [key]: true }));
+    try {
+      await api.post(`/rounds/lobbies/${lobbyId}/force-start`);
+      toast({ title: '🚀 Lobby Force-Started', description: 'Lobby is now transitioning to STARTING → PLAYING. Players bypassed ready check.' });
+      await refresh();
+    } catch (error: any) {
+      toast({
+        title: 'Force Start Failed',
+        description: error?.response?.data?.error || error.message || 'Could not force-start lobby.',
+        variant: 'destructive',
+      });
+    } finally {
+      setRoundControlLoading(prev => ({ ...prev, [key]: false }));
     }
   };
 
@@ -644,11 +695,29 @@ export default function TournamentManagePage() {
                         <p className="text-sm text-muted-foreground capitalize">{phase.type} Format · Lobby size {phase.lobbySize}</p>
                       </div>
                     </div>
-                    <Badge variant="outline" className={`px-2.5 py-1 ${
-                      phase.status === 'completed' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
-                        phase.status === 'in_progress' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
-                          'bg-slate-500/10 text-slate-400 border-slate-500/20'
-                    }`}>{phase.status || 'pending'}</Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className={`px-2.5 py-1 ${
+                        phase.status === 'completed' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
+                          phase.status === 'in_progress' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
+                            'bg-slate-500/10 text-slate-400 border-slate-500/20'
+                      }`}>{phase.status || 'pending'}</Badge>
+                      {/* Force Advance Phase button */}
+                      {phase.status === 'in_progress' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={roundControlLoading['phase-advance-' + phase.id]}
+                          onClick={() => handleForceAdvancePhase(phase.id)}
+                          className="border-rose-500/30 text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 hover:text-rose-300 gap-1.5 h-7 px-3 font-semibold shadow-sm transition-colors text-[11px]"
+                          title="Ép chuyển Phase — Đánh dấu tất cả Group xong và chuyển sang Phase kế tiếp"
+                        >
+                          {roundControlLoading['phase-advance-' + phase.id]
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            : <><Zap className="h-3.5 w-3.5" /> Ép Chuyển Phase</>
+                          }
+                        </Button>
+                      )}
+                    </div>
                   </div>
 
                   {phase.rounds && phase.rounds.length > 0 && (
@@ -656,7 +725,11 @@ export default function TournamentManagePage() {
                       {phase.rounds.map((round) => {
                          const lobbyCount = round.lobbies?.length || 0;
                          const completedLobbies = round.lobbies?.filter((l: any) => l.state === 'FINISHED' || l.state === 'COMPLETED').length || 0;
-                         const advancingKey = round.id + 'advance';
+                         const fetchedCount = round.lobbies?.filter((l: any) => l.fetchedResult).length || 0;
+                         const stuckLobbies = round.lobbies?.filter((l: any) => !['FINISHED', 'PLAYING', 'STARTING'].includes(l.state)) || [];
+                         const advanceKey = round.id + 'advance';
+                         const fetchKey = round.id + 'force-fetch';
+                         const completeKey = round.id + 'force-complete';
                          return (
                            <div key={round.id} className={`flex flex-col bg-white/5 rounded-lg p-3 border transition-colors ${
                               round.status === 'completed' ? 'border-green-500/20' :
@@ -680,7 +753,7 @@ export default function TournamentManagePage() {
                             <div className="flex-1 space-y-2">
                               <div className="flex justify-between items-end">
                                 <div className="text-xs text-muted-foreground">
-                                  {lobbyCount} lobbies · {completedLobbies}/{lobbyCount} finished
+                                  {lobbyCount} lobbies · {fetchedCount}/{lobbyCount} fetched · {completedLobbies}/{lobbyCount} finished
                                 </div>
                               </div>
                               
@@ -702,27 +775,95 @@ export default function TournamentManagePage() {
                               )}
                             </div>
 
-                            {/* Control button for active round */}
-                            <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between">
-                                {round.status === 'completed' ? (
+                            {/* Control buttons */}
+                            <div className="mt-4 pt-3 border-t border-white/5">
+                                {round.status === 'completed' && phase.status !== 'in_progress' ? (
                                   <span className="text-xs text-green-400 font-medium flex items-center gap-1.5">
-                                    <CheckCircle2 className="h-4 w-4" />{t("finished")}</span>
+                                    <CheckCircle2 className="h-4 w-4" />{t("finished")}
+                                  </span>
+                                ) : round.status === 'completed' && phase.status === 'in_progress' ? (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] text-amber-400/80 font-semibold flex items-center gap-1">
+                                      <ShieldAlert className="h-3 w-3" /> Phase bị kẹt
+                                    </span>
+                                    <Button
+                                      size="icon"
+                                      variant="outline"
+                                      disabled={roundControlLoading[advanceKey]}
+                                      onClick={() => handleRoundControl(round.id, 'advance')}
+                                      className="border-amber-500/30 text-amber-500 bg-amber-500/10 hover:bg-amber-500/20 hover:text-amber-400 h-8 w-8 shadow-sm transition-colors"
+                                      title="Khôi Phục Phase — Ép chuyển sang Phase tiếp theo"
+                                    >
+                                      {roundControlLoading[advanceKey] ? <Loader2 className="h-4 w-4 animate-spin" /> : <SkipForward className="h-4 w-4" />}
+                                    </Button>
+                                  </div>
                                 ) : (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    disabled={roundControlLoading[advancingKey]}
-                                    onClick={() => handleRoundControl(round.id, 'advance')}
-                                    className="w-full border-amber-500/30 text-amber-500 bg-amber-500/10 hover:bg-amber-500/20 hover:text-amber-400 h-8 font-semibold gap-1.5 shadow-sm"
-                                  >
-                                    {roundControlLoading[advancingKey] ? (
-                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                    ) : (
-                                      <><SkipForward className="h-3.5 w-3.5" /> Tiến Vòng / Trộn Lobby</>
-                                    )}
-                                  </Button>
+                                  <div className="flex gap-1.5">
+                                    {/* Force Advance */}
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      disabled={roundControlLoading[advanceKey]}
+                                      onClick={() => handleRoundControl(round.id, 'advance')}
+                                      className="flex-1 border-amber-500/30 text-amber-500 bg-amber-500/10 hover:bg-amber-500/20 hover:text-amber-400 h-8 font-semibold gap-1.5 shadow-sm text-[11px]"
+                                      title="Tiến Vòng / Trộn Lobby (Force Advance)"
+                                    >
+                                      {roundControlLoading[advanceKey] ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><SkipForward className="h-3.5 w-3.5" /> Tiến Vòng</>}
+                                    </Button>
+                                    {/* Force Fetch */}
+                                    <Button
+                                      size="icon"
+                                      variant="outline"
+                                      disabled={roundControlLoading[fetchKey]}
+                                      onClick={() => handleRoundControl(round.id, 'force-fetch')}
+                                      className="border-blue-500/30 text-blue-500 bg-blue-500/10 hover:bg-blue-500/20 hover:text-blue-400 h-8 w-8 shadow-sm transition-colors"
+                                      title="Tải Bảng Điểm (Force Fetch)"
+                                    >
+                                      {roundControlLoading[fetchKey] ? <Loader2 className="h-4 w-4 animate-spin" /> : <FastForward className="h-4 w-4" />}
+                                    </Button>
+                                    {/* Force Complete */}
+                                    <Button
+                                      size="icon"
+                                      variant="outline"
+                                      disabled={roundControlLoading[completeKey]}
+                                      onClick={() => handleRoundControl(round.id, 'force-complete')}
+                                      className="border-red-500/30 text-red-500 bg-red-500/10 hover:bg-red-500/20 hover:text-red-400 h-8 w-8 shadow-sm transition-colors"
+                                      title="Bỏ Qua Lỗi & Xếp Vòng (Force Complete)"
+                                    >
+                                      {roundControlLoading[completeKey] ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
+                                    </Button>
+                                  </div>
                                 )}
                             </div>
+
+                            {/* Per-lobby Force Start — only show for non-finished, non-playing lobbies */}
+                            {stuckLobbies.length > 0 && round.status !== 'completed' && (
+                              <div className="border-t border-white/5 px-1 pt-3 mt-3 flex flex-col gap-2">
+                                <span className="text-[11px] font-semibold text-emerald-500 flex items-center gap-1.5 uppercase tracking-wide">
+                                  <Play className="h-3.5 w-3.5" /> Force Start:
+                                </span>
+                                <div className="flex flex-wrap gap-2">
+                                  {stuckLobbies.map((lobby: any) => (
+                                    <Button
+                                      key={lobby.id}
+                                      size="sm"
+                                      variant="outline"
+                                      disabled={roundControlLoading['lobby-' + lobby.id]}
+                                      onClick={() => handleForceStartLobby(lobby.id)}
+                                      className="border-emerald-500/30 text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 hover:text-emerald-300 gap-1.5 px-2.5 py-1 font-medium shadow-sm transition-colors justify-start h-auto min-h-[30px]"
+                                      title={`Ép Bắt Đầu ${lobby.name} — bỏ qua chờ Ready`}
+                                    >
+                                      {roundControlLoading['lobby-' + lobby.id]
+                                        ? <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
+                                        : <Play className="h-3.5 w-3.5 shrink-0" />
+                                      }
+                                      <span className="truncate">{lobby.name || `Lobby ${lobby.id.slice(-4)}`}</span>
+                                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 border-emerald-500/30 text-emerald-500/80 uppercase font-semibold shrink-0">{lobby.state}</Badge>
+                                    </Button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                          );
                         })}

@@ -140,13 +140,6 @@ export default class RoundService {
       shuffled.sort((a, b) => (b.scoreTotal || 0) - (a.scoreTotal || 0));
     }
 
-    // Clear existing lobbies to prevent duplication if clicked multiple times
-    await prisma.lobby.deleteMany({
-      where: {
-        roundId: { in: firstPhase.rounds.map(r => r.id) }
-      }
-    });
-
     // Distribute participants sequentially (fill group up to maxPlayersPerGroup, then move to next)
     const groups: typeof participants[] = Array.from({ length: requiredNumberOfGroups }, () => []);
     shuffled.forEach((p, i) => {
@@ -154,7 +147,8 @@ export default class RoundService {
       groups[groupIndex].push(p);
     });
 
-    // Create lobbies in each group (round)
+    const lobbiesToCreate: any[] = [];
+    // Collect all lobbies to create
     for (let groupIndex = 0; groupIndex < requiredNumberOfGroups; groupIndex++) {
       const round = firstPhase.rounds[groupIndex];
       if (!round) {
@@ -166,23 +160,42 @@ export default class RoundService {
       const groupName = this.groupNameFromNumber(round.roundNumber);
       logger.info(`[PreAssign] Assigning Group ${groupName}: ${groupParticipants.length} players`);
 
-      // Split group participants into lobbies
       let lobbyCount = 1;
       for (let i = 0; i < groupParticipants.length; i += lobbySize) {
         const lobbyParticipants = groupParticipants.slice(i, i + lobbySize);
-        const participantUserIds = lobbyParticipants.map(p => p.userId);
-
-        await prisma.lobby.create({
-          data: {
-            roundId: round.id,
-            name: `Lobby ${lobbyCount++}`,
-            participants: participantUserIds,
-            state: 'WAITING',
-            phaseStartedAt: new Date(),
-          }
+        lobbiesToCreate.push({
+          roundId: round.id,
+          name: `Lobby ${lobbyCount++}`,
+          participants: lobbyParticipants.map(p => p.userId),
+          state: 'WAITING',
+          phaseStartedAt: new Date(),
         });
       }
     }
+
+    // Atomic transaction to clear existing lobbies and insert new ones
+    await prisma.$transaction(async (tx) => {
+      // Acquire row-level lock on Phase to prevent concurrent preAssignGroups runs
+      await tx.$executeRaw`SELECT 1 FROM "Phase" WHERE id = ${firstPhase.id} FOR UPDATE`;
+      
+      // Re-verify no lobbies exist after acquiring lock
+      const currentPhase = await tx.phase.findUnique({
+        where: { id: firstPhase.id },
+        include: { rounds: { include: { _count: { select: { lobbies: true } } } } }
+      });
+      const hasLobbiesTx = currentPhase?.rounds.some(r => r._count.lobbies > 0);
+      if (hasLobbiesTx) {
+          logger.info(`[PreAssign] Race condition guarded: Tournament ${tournamentId} already assigned.`);
+          return;
+      }
+
+      // Clear existing lobbies to prevent duplication if clicked multiple times
+      await tx.lobby.deleteMany({
+        where: { roundId: { in: firstPhase.rounds.map(r => r.id) } }
+      });
+      
+      await tx.lobby.createMany({ data: lobbiesToCreate });
+    });
 
     // Update tournament actualParticipantsCount
     await prisma.tournament.update({
@@ -893,6 +906,96 @@ export default class RoundService {
   }
 
   /**
+   * Force-advance an entire phase to the next phase.
+   * Production-safe emergency override when:
+   *   - All groups have finished playing but phase is stuck as 'in_progress'
+   *   - Individual group Force Advance buttons don't resolve the stuck phase
+   *   - Race condition between parallel groups prevented automatic phase transition
+   *
+   * Steps:
+   *   1. Mark all lobbies in all rounds of this phase as fetchedResult=true
+   *   2. Mark all non-completed rounds as 'completed'
+   *   3. Trigger autoAdvance on the last round → enters the recovery path and performs phase transition
+   *
+   * Works with both mock and real Riot API data — only operates on state flags, not match data.
+   */
+  static async forceAdvancePhase(phaseId: string) {
+    const phase = await prisma.phase.findUnique({
+      where: { id: phaseId },
+      include: {
+        rounds: {
+          include: { lobbies: { select: { id: true, state: true, fetchedResult: true } } }
+        }
+      }
+    });
+
+    if (!phase) throw new ApiError(404, 'Phase not found');
+    if (phase.status === 'completed') {
+      return { message: `Phase ${phase.name} is already completed.`, alreadyCompleted: true };
+    }
+    if (phase.status !== 'in_progress') {
+      throw new ApiError(400, `Phase ${phase.name} is '${phase.status}', not 'in_progress'. Cannot force-advance a phase that hasn't started.`);
+    }
+
+    logger.warn(`[ForceAdvancePhase] Admin forced phase advance for: ${phase.name} (${phaseId})`);
+
+    let lastRoundId: string | null = null;
+
+    for (const round of phase.rounds) {
+      // Step 1: Mark all lobbies as fetched
+      const unfetchedLobbies = round.lobbies.filter(l => !l.fetchedResult);
+      if (unfetchedLobbies.length > 0) {
+        await prisma.lobby.updateMany({
+          where: { id: { in: unfetchedLobbies.map(l => l.id) } },
+          data: { fetchedResult: true }
+        });
+        logger.info(`[ForceAdvancePhase] Marked ${unfetchedLobbies.length} lobbies as fetched in round ${round.roundNumber}`);
+      }
+
+      // Step 1b: Transition any non-FINISHED lobbies to FINISHED (prevent stale lobby states)
+      const nonFinishedLobbies = round.lobbies.filter(l => l.state !== 'FINISHED' && l.state !== 'COMPLETED');
+      if (nonFinishedLobbies.length > 0) {
+        await prisma.lobby.updateMany({
+          where: { id: { in: nonFinishedLobbies.map(l => l.id) } },
+          data: { state: 'FINISHED' }
+        });
+        logger.info(`[ForceAdvancePhase] Forced ${nonFinishedLobbies.length} lobbies to FINISHED in round ${round.roundNumber}`);
+      }
+
+      // Step 2: Mark round as completed
+      if (round.status !== 'completed') {
+        await prisma.round.update({
+          where: { id: round.id },
+          data: { status: 'completed', endTime: new Date() }
+        });
+        logger.info(`[ForceAdvancePhase] Marked round ${round.roundNumber} (${round.id}) as completed`);
+      }
+
+      lastRoundId = round.id;
+    }
+
+    if (!lastRoundId) {
+      throw new ApiError(400, 'Phase has no rounds to advance.');
+    }
+
+    // Step 3: Trigger autoAdvance on the last round — it will enter the recovery path
+    // (round.status === 'completed' + phase.status === 'in_progress') and perform the phase transition
+    logger.info(`[ForceAdvancePhase] Triggering autoAdvance on last round ${lastRoundId} to run recovery/phase-transition path.`);
+    const result = await RoundService.autoAdvance(lastRoundId);
+
+    // Emit real-time updates
+    try {
+      if ((global as any).io) {
+        await bracketCache.invalidate(phase.tournamentId);
+        (global as any).io.to(`tournament:${phase.tournamentId}`).emit('bracket_update', { tournamentId: phase.tournamentId });
+        (global as any).io.to(`tournament:${phase.tournamentId}`).emit('tournament_update', { type: 'phase_force_advanced' });
+      }
+    } catch (_) { /* non-fatal */ }
+
+    return { message: `Phase "${phase.name}" force-advanced successfully.`, result };
+  }
+
+  /**
    * Safely enqueue an autoAdvance job, or call it directly if BullMQ is unavailable (no Redis).
    * Using setTimeout(0) for direct calls avoids blocking the current call stack and
    * prevents recursive stack overflows when advancing multiple phases in sequence.
@@ -1371,6 +1474,38 @@ export default class RoundService {
         for (const jobData of jobsToQueue) {
           await fetchMatchDataQueue.add('fetchMatchData', jobData);
         }
+      }
+
+      // ── POST-TRANSACTION RACE CONDITION FIX ──────────────────────────────────
+      // When parallel groups (e.g. Group A & B) complete simultaneously, each
+      // transaction only sees ITSELF as newly completed (1/2). Both return
+      // "Waiting for remaining groups" and neither triggers the phase transition.
+      // Fix: After committing, re-check (outside transaction) if ALL rounds in the
+      // phase are now completed. If so, re-trigger autoAdvance which will enter the
+      // recovery path (round.status === 'completed' + phase.status === 'in_progress')
+      // and correctly perform the phase transition.
+      if (result && typeof result.message === 'string' && result.message.includes('Waiting for')) {
+        setTimeout(async () => {
+          try {
+            const completedRound = await prisma.round.findUnique({
+              where: { id: roundId },
+              include: { phase: true },
+            });
+            if (!completedRound || completedRound.phase.status !== 'in_progress') return;
+
+            const totalInPhase = await prisma.round.count({ where: { phaseId: completedRound.phaseId } });
+            const doneInPhase = await prisma.round.count({ where: { phaseId: completedRound.phaseId, status: 'completed' } });
+
+            if (doneInPhase >= totalInPhase) {
+              logger.warn(`[RaceConditionFix] All ${totalInPhase} rounds in phase ${completedRound.phaseId} are completed but phase is still 'in_progress'. Re-triggering autoAdvance for recovery.`);
+              await RoundService._queueOrCallAutoAdvance(roundId);
+            } else {
+              logger.debug(`[RaceConditionFix] Phase ${completedRound.phaseId}: ${doneInPhase}/${totalInPhase} rounds done. No re-trigger needed.`);
+            }
+          } catch (recheckErr) {
+            logger.error(`[RaceConditionFix] Post-tx recheck failed: ${recheckErr instanceof Error ? recheckErr.message : String(recheckErr)}`);
+          }
+        }, 1500); // 1.5s delay to allow the parallel transaction to commit first
       }
 
       // ── Schedule lobby timers AFTER transaction commits ──
