@@ -3,6 +3,7 @@ import { LOBBY_STATE, LobbyState, assertValidState, PHASE_DURATIONS_MS } from '.
 import LobbyTimerService from './LobbyTimerService';
 import logger from '../utils/logger';
 import { fetchMatchDataQueue } from '../lib/queues';
+import { bracketCache } from './BracketCacheService';
 
 // Redis client (ioredis) — imported lazily to support environments where Redis is optional
 let _redis: any = null;
@@ -161,9 +162,17 @@ export default class LobbyStateService {
       });
       
       const io = (global as any).__io || (global as any).io;
+      const tournamentId = lobbyWithTourn?.round?.phase?.tournamentId;
+
+      // Invalidate bracket cache so next fetch returns fresh lobby states
+      if (tournamentId) {
+        await bracketCache.invalidate(tournamentId);
+      }
+
       if (io) {
-        if (lobbyWithTourn?.round?.phase?.tournamentId) {
-          io.to(`tournament:${lobbyWithTourn.round.phase.tournamentId}`).emit('tournament_update');
+        if (tournamentId) {
+          io.to(`tournament:${tournamentId}`).emit('tournament_update');
+          io.to(`tournament:${tournamentId}`).emit('bracket_update', { tournamentId });
         }
         
         // Broadcast the new LobbyStateSnapshot to the lobby room
@@ -514,5 +523,16 @@ export default class LobbyStateService {
     }
 
     logger.warn(`LobbyStateService.autoResolveIntervention: lobby ${lobbyId} auto-resolved — ${participantUserIds.length} players given 8th place`);
+
+    // Invalidate bracket cache + notify frontend
+    const tournamentId = lobby.round.phase.tournamentId;
+    if (tournamentId) {
+      await bracketCache.invalidate(tournamentId);
+      const io = (global as any).__io || (global as any).io;
+      if (io) {
+        io.to(`tournament:${tournamentId}`).emit('tournament_update');
+        io.to(`tournament:${tournamentId}`).emit('bracket_update', { tournamentId });
+      }
+    }
   }
 }

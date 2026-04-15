@@ -48,9 +48,7 @@ export default function RoundResultsPage({ params }: { params: { id: string; rou
   useEffect(() => {
     if (!params.id || !params.round) return
 
-    const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL
-      || (process.env.NEXT_PUBLIC_API_URL?.replace('/api', ''))
-      || 'http://localhost:4000'
+    const SOCKET_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'
 
     let socketInstance: any = null
     let isMounted = true
@@ -58,7 +56,7 @@ export default function RoundResultsPage({ params }: { params: { id: string; rou
     import('socket.io-client').then(({ io }) => {
       if (!isMounted) return // component unmounted before promise resolved
       socketInstance = io(SOCKET_URL, { transports: ['websocket'] })
-      socketInstance.emit('join_tournament', params.id)
+      socketInstance.emit('join', { tournamentId: params.id })
 
       const refetch = () => fetchScoreboard()
       socketInstance.on('tournament_update', refetch)

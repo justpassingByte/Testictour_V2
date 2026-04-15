@@ -5,7 +5,7 @@
  * Uses Redis if available, falls back to in-memory Map.
  * 
  * Cache key: bracket:{tournamentId}
- * TTL: 5 minutes (safety net — normally invalidated on bracket changes)
+ * TTL: 30 seconds (short TTL ensures fresh lobby states during live tournaments)
  * 
  * Invalidation points (all places that emit 'bracket_update'):
  *   - RoundService.preAssignGroups
@@ -19,7 +19,7 @@ import { createClient } from '../lib/redis';
 import logger from '../utils/logger';
 
 const CACHE_PREFIX = 'bracket:';
-const CACHE_TTL_SECONDS = 300; // 5 minutes safety TTL
+const CACHE_TTL_SECONDS = 30; // 30 seconds — keeps lobby states fresh during live play
 
 class BracketCacheService {
   private redis: any;
