@@ -85,7 +85,7 @@
   "add_tag": "Thêm thẻ",
   "add_tier": "Thêm Hạng",
   "additional_information": "Thông tin bổ sung",
-  "additional_tournament_rules": "Cáct quy định khác",
+  "additional_tournament_rules": "Quy định bổ sung",
   "admin": "Quản trị",
   "admin_actions": "Hành động Quản trị",
   "admin_approve_and_distribute": "Admin duyệt và phát thưởng",
@@ -148,7 +148,6 @@
   "all_time": "Tất cả trận",
   "all_tournaments": "Tất cả giải đấu",
   "all_types": "Tất cả loại",
-  "additional_tournament_rules": "Quy định bổ sung",
   "rules_tiebreak_title": "Quy tắc Tiebreak theo từng Thể thức",
   "rules_tiebreak_subtitle": "Khi nhiều người chơi có cùng điểm, hệ thống sẽ áp dụng tiebreak theo thứ tự ưu tiên dưới đây.",
   "rules_general_title": "Quy tắc chung & Thể thức",
@@ -157,53 +156,104 @@
   "rules_tiebreak_swiss_label": "Swiss",
   "rules_tiebreak_swiss_desc": "Vòng Swiss: tất cả người chơi thi đấu nhiều trận, điểm cộng dồn, không bị loại giữa các trận.",
   "rules_tiebreak_swiss_items": [
-    { "label": "Tổng điểm", "desc": "Điểm cộng dồn qua tất cả các trận trong vòng (cao hơn = tốt hơn)." },
-    { "label": "Tổng Placement", "desc": "Tổng vị trí xếp hạng trong tất cả trận (thấp hơn = trung bình tốt hơn). VD: 1+2+3=6 thắng 3+4+5=12." },
-    { "label": "Số lần Top 1", "desc": "Số trận đứng hạng 1 (nhiều hơn = ưu tiên hơn)." },
-    { "label": "Best Placement", "desc": "Vị trí tốt nhất đạt được trong 1 trận bất kỳ (thấp hơn = tốt hơn)." }
+    {
+      "label": "Tổng điểm",
+      "desc": "Điểm cộng dồn qua tất cả các trận trong vòng (cao hơn = tốt hơn)."
+    },
+    {
+      "label": "Tổng Placement",
+      "desc": "Tổng vị trí xếp hạng trong tất cả trận (thấp hơn = trung bình tốt hơn). VD: 1+2+3=6 thắng 3+4+5=12."
+    },
+    {
+      "label": "Số lần Top 1",
+      "desc": "Số trận đứng hạng 1 (nhiều hơn = ưu tiên hơn)."
+    },
+    {
+      "label": "Best Placement",
+      "desc": "Vị trí tốt nhất đạt được trong 1 trận bất kỳ (thấp hơn = tốt hơn)."
+    }
   ],
   "rules_tiebreak_elimination_label": "Loại Trực Tiếp",
   "rules_tiebreak_elimination_desc": "Vòng Loại Trực Tiếp: top N mỗi lobby tiến vào vòng sau, phần còn lại bị loại.",
   "rules_tiebreak_elimination_items": [
-    { "label": "Placement trong trận", "desc": "Thứ hạng trực tiếp trong Match đó (top N advance, bottom bị loại). Dành cho thể thức BO1." },
-    { "label": "Điểm trận đó", "desc": "Nếu cùng placement (rất hiếm), dùng điểm tích lũy trong trận làm phân định." }
+    {
+      "label": "Placement trong trận",
+      "desc": "Thứ hạng trực tiếp trong Match đó (top N advance, bottom bị loại). Dành cho thể thức BO1."
+    },
+    {
+      "label": "Điểm trận đó",
+      "desc": "Nếu cùng placement (rất hiếm), dùng điểm tích lũy trong trận làm phân định."
+    }
   ],
   "rules_tiebreak_elimination_bo_label": "Loại Trực Tiếp (BO)",
   "rules_tiebreak_elimination_bo_desc": "Vòng Loại Trực Tiếp (BO): Đánh đủ số trận quy định với bảng cố định, sau đó tổng kết điểm để loại người bét bảng.",
   "rules_tiebreak_elimination_bo_items": [
-    { "label": "Tổng Điểm Series", "desc": "Cộng dồn điểm các trận của series BOx để xếp hạng đi tiếp." },
-    { "label": "Tổng Placement", "desc": "Tổng vị trí xếp hạng trong các trận của series (thấp hơn = ưu tiên)." },
-    { "label": "Số lần Top 1", "desc": "Đứng top 1 nhiều hơn trong series sẽ ưu tiên cao hơn." }
+    {
+      "label": "Tổng Điểm Series",
+      "desc": "Cộng dồn điểm các trận của series BOx để xếp hạng đi tiếp."
+    },
+    {
+      "label": "Tổng Placement",
+      "desc": "Tổng vị trí xếp hạng trong các trận của series (thấp hơn = ưu tiên)."
+    },
+    {
+      "label": "Số lần Top 1",
+      "desc": "Đứng top 1 nhiều hơn trong series sẽ ưu tiên cao hơn."
+    }
   ],
   "rules_tiebreak_checkmate_label": "Checkmate",
   "rules_tiebreak_checkmate_desc": "Vòng Checkmate: tiếp tục thi đấu cho đến khi có người đạt điều kiện thắng (hạng 1 hoặc ngưỡng điểm).",
   "rules_tiebreak_checkmate_items": [
-    { "label": "Hạng 1 trong trận", "desc": "Ai đứng hạng 1 trong trận đó thắng tức khắc (Checkmate condition)." },
-    { "label": "Tổng điểm tích lũy", "desc": "Nếu chưa ai đạt Checkmate, dùng tổng điểm qua các trận để xếp hạng tạm thời." }
+    {
+      "label": "Hạng 1 trong trận",
+      "desc": "Ai đứng hạng 1 trong trận đó thắng tức khắc (Checkmate condition)."
+    },
+    {
+      "label": "Tổng điểm tích lũy",
+      "desc": "Nếu chưa ai đạt Checkmate, dùng tổng điểm qua các trận để xếp hạng tạm thời."
+    }
   ],
   "rules_tiebreak_points_label": "Điểm Tích Lũy",
   "rules_tiebreak_points_desc": "Vòng Điểm: thi đấu nhiều trận, xếp hạng dựa trên tổng điểm cộng dồn.",
   "rules_tiebreak_points_items": [
-    { "label": "Tổng điểm", "desc": "Điểm cộng dồn qua tất cả các trận (cao hơn = tốt hơn)." },
-    { "label": "Best Placement", "desc": "Vị trí tốt nhất đạt được trong 1 trận bất kỳ." },
-    { "label": "Số lần Top 1", "desc": "Số trận đứng hạng 1 (nhiều hơn = ưu tiên)." }
+    {
+      "label": "Tổng điểm",
+      "desc": "Điểm cộng dồn qua tất cả các trận (cao hơn = tốt hơn)."
+    },
+    {
+      "label": "Best Placement",
+      "desc": "Vị trí tốt nhất đạt được trong 1 trận bất kỳ."
+    },
+    {
+      "label": "Số lần Top 1",
+      "desc": "Số trận đứng hạng 1 (nhiều hơn = ưu tiên)."
+    }
   ],
   "rules_tiebreak_round_robin_label": "Round Robin",
   "rules_tiebreak_round_robin_desc": "Vòng Round Robin: mỗi người chơi gặp nhau trong các lobby xoay vòng, xếp hạng theo tổng điểm.",
   "rules_tiebreak_round_robin_items": [
-    { "label": "Tổng điểm", "desc": "Điểm cộng dồn qua tất cả các trận." },
-    { "label": "Tổng Placement", "desc": "Tổng placement thấp hơn = trung bình tốt hơn." },
-    { "label": "Số lần Top 1", "desc": "Số trận đứng hạng 1." }
+    {
+      "label": "Tổng điểm",
+      "desc": "Điểm cộng dồn qua tất cả các trận."
+    },
+    {
+      "label": "Tổng Placement",
+      "desc": "Tổng placement thấp hơn = trung bình tốt hơn."
+    },
+    {
+      "label": "Số lần Top 1",
+      "desc": "Số trận đứng hạng 1."
+    }
   ],
-  "lobby_assignment_rules": "Quy tắc chia bảng",
-  "random_assignment": "Chia bảng ngẫu nhiên",
-  "random_assignment_desc": "Người chơi được xếp vào bất kỳ bảng nào mà không có tiêu chí cố định.",
-  "seeded_assignment": "Chia bảng theo hạt giống",
-  "seeded_assignment_desc": "Người chơi được xếp dựa trên thành tích hoặc thứ hạng (Snake Seeding).",
-  "rule_1": "Người tham gia phải đăng ký trước thời hạn đăng ký.",
+  "lobby_assignment_rules": "Quy tắc Chọn sảnh",
+  "random_assignment": "Bốc thăm ngẫu nhiên",
+  "random_assignment_desc": "Người được xếp vào các sảnh một cách ngẫu nhiên, không xét đến hiệu suất hay thứ hạng của họ.",
+  "seeded_assignment": "Bốc thăm hạt giống",
+  "seeded_assignment_desc": "Người chơi được xếp vào các sảnh dựa trên hiệu suất, hạng, hoặc tiêu chí hạt giống khác để tạo các trận đấu cân bằng hay có chiến thuật.",
+  "rule_1": "Tất cả người tham gia phải đăng ký trước hạn chót đăng ký.",
   "rule_2": "Người chơi phải sử dụng cùng một tài khoản Riot trong suốt giải đấu.",
-  "rule_3": "Trong trường hợp hòa điểm, người chơi có số lần về nhất cao hơn sẽ thắng.",
-  "rule_4": "Bất kỳ hình thức gian lận hoặc hành vi phi thể thao nào đều sẽ bị loại.",
+  "rule_3": "Trong trường hợp hòa, người chơi có số lần về nhất nhiều hơn sẽ chiến thắng.",
+  "rule_4": "Bất kỳ hình thức gian lận hoặc hành vi phi thể thao nào đều sẽ dẫn đến việc bị truất quyền thi đấu.",
   "escrow_title": "Bảo chứng Escrow",
   "escrow_desc": "Giải đấu này được bảo vệ bởi hệ thống Escrow. Tiền thưởng đã được Host ký gửi an toàn vào ví hệ thống trước khi bắt đầu.",
   "community_title": "Chế độ Cộng đồng",
@@ -958,7 +1008,6 @@
   "lobbies_played_partner": "Hành lang đã chơi (Đối tác)",
   "lobby": "Sảnh",
   "lobby_activity": "Hoạt động phòng đấu",
-  "lobby_assignment_rules": "Quy tắc Chọn sảnh",
   "lobby_breakdown": "Chi tiết sảnh",
   "lobby_information": "Thông tin phòng đấu",
   "lobby_list": "Danh sách sảnh",
@@ -1430,8 +1479,6 @@
   "quy_escrow_da_duoc_chuyen_toi_nguoi_choi_hoac_duoc": "Quỹ Escrow đã được chuyển tới người chơi hoặc được đánh dấu là giải ngân. Xem Settlement Report để kiểm tra chi tiết.",
   "r_lobbies_length_0": "r.lobby || []).độ dài || 0}",
   "r_points_total_totalscoretoshow_roundout_desc": "r.điểm),\r\n            tổng cộng: TotalScoreToShow,\r\n            roundOutcomeStatus: roundOutcome?.status ?? vô giá trị,\r\n            bị loại bỏToàn cầu: người tham gia.bị loại bỏ ?? SAI,\r\n        };\r\n    }).filter((p): p là NonNullable",
-  "random_assignment": "Bốc thăm ngẫu nhiên",
-  "random_assignment_desc": "Người được xếp vào các sảnh một cách ngẫu nhiên, không xét đến hiệu suất hay thứ hạng của họ.",
   "rank": "Thứ hạng",
   "rank_const_sortorder_setsortorder_usesta_desc": "(\"thứ hạng\")\n  const [sortOrder, setSortOrder] = useState",
   "ranked": "Xếp hạng",
@@ -1561,10 +1608,6 @@
   "round_robin_phase": "Giai đoạn Vòng tròn",
   "round_robin_phase_desc": "Mỗi người chơi hoặc đội phải thi đấu với mọi người chơi hoặc đội khác một số lần định trước. Thể thức này đảm bảo mọi người đều được đối đầu với nhau.",
   "rounds": "Vòng đấu",
-  "rule_1": "Tất cả người tham gia phải đăng ký trước hạn chót đăng ký.",
-  "rule_2": "Người chơi phải sử dụng cùng một tài khoản Riot trong suốt giải đấu.",
-  "rule_3": "Trong trường hợp hòa, người chơi có số lần về nhất nhiều hơn sẽ chiến thắng.",
-  "rule_4": "Bất kỳ hình thức gian lận hoặc hành vi phi thể thao nào đều sẽ dẫn đến việc bị truất quyền thi đấu.",
   "rules": "Luật lệ",
   "rules_and_advancement": "Quy tắc và tiến trình giải đấu",
   "rules_and_tournament_advancement": "Quy tắc và tiến bộ giải đấu",
@@ -1594,8 +1637,6 @@
   "searching_for_match": "Đang tìm trận đấu...",
   "second_place": "Hạng 2",
   "seed_full_tournament": "Giải đấu hạt giống đầy đủ",
-  "seeded_assignment": "Bốc thăm hạt giống",
-  "seeded_assignment_desc": "Người chơi được xếp vào các sảnh dựa trên hiệu suất, hạng, hoặc tiêu chí hạt giống khác để tạo các trận đấu cân bằng hay có chiến thuật.",
   "select_an_action_to_view_the_result_payl_desc": "Chọn một hành động để xem tải trọng kết quả ở đây.",
   "select_region": "Chọn khu vực",
   "select_tags_that_describe_your_lobby_to__desc": "Chọn các thẻ mô tả sảnh của bạn để giúp người chơi tìm thấy nó hoặc thêm thẻ mới.",
@@ -1961,5 +2002,6 @@
   "leaderboard_results": "Bảng Xếp Hạng",
   "prize_pool_locked": "Quỹ thưởng đã khóa",
   "prize_pool_locked_desc": "Quỹ thưởng hiện đang được khóa và bảo đảm an toàn trong dịch vụ đại diện trả hộ.",
-  "view_scoreboard": "Xem bảng điểm"
+  "view_scoreboard": "Xem bảng điểm",
+  "projected": "Dự tính"
 }

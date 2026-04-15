@@ -226,11 +226,27 @@ export default class ParticipantService {
         ? customStructure
         : PrizeCalculationService.getDynamicPrizeDistribution(participantCount);
 
-      projectedDistribution = PrizeCalculationService.getFinalPrizeDistribution(
-        participants as any,
-        structureToUse as any,
-        prizePool
-      );
+      // Calculate projected prizes based on leaderboard position (index-based)
+      // instead of score-based ranking to avoid all-same-score players getting rank 1 prizes
+      const isArray = Array.isArray(structureToUse);
+      for (let i = 0; i < participants.length; i++) {
+        const rank = i + 1; // 1-indexed position in sorted leaderboard
+        const prizePercentage = isArray
+          ? (structureToUse as any)[i]
+          : (structureToUse as Record<string, number>)[(rank).toString()];
+
+        if (prizePercentage !== undefined && prizePercentage !== null) {
+          const normalizedPercentage = prizePercentage > 1 ? prizePercentage / 100 : prizePercentage;
+          const amount = prizePool * normalizedPercentage;
+          if (amount > 0) {
+            projectedDistribution.push({
+              participantId: participants[i].id,
+              amount,
+              rank,
+            });
+          }
+        }
+      }
     }
 
     return participants.map(p => {

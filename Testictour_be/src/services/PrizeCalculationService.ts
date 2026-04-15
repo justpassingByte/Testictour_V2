@@ -50,37 +50,27 @@ export default class PrizeCalculationService {
   ): Array<{ participantId: string; amount: number; rank: number }> {
     logger.info(`Calculating final prize distribution for ${participants.length} participants`);
     
-    // Sort participants by score (highest first)
-    const sortedParticipants = [...participants].sort((a, b) => b.scoreTotal - a.scoreTotal);
+    // Sort participants by score (highest first), then by id for deterministic ordering
+    const sortedParticipants = [...participants].sort((a, b) => {
+      if (b.scoreTotal !== a.scoreTotal) return b.scoreTotal - a.scoreTotal;
+      return a.id.localeCompare(b.id); // deterministic tiebreak
+    });
     
-    // Calculate prize for each eligible participant
+    // Calculate prize for each eligible participant based on their position
     const distribution: Array<{ participantId: string; amount: number; rank: number }> = [];
-    let currentRank = 1;
-    let previousScore: number | null = null;
-    let tiedRankCount = 0;
     
-    // Process each participant for prize calculation
+    const isArray = Array.isArray(prizeStructure);
+    
     for (let i = 0; i < sortedParticipants.length; i++) {
       const participant = sortedParticipants[i];
+      const rank = i + 1; // 1-indexed position
       
-      // Handle scoring ties - players with the same score get the same rank
-      if (previousScore !== null && participant.scoreTotal < previousScore) {
-        currentRank += tiedRankCount;
-        tiedRankCount = 1;
-      } else if (previousScore === null || participant.scoreTotal === previousScore) {
-        tiedRankCount++;
-      } else {
-        tiedRankCount = 1;
-      }
-      previousScore = participant.scoreTotal;
-      
-      // Check if this rank gets a prize according to structure
-      const isArray = Array.isArray(prizeStructure);
+      // Check if this rank/position gets a prize according to structure
       const prizePercentage = isArray 
-        ? (prizeStructure as any)[currentRank - 1] 
-        : prizeStructure[currentRank.toString()];
+        ? (prizeStructure as any)[i] 
+        : prizeStructure[rank.toString()];
 
-      if (prizePercentage !== undefined) {
+      if (prizePercentage !== undefined && prizePercentage !== null) {
         const normalizedPercentage = prizePercentage > 1 ? prizePercentage / 100 : prizePercentage;
         const amount = prizePool * normalizedPercentage;
         
@@ -88,7 +78,7 @@ export default class PrizeCalculationService {
           distribution.push({
             participantId: participant.id,
             amount,
-            rank: currentRank
+            rank
           });
         }
       }

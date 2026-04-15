@@ -123,7 +123,6 @@
   "asia": "아시아",
   "oceania": "오세아니아",
   "change_language": "언어 변경",
-  
   "auth": {
     "title": "인증",
     "description": "토너먼트에 참가하려면 로그인하거나 계정을 등록하세요.",
@@ -140,7 +139,6 @@
     "registerError": "등록 실패. 다시 시도하세요.",
     "passwordMismatch": "비밀번호가 일치하지 않습니다."
   },
-  
   "search_tournaments": "토너먼트 검색...",
   "all_regions": "모든 지역",
   "global": "글로벌",
@@ -152,14 +150,12 @@
   "no_completed_tournaments_match_criteria": "검색 조건과 일치하는 완료된 토너먼트가 없습니다",
   "no_registered_tournaments_criteria": "등록된 토너먼트가 없습니다",
   "browse_tourfilter_tournaments_description": "지역 및 상태별로 토너먼트 검색 및 필터링",
-  
   "sync_tooltip": {
     "live_updates": "데이터가 실시간으로 업데이트되고 있습니다",
     "syncing": "데이터 동기화 중...",
     "sync_error": "동기화 실패. 다시 시도하려면 클릭하세요.",
     "not_synced": "데이터가 동기화되지 않았습니다. 동기화하려면 클릭하세요."
   },
-
   "loyalty": "로열티",
   "loyalty_title": "로열티 & 퀘스트",
   "loyalty_description": "퀘스트 완료, 코인 획득, 업적 달성으로 로열티 등급을 올려보세요.",
@@ -248,5 +244,6 @@
   "bracket_pre_assigned": "대진표가 배정되었습니다. 토너먼트가 곧 시작됩니다!",
   "bracket_not_ready": "대진표는 토너먼트 시작 5분 전에 배정됩니다.",
   "reshuffled": "로비가 재배정되었습니다.",
-  "players_count_in_group": "{count}명"
+  "players_count_in_group": "{count}명",
+  "projected": "예상"
 }

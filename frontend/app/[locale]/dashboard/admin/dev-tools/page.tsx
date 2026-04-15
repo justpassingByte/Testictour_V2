@@ -196,9 +196,9 @@ export default function DevToolsPage() {
   const [simRegion, setSimRegion] = useState("sea");
   const [simTourPlayers, setSimTourPlayers] = useState("16");
   const [simPhasesConfigRaw, setSimPhasesConfigRaw] = useState(JSON.stringify([
-    { name: "Vòng Sơ Loại 1", type: "elimination", matchesPerRound: 2, lobbySize: 8 },
-    { name: "Vòng Sơ Loại 2", type: "elimination", matchesPerRound: 1, lobbySize: 8 },
-    { name: "Vòng Bảng Thụy Sĩ", type: "swiss", matchesPerRound: 3, lobbySize: 8 }
+    { name: "Vòng Sơ Loại 1", type: "elimination", matchesPerRound: 2, numberOfRounds: 1, lobbySize: 8 },
+    { name: "Vòng Sơ Loại 2", type: "elimination", matchesPerRound: 1, numberOfRounds: 1, lobbySize: 8 },
+    { name: "Vòng Bảng Thụy Sĩ", type: "swiss", matchesPerRound: 1, numberOfRounds: 3, lobbySize: 8 }
   ], null, 2));
 
   const getRiotRegion = (r: string) => {

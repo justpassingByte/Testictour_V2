@@ -385,13 +385,13 @@ export default function CreateTournamentPage() {
 
                     <div className="space-y-2 relative">
                       <Label className="text-orange-400 font-medium tracking-wide">Matches to Play (Thể thức thi đấu)</Label>
-                      <Input type="number" min={1} value={phase.matchesPerRound || phase.numberOfRounds} onChange={(e) => {
-                        const val = parseInt(e.target.value);
+                      <Input type="number" min={1} value={phase.matchesPerRound} onChange={(e) => {
+                        const val = parseInt(e.target.value) || 1;
                         updatePhase(index, "matchesPerRound", val);
-                        updatePhase(index, "numberOfRounds", val);
+                        updatePhase(index, "numberOfRounds", 1);
                       }} className="border-orange-500/50 focus-visible:ring-orange-500/30" />
                       <p className="text-[10px] text-muted-foreground mt-1">
-                        {phase.type === 'elimination' ? "Số trận mỗi bảng (1 = BO1, 2 = BO2)." : "Sẽ xào lobby sau mỗi trận cho đến khi đủ số trận."}
+                        {phase.type === 'elimination' ? "Số trận mỗi bảng (1 = BO1, 2 = BO2)." : "Số trận của phase thi đấu (xào lobby sau mỗi trận)."}
                       </p>
                     </div>
                     <div className="space-y-2">

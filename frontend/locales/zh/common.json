@@ -123,7 +123,6 @@
   "asia": "亚洲",
   "oceania": "大洋洲",
   "change_language": "更改语言",
-  
   "auth": {
     "title": "认证",
     "description": "登录或注册账户参加锦标赛。",
@@ -144,7 +143,6 @@
     "region": "地区",
     "referrer": "推荐人（可选）"
   },
-  
   "dashboard": {
     "title": "仪表板",
     "logout": "登出",
@@ -172,7 +170,6 @@
       "rewards": "奖励"
     }
   },
-  
   "search_tournaments": "搜索锦标赛...",
   "all_regions": "所有地区",
   "global": "全球",
@@ -184,14 +181,12 @@
   "no_completed_tournaments_match_criteria": "没有符合搜索条件的已完成锦标赛",
   "no_registered_tournaments_criteria": "您尚未注册任何锦标赛",
   "browse_tourfilter_tournaments_description": "按地区和状态搜索和筛选锦标赛",
-  
   "sync_tooltip": {
     "live_updates": "数据正在实时更新",
     "syncing": "正在同步数据...",
     "sync_error": "同步失败。点击重试。",
     "not_synced": "数据未同步。点击同步。"
   },
-
   "loyalty": "忠诚度",
   "loyalty_title": "忠诚度 & 任务",
   "loyalty_description": "完成任务，赚取金币，解锁成就，提升忠诚度等级。",
@@ -280,5 +275,6 @@
   "bracket_pre_assigned": "赛程已分配。锦标赛即将开始！",
   "bracket_not_ready": "赛程将在锦标赛开始前5分钟抽签。",
   "reshuffled": "大厅已重新分配。",
-  "players_count_in_group": "{count}名玩家"
+  "players_count_in_group": "{count}名玩家",
+  "projected": "预计"
 }

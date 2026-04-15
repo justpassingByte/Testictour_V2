@@ -1085,12 +1085,18 @@ router.post('/automation/simulate-match', async (req: Request, res: Response) =>
       }
 
       for (const lobby of lobbies) {
-        // Delete any existing simulated matches to prevent spawning duplicates when clicking multiple times
-        const existingMatches = await prisma.match.findMany({ where: { lobbyId: lobby.id } });
-        await Promise.all(existingMatches.map(async (m: any) => {
-          await prisma.matchResult.deleteMany({ where: { matchId: m.id } });
-          await prisma.match.delete({ where: { id: m.id } });
-        }));
+        const matchesPerRound = lobby.round.phase.matchesPerRound || 1;
+        const currentCompletedMatches = (lobby as any).completedMatchesCount || 0;
+
+        // Only delete existing matches on the FIRST match of the round (fresh start).
+        // For subsequent matches (BO2/BO3), keep previous match data intact.
+        if (currentCompletedMatches === 0) {
+          const existingMatches = await prisma.match.findMany({ where: { lobbyId: lobby.id } });
+          await Promise.all(existingMatches.map(async (m: any) => {
+            await prisma.matchResult.deleteMany({ where: { matchId: m.id } });
+            await prisma.match.delete({ where: { id: m.id } });
+          }));
+        }
 
         // Use lobby-specific match data to ensure different lobbies get different results
         const lobbyMatchData = lobbyMatchResults.get(lobby.id) || result.match;
@@ -1130,9 +1136,16 @@ router.post('/automation/simulate-match', async (req: Request, res: Response) =>
 
         await Promise.all(matchRecordsPromises);
 
+        // Respect matchesPerRound: only mark lobby as fully done when all matches are completed
+        const matchesAfterThis = currentCompletedMatches + 1;
+        const isLobbyFullyDone = matchesAfterThis >= matchesPerRound;
+
         await prisma.lobby.update({
           where: { id: lobby.id },
-          data: { completedMatchesCount: { increment: 1 }, fetchedResult: true }
+          data: {
+            completedMatchesCount: { increment: 1 },
+            fetchedResult: isLobbyFullyDone  // Only true when all BO matches are done
+          }
         });
 
         // UPDATE PLAYER PROFILE STATS DIRECTLY FOR DEV TOOLS
@@ -1151,13 +1164,19 @@ router.post('/automation/simulate-match', async (req: Request, res: Response) =>
           console.error("Failed to update tournament summary in dev route:", err);
         }
 
-        // Use unified state transition so Redis is synced and Socket.IO emits
-        const LobbyStateService = require('../services/LobbyStateService').default;
-        await LobbyStateService.transitionPhase(lobby.id, 'PLAYING', 'FINISHED');
+        if (isLobbyFullyDone) {
+          // All matches in this round are done — transition to FINISHED
+          const LobbyStateService = require('../services/LobbyStateService').default;
+          await LobbyStateService.transitionPhase(lobby.id, 'PLAYING', 'FINISHED');
+        } else {
+          // More matches still needed (BO2/BO3) — keep lobby ready for next match
+          console.log(`[DevTools] Lobby ${lobby.id}: match ${matchesAfterThis}/${matchesPerRound} done. Waiting for more matches.`);
+        }
 
         try {
           const io = (global as any).__io || (global as any).io;
           if (io) {
+            const LobbyStateService = require('../services/LobbyStateService').default;
             const snapshot = await LobbyStateService.getLobbyState(lobby.id).catch(() => null);
             if (snapshot) io.to(`lobby:${lobby.id}`).emit('lobby:state_update', snapshot);
 
@@ -1191,10 +1210,20 @@ router.post('/automation/simulate-match', async (req: Request, res: Response) =>
         if (io && lobbies.length > 0) io.to(`tournament:${lobbies[0].round.phase.tournamentId}`).emit('tournament_update');
       } catch (_) { }
 
+      // Check if any lobbies are still waiting for more matches (multi-match round)
+      const anyPendingMore = lobbies.some((l: any) => {
+        const mpr = l.round.phase.matchesPerRound || 1;
+        const completed = ((l as any).completedMatchesCount || 0) + 1; // +1 for the match we just added
+        return completed < mpr;
+      });
+
       return res.json({
         success: true,
-        message: `Simulated Riot Match for ${lobbies.length} Lobbies`,
+        message: anyPendingMore
+          ? `Simulated match for ${lobbies.length} Lobbies (more matches needed — press simulate again for next BO match)`
+          : `Simulated Riot Match for ${lobbies.length} Lobbies (round complete)`,
         tournamentId: lobbies[0]?.round?.phase?.tournamentId,
+        allMatchesDone: !anyPendingMore,
       });
     }
   } catch (err: any) {

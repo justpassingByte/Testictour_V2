@@ -1137,9 +1137,16 @@ export default function TournamentManagePage() {
 
                             <div className="space-y-1.5">
                               <Label className="text-[11px] uppercase tracking-wide text-orange-400">Matches to Play (Thể thức thi đấu)</Label>
-                              <Input type="number" min={1} value={phase.matchesPerRound || phase.numberOfRounds} onChange={(e) => setEditPhases(prev => prev.map((p, i) => i === index ? { ...p, matchesPerRound: parseInt(e.target.value) || 1, numberOfRounds: parseInt(e.target.value) || 1 } : p))} className="bg-black/40 border-orange-500/50" />
+                              <Input type="number" min={1} value={phase.matchesPerRound} onChange={(e) => {
+                                const val = parseInt(e.target.value) || 1;
+                                setEditPhases(prev => prev.map((p, i) => i === index ? {
+                                  ...p,
+                                  matchesPerRound: val,
+                                  numberOfRounds: 1
+                                } : p));
+                              }} className="bg-black/40 border-orange-500/50" />
                               <p className="text-[9px] text-muted-foreground mt-0.5 px-1">
-                                {phase.type === 'elimination' ? "Số trận mỗi bảng (1 = BO1, 2 = BO2)." : "Sẽ xào lobby sau mỗi trận cho đến khi đủ số trận."}
+                                {phase.type === 'elimination' ? "Số trận mỗi bảng (1 = BO1, 2 = BO2)." : "Số trận của phase thi đấu (xào lobby sau mỗi trận)."}
                               </p>
                             </div>
                             <div className="space-y-1.5">

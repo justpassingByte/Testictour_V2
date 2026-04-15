@@ -85,7 +85,7 @@
   "add_tag": "Add Tag",
   "add_tier": "Add Tier",
   "additional_information": "Additional Information",
-  "additional_tournament_rules": "Additional Tournament Rules",
+  "additional_tournament_rules": "Additional Rules",
   "admin": "Admin",
   "admin_actions": "Admin Actions",
   "admin_approve_and_distribute": "Admin approve and distribute",
@@ -148,7 +148,6 @@
   "all_time": "All Time",
   "all_tournaments": "All Tournaments",
   "all_types": "All Types",
-  "additional_tournament_rules": "Additional Rules",
   "rules_tiebreak_title": "Tiebreak Rules per Format",
   "rules_tiebreak_subtitle": "When multiple players have the same points, the system applies tiebreaks in the following order of priority.",
   "rules_general_title": "General Rules & Formats",
@@ -157,49 +156,100 @@
   "rules_tiebreak_swiss_label": "Swiss",
   "rules_tiebreak_swiss_desc": "Swiss Round: all players play multiple matches, points accumulate, no elimination between matches.",
   "rules_tiebreak_swiss_items": [
-    { "label": "Total Points", "desc": "Cumulative points throughout all matches in the round (higher = better)." },
-    { "label": "Total Placement", "desc": "Sum of placement positions (lower = better average). Ex: 1+2+3=6 beats 3+4+5=12." },
-    { "label": "Top 1 Count", "desc": "Number of matches finishing in 1st place (higher = priority)." },
-    { "label": "Best Placement", "desc": "Single best placement achieved in any match (lower = better)." }
+    {
+      "label": "Total Points",
+      "desc": "Cumulative points throughout all matches in the round (higher = better)."
+    },
+    {
+      "label": "Total Placement",
+      "desc": "Sum of placement positions (lower = better average). Ex: 1+2+3=6 beats 3+4+5=12."
+    },
+    {
+      "label": "Top 1 Count",
+      "desc": "Number of matches finishing in 1st place (higher = priority)."
+    },
+    {
+      "label": "Best Placement",
+      "desc": "Single best placement achieved in any match (lower = better)."
+    }
   ],
   "rules_tiebreak_elimination_label": "Elimination",
   "rules_tiebreak_elimination_desc": "Elimination Round: top N from each lobby advance, others are eliminated.",
   "rules_tiebreak_elimination_items": [
-    { "label": "Match Placement", "desc": "Direct ranking in that match (top N advance, bottom eliminated). For BO1 format." },
-    { "label": "Match Score", "desc": "If placement is tied, use in-game score as tiebreaker." }
+    {
+      "label": "Match Placement",
+      "desc": "Direct ranking in that match (top N advance, bottom eliminated). For BO1 format."
+    },
+    {
+      "label": "Match Score",
+      "desc": "If placement is tied, use in-game score as tiebreaker."
+    }
   ],
   "rules_tiebreak_elimination_bo_label": "Elimination (BO)",
   "rules_tiebreak_elimination_bo_desc": "Elimination Round (BO): Play a fixed number of matches with the same group, then aggregate points to eliminate bottom players.",
   "rules_tiebreak_elimination_bo_items": [
-    { "label": "Total Series Points", "desc": "Cumulative points from the BOx series to determine advancement." },
-    { "label": "Total Placement", "desc": "Sum of placement positions across the series (lower = priority)." },
-    { "label": "Top 1 Count", "desc": "Higher number of 1st place finishes in the series takes priority." }
+    {
+      "label": "Total Series Points",
+      "desc": "Cumulative points from the BOx series to determine advancement."
+    },
+    {
+      "label": "Total Placement",
+      "desc": "Sum of placement positions across the series (lower = priority)."
+    },
+    {
+      "label": "Top 1 Count",
+      "desc": "Higher number of 1st place finishes in the series takes priority."
+    }
   ],
   "rules_tiebreak_checkmate_label": "Checkmate",
   "rules_tiebreak_checkmate_desc": "Checkmate Round: play until someone reaches win condition (1st place or point threshold).",
   "rules_tiebreak_checkmate_items": [
-    { "label": "1st Place in Match", "desc": "Anyone finishing 1st wins immediately (Checkmate condition)." },
-    { "label": "Total Accumulated Points", "desc": "If no one reaches Checkmate, use total points as temporary ranking." }
+    {
+      "label": "1st Place in Match",
+      "desc": "Anyone finishing 1st wins immediately (Checkmate condition)."
+    },
+    {
+      "label": "Total Accumulated Points",
+      "desc": "If no one reaches Checkmate, use total points as temporary ranking."
+    }
   ],
   "rules_tiebreak_points_label": "Points Standing",
   "rules_tiebreak_points_desc": "Points Round: play multiple matches, ranked by total cumulative points.",
   "rules_tiebreak_points_items": [
-    { "label": "Total Points", "desc": "Cumulative points across all matches (higher = better)." },
-    { "label": "Best Placement", "desc": "Single best placement achieved in any match." },
-    { "label": "Top 1 Count", "desc": "Number of matches finishing in 1st place." }
+    {
+      "label": "Total Points",
+      "desc": "Cumulative points across all matches (higher = better)."
+    },
+    {
+      "label": "Best Placement",
+      "desc": "Single best placement achieved in any match."
+    },
+    {
+      "label": "Top 1 Count",
+      "desc": "Number of matches finishing in 1st place."
+    }
   ],
   "rules_tiebreak_round_robin_label": "Round Robin",
   "rules_tiebreak_round_robin_desc": "Round Robin: players rotate and face different opponents, ranked by total points.",
   "rules_tiebreak_round_robin_items": [
-    { "label": "Total Points", "desc": "Cumulative points across all matches." },
-    { "label": "Total Placement", "desc": "Lower sum of placements = better average." },
-    { "label": "Top 1 Count", "desc": "Number of matches finishing in 1st place." }
+    {
+      "label": "Total Points",
+      "desc": "Cumulative points across all matches."
+    },
+    {
+      "label": "Total Placement",
+      "desc": "Lower sum of placements = better average."
+    },
+    {
+      "label": "Top 1 Count",
+      "desc": "Number of matches finishing in 1st place."
+    }
   ],
   "lobby_assignment_rules": "Lobby Assignment Rules",
   "random_assignment": "Random Assignment",
-  "random_assignment_desc": "Players are placed into matches randomly with no specific criteria.",
+  "random_assignment_desc": "Players are assigned to lobbies randomly, without considering their performance or rank.",
   "seeded_assignment": "Seeded Assignment",
-  "seeded_assignment_desc": "Players are grouped based on previous performance or rank.",
+  "seeded_assignment_desc": "Players are assigned to lobbies based on their performance, rank, or other seeding criteria to ensure balanced or strategic matchups.",
   "rule_1": "All participants must register before the registration deadline.",
   "rule_2": "Players must use the same Riot account throughout the tournament.",
   "rule_3": "In case of a tie, the player with the highest number of first-place finishes wins.",
@@ -958,7 +1008,6 @@
   "lobbies_played_partner": "Lobbies Played (Partner)",
   "lobby": "Lobby",
   "lobby_activity": "Lobby Activity",
-  "lobby_assignment_rules": "Lobby Assignment Rules",
   "lobby_breakdown": "Lobby Breakdown",
   "lobby_information": "Lobby Information",
   "lobby_list": "Lobby List",
@@ -1430,8 +1479,6 @@
   "quy_escrow_da_duoc_chuyen_toi_nguoi_choi_hoac_duoc": "Quy Escrow Da Duoc Chuyen Toi Nguoi Choi Hoac Duoc",
   "r_lobbies_length_0": "r.lobbies || []).length || 0}",
   "r_points_total_totalscoretoshow_roundout_desc": "r.points),\r\n            total: totalScoreToShow,\r\n            roundOutcomeStatus: roundOutcome?.status ?? null,\r\n            eliminatedGlobal: participant.eliminated ?? false,\r\n        };\r\n    }).filter((p): p is NonNullable",
-  "random_assignment": "Random Assignment",
-  "random_assignment_desc": "Players are assigned to lobbies randomly, without considering their performance or rank.",
   "rank": "Rank",
   "rank_const_sortorder_setsortorder_usesta_desc": "(\"rank\")\n  const [sortOrder, setSortOrder] = useState",
   "ranked": "Ranked",
@@ -1561,10 +1608,6 @@
   "round_robin_phase": "Round Robin Phase",
   "round_robin_phase_desc": "Each player or team plays against every other player or team a predetermined number of times. This format ensures everyone gets to play against everyone else.",
   "rounds": "Rounds",
-  "rule_1": "All participants must register before the registration deadline.",
-  "rule_2": "Players must use the same Riot account throughout the tournament.",
-  "rule_3": "In case of a tie, the player with the highest number of first-place finishes wins.",
-  "rule_4": "Any form of cheating or unsportsmanlike conduct will result in disqualification.",
   "rules": "Rules",
   "rules_and_advancement": "Rules and tournament advancement",
   "rules_and_tournament_advancement": "Rules and tournament advancement",
@@ -1594,8 +1637,6 @@
   "searching_for_match": "Searching for match...",
   "second_place": "2nd Place",
   "seed_full_tournament": "Seed Full Tournament",
-  "seeded_assignment": "Seeded Assignment",
-  "seeded_assignment_desc": "Players are assigned to lobbies based on their performance, rank, or other seeding criteria to ensure balanced or strategic matchups.",
   "select_an_action_to_view_the_result_payl_desc": "Select an action to view the result payload here.",
   "select_region": "Select Region",
   "select_tags_that_describe_your_lobby_to__desc": "Select tags that describe your lobby to help players find it, or add new ones.",
@@ -1961,5 +2002,6 @@
   "leaderboard_results": "Tournament Leaderboard",
   "prize_pool_locked": "Prize Pool Locked",
   "prize_pool_locked_desc": "The prize pool is currently locked and secured in escrow.",
-  "view_scoreboard": "View Scoreboard"
+  "view_scoreboard": "View Scoreboard",
+  "projected": "Projected"
 }
