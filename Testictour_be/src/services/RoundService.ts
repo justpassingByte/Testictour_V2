@@ -974,6 +974,7 @@ export default class RoundService {
               include: { lobbies: true }
             });
 
+
             for (const round of allRoundsInPhase) {
               if (round.status === 'pending') {
                 await tx.round.update({
@@ -992,6 +993,7 @@ export default class RoundService {
                 const lobbyAssignment = (currentRound.phase.lobbyAssignment || 'random') as 'random' | 'seeded' | 'swiss' | 'snake';
                 const matchesPerRound = currentRound.phase.matchesPerRound || 1;
                 await LobbyService.autoAssignLobbies(round.id, participants, lobbySize, lobbyAssignment, matchesPerRound, tx);
+                // Note: returned transitionsToSchedule are scheduled post-transaction via DB query [PostTx].
               }
             }
           } else {
@@ -1009,6 +1011,8 @@ export default class RoundService {
               const lobbySize = currentRound.phase.lobbySize || 8;
               const lobbyAssignment = (currentRound.phase.lobbyAssignment || 'random') as 'random' | 'seeded' | 'swiss' | 'snake';
               const matchesPerRound = currentRound.phase.matchesPerRound || 1;
+              // Return value intentionally not destructured here — timers are scheduled
+              // post-transaction via the DB query below (see [PostTx] block after transaction).
               await LobbyService.autoAssignLobbies(roundId, participants, lobbySize, lobbyAssignment, matchesPerRound, tx);
             }
           }
@@ -1366,6 +1370,35 @@ export default class RoundService {
         logger.info(`Queuing ${jobsToQueue.length} match data jobs after transaction commit.`);
         for (const jobData of jobsToQueue) {
           await fetchMatchDataQueue.add('fetchMatchData', jobData);
+        }
+      }
+
+      // ── Schedule lobby timers AFTER transaction commits ──
+      // autoAssignLobbies returns transitionsToSchedule but cannot call LobbyTimerService
+      // inside a transaction (BullMQ requires committed IDs). We query newly created lobbies
+      // from the pending→in_progress path and schedule their WAITING→READY_CHECK timers here.
+      if (result && result.message === 'Round(s) started successfully') {
+        try {
+          const LobbyTimerSvc = (await import('./LobbyTimerService')).default;
+          // Find all lobbies in the started rounds that have no BullMQ timer scheduled yet
+          // (those created inside the transaction above will have state WAITING and no timer)
+          const newLobbies = await prisma.lobby.findMany({
+            where: {
+              round: { phase: { rounds: { some: { id: result.roundId } } } },
+              state: 'WAITING',
+            },
+            select: { id: true },
+          });
+          if (newLobbies.length > 0) {
+            logger.info(`[PostTx] Scheduling WAITING→READY_CHECK timers for ${newLobbies.length} new lobbies.`);
+            for (const lobby of newLobbies) {
+              await LobbyTimerSvc.scheduleTransition(lobby.id, 'READY_CHECK' as any, 120_000).catch(err => {
+                logger.warn(`[PostTx] Failed to schedule lobby timer for ${lobby.id}: ${err instanceof Error ? err.message : String(err)}`);
+              });
+            }
+          }
+        } catch (timerErr) {
+          logger.warn(`[PostTx] Lobby timer scheduling failed (non-fatal): ${timerErr instanceof Error ? timerErr.message : String(timerErr)}`);
         }
       }
 

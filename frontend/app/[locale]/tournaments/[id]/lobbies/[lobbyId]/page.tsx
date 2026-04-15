@@ -3,7 +3,12 @@ import Link from 'next/link';
 import LobbyPageClient from './LobbyPageClient';
 import { ILobbyStateSnapshot } from '@/app/types/tournament';
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:4000';
+// SSR: prefer BACKEND_URL (internal Docker hostname), fallback to INTERNAL_BACKEND_URL (strip /api), then public URL
+const BACKEND_URL =
+  process.env.BACKEND_URL ||
+  (process.env.INTERNAL_BACKEND_URL?.replace(/\/api$/, '')) ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  'http://localhost:4000';
 
 async function fetchLobbyState(lobbyId: string, token?: string): Promise<ILobbyStateSnapshot | null> {
   try {

@@ -48,7 +48,10 @@ services:
     ports:
       - "80:3000" 
     environment:
+      # SSR (server-side) fetch — must use internal Docker service name, NOT public IP
+      - BACKEND_URL=http://testictour-backend:4000
       - INTERNAL_BACKEND_URL=http://testictour-backend:4000/api
+      # Client-side fetch — must use public IP accessible from browser
       - NEXT_PUBLIC_API_URL=http://16.176.11.53:4000
       - NEXT_PUBLIC_BACKEND_URL=http://16.176.11.53:4000
     depends_on:
