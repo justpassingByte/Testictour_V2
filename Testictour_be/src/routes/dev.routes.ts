@@ -1384,9 +1384,14 @@ router.post('/automation/simulate-match-mock', async (req: Request, res: Respons
 
       await Promise.all(matchRecordsMockPromises);
 
+      const matchesPerRound = lobby.round.phase.matchesPerRound || 1;
+      const currentCompletedMatches = lobby.completedMatchesCount || 0;
+      const matchesAfterThis = currentCompletedMatches + 1;
+      const isLobbyFullyDone = matchesAfterThis >= matchesPerRound;
+
       await prisma.lobby.update({
         where: { id: lobby.id },
-        data: { completedMatchesCount: { increment: 1 }, fetchedResult: true }
+        data: { completedMatchesCount: { increment: 1 }, fetchedResult: isLobbyFullyDone }
       });
 
       // Update player profile summaries
@@ -1397,9 +1402,13 @@ router.post('/automation/simulate-match-mock', async (req: Request, res: Respons
         console.error('[simulate-match-mock] Failed to create match summaries:', err);
       }
 
-      // Transition lobby state PLAYING → FINISHED
-      const LobbyStateService = require('../services/LobbyStateService').default;
-      await LobbyStateService.transitionPhase(lobby.id, 'PLAYING', 'FINISHED');
+      if (isLobbyFullyDone) {
+        // Transition lobby state PLAYING → FINISHED only when all matches are done
+        const LobbyStateService = require('../services/LobbyStateService').default;
+        await LobbyStateService.transitionPhase(lobby.id, 'PLAYING', 'FINISHED');
+      } else {
+        console.log(`[DevTools Mock] Lobby ${lobby.id}: match ${matchesAfterThis}/${matchesPerRound} done. Waiting for more matches.`);
+      }
 
       try {
         const io = (global as any).__io || (global as any).io;
@@ -1434,9 +1443,18 @@ router.post('/automation/simulate-match-mock', async (req: Request, res: Respons
       }
     } catch (_) { }
 
+    // Check if any lobbies are still waiting for more matches (multi-match round)
+    const anyPendingMore = lobbies.some((l: any) => {
+      const mpr = l.round.phase.matchesPerRound || 1;
+      const completed = ((l as any).completedMatchesCount || 0) + 1; // +1 for the match we just added
+      return completed < mpr;
+    });
+
     return res.json({
       success: true,
-      message: `✅ Mock simulated ${lobbies.length} lobbies with random placements (no Riot API)`,
+      message: anyPendingMore
+        ? `Simulated mock match for ${lobbies.length} Lobbies (more matches needed — press simulate again for next BO match)`
+        : `✅ Mock simulated ${lobbies.length} lobbies with random placements (round complete)`,
       lobbiesProcessed: lobbies.length,
       tournamentId: lobbies[0]?.round?.phase?.tournamentId,
     });

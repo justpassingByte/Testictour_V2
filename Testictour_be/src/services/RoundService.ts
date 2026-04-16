@@ -671,9 +671,12 @@ export default class RoundService {
     const scoreboard = uniquePlayers.map(player => {
       let status: 'advanced' | 'eliminated' | 'pending';
 
+      const thisLobby = round.lobbies.find(l => l.id === player.lobbyId);
+      const isLobbyCompleted = thisLobby?.fetchedResult === true;
+
       if (player.roundOutcomeStatus) {
         status = player.roundOutcomeStatus as 'advanced' | 'eliminated';
-      } else if (player.placements.length > 0 && advancementN !== null) {
+      } else if (isLobbyCompleted && player.placements.length > 0 && advancementN !== null) {
         const lobbyPlayers = lobbyGroups.get(player.lobbyId) ?? [];
         const sorted = [...lobbyPlayers].sort((a, b) => {
           const scoreDiff = b.total - a.total;
@@ -682,7 +685,7 @@ export default class RoundService {
         });
         const rank = sorted.findIndex(p => p.id === player.id) + 1;
         status = rank <= advancementN ? 'advanced' : 'eliminated';
-      } else if (player.placements.length > 0) {
+      } else if (isLobbyCompleted && player.placements.length > 0) {
         status = player.eliminatedGlobal ? 'eliminated' : 'advanced';
       } else {
         status = 'pending';

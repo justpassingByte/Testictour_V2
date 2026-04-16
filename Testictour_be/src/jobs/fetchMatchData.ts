@@ -167,9 +167,14 @@ export default async function fetchMatchData(job: Job<FetchMatchDataJobData>, io
     logger.error(`MatchDataWorker: Failed to queue match summary: ${err}`);
   }
 
-  // 9. Transition lobby to FINISHED
-  await LobbyStateService.transitionPhase(lobbyId, LOBBY_STATE.PLAYING, LOBBY_STATE.FINISHED);
-
-  logger.info(`MatchDataWorker: job ${job.id} completed — lobby ${lobbyId} → FINISHED`);
+  // 9. Transition lobby to FINISHED (only if fully done)
+  // Re-fetch the fresh lobby to see if MatchResultService marked it as completely fetched
+  const freshLobby = await prisma.lobby.findUnique({ where: { id: lobbyId }, select: { fetchedResult: true } });
+  if (freshLobby?.fetchedResult) {
+    await LobbyStateService.transitionPhase(lobbyId, LOBBY_STATE.PLAYING, LOBBY_STATE.FINISHED);
+    logger.info(`MatchDataWorker: job ${job.id} completed — lobby ${lobbyId} fully done → FINISHED`);
+  } else {
+    logger.info(`MatchDataWorker: job ${job.id} completed — lobby ${lobbyId} needs more matches, staying in PLAYING state`);
+  }
 }
 
