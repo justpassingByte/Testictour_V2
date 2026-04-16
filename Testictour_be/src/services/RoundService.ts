@@ -177,7 +177,7 @@ export default class RoundService {
     await prisma.$transaction(async (tx) => {
       // Acquire row-level lock on Phase to prevent concurrent preAssignGroups runs
       await tx.$executeRaw`SELECT 1 FROM "Phase" WHERE id = ${firstPhase.id} FOR UPDATE`;
-      
+
       // Re-verify no lobbies exist after acquiring lock
       const currentPhase = await tx.phase.findUnique({
         where: { id: firstPhase.id },
@@ -185,15 +185,15 @@ export default class RoundService {
       });
       const hasLobbiesTx = currentPhase?.rounds.some(r => r._count.lobbies > 0);
       if (hasLobbiesTx) {
-          logger.info(`[PreAssign] Race condition guarded: Tournament ${tournamentId} already assigned.`);
-          return;
+        logger.info(`[PreAssign] Race condition guarded: Tournament ${tournamentId} already assigned.`);
+        return;
       }
 
       // Clear existing lobbies to prevent duplication if clicked multiple times
       await tx.lobby.deleteMany({
         where: { roundId: { in: firstPhase.rounds.map(r => r.id) } }
       });
-      
+
       await tx.lobby.createMany({ data: lobbiesToCreate });
     });
 
@@ -296,7 +296,7 @@ export default class RoundService {
               allLobbiesForMatch.push({
                 id: `${lobby.id}_m${m}`,
                 name: `[${groupLetter}] ${lobby.name}`,
-                state: completed > m ? 'FINISHED' : completed === m ? lobby.state : 'WAITING',
+                state: completed > m ? 'FINISHED' : completed === m ? (lobby.fetchedResult ? 'WAITING' : lobby.state) : 'WAITING',
                 fetchedResult: completed > m,
                 completedMatchesCount: completed,
                 // Hide players for future matches in Swiss/MultiMatch rounds
@@ -340,7 +340,7 @@ export default class RoundService {
                   return {
                     id: `${lobby.id}_m${m}`,
                     name: lobby.name,
-                    state: completed > m ? 'FINISHED' : completed === m ? lobby.state : 'WAITING',
+                    state: completed > m ? 'FINISHED' : completed === m ? (lobby.fetchedResult ? 'WAITING' : lobby.state) : 'WAITING',
                     fetchedResult: completed > m,
                     completedMatchesCount: completed,
                     // Hide players for future matches in Swiss/MultiMatch rounds
@@ -1049,7 +1049,7 @@ export default class RoundService {
           include: {
             phase: { include: { tournament: true } },
             lobbies: {
-               include: { matches: { include: { matchResults: true } } }
+              include: { matches: { include: { matchResults: true } } }
             },
           },
         }) as any;
@@ -1159,14 +1159,14 @@ export default class RoundService {
           return { message: 'Round(s) started successfully', roundId };
         }
 
-          // --- LOGIC TO COMPLETE AN IN_PROGRESS ROUND ---
+        // --- LOGIC TO COMPLETE AN IN_PROGRESS ROUND ---
         if (currentRound.status === 'in_progress') {
           // Freshly count non-fetched lobbies to avoid stale memory issues
           const pendingLobbiesCount = await tx.lobby.count({
             where: { roundId: roundId, fetchedResult: false }
           });
           const allLobbiesFetched = pendingLobbiesCount === 0;
-          
+
           logger.debug(`Round ${currentRound.id}: pendingLobbiesCount = ${pendingLobbiesCount}.`);
 
           // For checkmate phases, we bypass the allLobbiesFetched check
@@ -1179,8 +1179,8 @@ export default class RoundService {
           if (matchesPerRound > 1) {
             // Fetch fresh lobby match counts to avoid stale data blocking multi-round advancement
             const lobbiesFresh = await tx.lobby.findMany({
-                where: { roundId: currentRound.id },
-                select: { completedMatchesCount: true }
+              where: { roundId: currentRound.id },
+              select: { completedMatchesCount: true }
             });
             const minCompletedMatches = Math.min(...lobbiesFresh.map((l: any) => l.completedMatchesCount || 0));
             logger.info(`[MultiMatch] Round ${currentRound.id}: Match (min) ${minCompletedMatches}/${matchesPerRound} completed.`);
@@ -1200,7 +1200,7 @@ export default class RoundService {
               let shuffled: string[] = [];
 
               const lobbyAssignment = (currentRound.phase.lobbyAssignment || 'random') as string;
-              
+
               if (currentRound.phase.type === 'elimination' || currentRound.phase.type === 'points' || lobbyAssignment === 'none') {
                 // ELIMINATION / POINTS BO2/BO3: Do NOT shuffle! Players play against the same opponents.
                 logger.info(`[MultiMatch] ${currentRound.phase.type} phase: Skipping reshuffle, recreating same lobbies for next match.`);
@@ -1218,57 +1218,82 @@ export default class RoundService {
                   logger.debug(`[MultiMatch] Lobby ${lobby.id} recreated with same ${((lobby.participants as any[]) || []).length} players.`);
                 }
               } else {
-              if (lobbyAssignment === 'swiss' || lobbyAssignment === 'seeded' || lobbyAssignment === 'snake') {
-                const parts = await tx.participant.findMany({
-                  where: { userId: { in: uniqueParticipantIds }, tournamentId: currentRound.phase.tournamentId },
-                  select: { userId: true, scoreTotal: true, user: { select: { username: true } } }
-                });
-                parts.sort((a, b) => (b.scoreTotal || 0) - (a.scoreTotal || 0));
+                if (lobbyAssignment === 'swiss' || lobbyAssignment === 'seeded' || lobbyAssignment === 'snake') {
+                  const parts = await tx.participant.findMany({
+                    where: { userId: { in: uniqueParticipantIds }, tournamentId: currentRound.phase.tournamentId },
+                    select: { userId: true, scoreTotal: true, user: { select: { username: true } } }
+                  });
 
-                logger.info(`[MultiMatch] Sorted logic (${lobbyAssignment}) for Round ${currentRound.id}:`);
-                parts.forEach((p: any, idx) => {
-                  logger.info(`  ${idx + 1}. ${p.user?.username || p.userId}: ${p.scoreTotal} pts`);
-                });
-                
-                if (lobbyAssignment === 'snake') {
-                  const numLobbies = Math.ceil(parts.length / (currentRound.phase.lobbySize || 8));
-                  const tempLobbies: any[][] = Array.from({ length: numLobbies }, () => []);
-                  for (let i = 0; i < parts.length; i++) {
-                    const lobbyIndex = i % numLobbies;
-                    const isReversed = Math.floor(i / numLobbies) % 2 !== 0;
-                    if (isReversed) tempLobbies[numLobbies - 1 - lobbyIndex].push(parts[i]);
-                    else tempLobbies[lobbyIndex].push(parts[i]);
+                  // Fetch MatchResults to get placements for tiebreaker
+                  const matchResultsForTiebreak = await tx.matchResult.findMany({
+                    where: {
+                      userId: { in: uniqueParticipantIds },
+                      match: { lobby: { roundId: currentRound.id } }
+                    },
+                    select: { userId: true, placement: true }
+                  });
+
+                  const placementsMap = new Map<string, number[]>();
+                  for (const result of matchResultsForTiebreak) {
+                    const existing = placementsMap.get(result.userId) || [];
+                    existing.push(result.placement);
+                    placementsMap.set(result.userId, existing);
                   }
-                  shuffled = tempLobbies.flat().map(p => p.userId);
+
+                  const partsWithPlacements = parts.map(p => ({
+                    userId: p.userId,
+                    score: p.scoreTotal || 0,
+                    placements: placementsMap.get(p.userId) || [],
+                    username: p.user?.username
+                  }));
+
+                  // Use the standard tiebreak comparator
+                  partsWithPlacements.sort(RoundService.tiebreakComparator);
+
+                  logger.info(`[MultiMatch] Sorted logic (${lobbyAssignment}) for Round ${currentRound.id}:`);
+                  partsWithPlacements.forEach((p, idx) => {
+                    logger.info(`  ${idx + 1}. ${p.username || p.userId}: ${p.score} pts (placements: [${p.placements.join(', ')}])`);
+                  });
+
+                  if (lobbyAssignment === 'snake') {
+                    const numLobbies = Math.ceil(partsWithPlacements.length / (currentRound.phase.lobbySize || 8));
+                    const tempLobbies: any[][] = Array.from({ length: numLobbies }, () => []);
+                    for (let i = 0; i < partsWithPlacements.length; i++) {
+                      const lobbyIndex = i % numLobbies;
+                      const isReversed = Math.floor(i / numLobbies) % 2 !== 0;
+                      if (isReversed) tempLobbies[numLobbies - 1 - lobbyIndex].push(partsWithPlacements[i]);
+                      else tempLobbies[lobbyIndex].push(partsWithPlacements[i]);
+                    }
+                    shuffled = tempLobbies.flat().map(p => p.userId);
+                  } else {
+                    shuffled = partsWithPlacements.map(p => p.userId);
+                  }
                 } else {
-                  shuffled = parts.map(p => p.userId);
+                  shuffled = uniqueParticipantIds.sort(() => Math.random() - 0.5);
                 }
-              } else {
-                shuffled = uniqueParticipantIds.sort(() => Math.random() - 0.5);
-              }
 
-              const lobbySize = currentRound.phase.lobbySize || 8;
+                const lobbySize = currentRound.phase.lobbySize || 8;
 
-              // Redistribute shuffled participants across existing lobbies, reset states
-              for (let i = 0; i < currentRound.lobbies.length; i++) {
-                const lobby = currentRound.lobbies[i];
-                const start = i * lobbySize;
-                const end = Math.min(start + lobbySize, shuffled.length);
-                const newParticipants = shuffled.slice(start, end);
-                if (newParticipants.length === 0) continue;
+                // Redistribute shuffled participants across existing lobbies, reset states
+                for (let i = 0; i < currentRound.lobbies.length; i++) {
+                  const lobby = currentRound.lobbies[i];
+                  const start = i * lobbySize;
+                  const end = Math.min(start + lobbySize, shuffled.length);
+                  const newParticipants = shuffled.slice(start, end);
+                  if (newParticipants.length === 0) continue;
 
-                await tx.lobby.update({
-                  where: { id: lobby.id },
-                  data: {
-                    participants: newParticipants,
-                    fetchedResult: false,
-                    state: 'WAITING',
-                    matchStartedAt: null,
-                    phaseStartedAt: new Date(),
-                  }
-                });
-                logger.debug(`[MultiMatch] Lobby ${lobby.id} reshuffled with ${newParticipants.length} players.`);
-              }
+                  await tx.lobby.update({
+                    where: { id: lobby.id },
+                    data: {
+                      participants: newParticipants,
+                      fetchedResult: false,
+                      state: 'WAITING',
+                      matchStartedAt: null,
+                      phaseStartedAt: new Date(),
+                    }
+                  });
+                  logger.debug(`[MultiMatch] Lobby ${lobby.id} reshuffled with ${newParticipants.length} players.`);
+                }
 
               }
 
@@ -1281,12 +1306,12 @@ export default class RoundService {
               }
 
 
-              return { 
+              return {
                 _action: 'schedule_lobby_timers',
                 lobbyIds: (currentRound.lobbies as any[]).map((l: any) => l.id),
                 delayMs: 300_000, // 5 minutes preparation time
-                message: `Match ${minCompletedMatches}/${matchesPerRound} completed. Lobbies reshuffled for next match.`, 
-                matchNumber: minCompletedMatches, 
+                message: `Match ${minCompletedMatches}/${matchesPerRound} completed. Lobbies reshuffled for next match.`,
+                matchNumber: minCompletedMatches,
                 matchesPerRound,
                 tournamentId: currentRound.phase.tournamentId
               };
@@ -1302,9 +1327,9 @@ export default class RoundService {
           const currentPhase = allPhases.find(p => p.id === currentRound.phaseId);
           if (!currentPhase) throw new ApiError(404, 'Current phase not found');
 
-          // Always update this round's participant scores immediately (real-time leaderboard)
-          await this._updateParticipantTotalScores(tx, currentRound.phase.tournament.id, currentRound.id);
-          logger.debug(`Round ${currentRound.id}: Participant total scores updated.`);
+          // Participant total scores are already dynamically incremented by MatchResultService.processMatchResults
+          // Removing this._updateParticipantTotalScores to prevent double-counting of scores.
+          logger.debug(`Round ${currentRound.id}: Participant total scores up to date.`);
 
           const totalRoundsInPhase = currentPhase.numberOfRounds || 1;
           const completedRoundsInPhase = await tx.round.count({ where: { phaseId: currentPhase.id, status: 'completed' } });
@@ -1588,6 +1613,32 @@ export default class RoundService {
           }
         } catch (timerErr) {
           logger.warn(`[PostTx] Lobby timer scheduling failed (non-fatal): ${timerErr instanceof Error ? timerErr.message : String(timerErr)}`);
+        }
+      }
+
+      // ── Handle schedule_lobby_timers sentinel (multi-match reshuffle) ──────────
+      // When autoAdvance reshuffles lobbies between matches in a BO2/BO3 round,
+      // it returns this sentinel. We must schedule WAITING→READY_CHECK timers
+      // AFTER the transaction commits so Redis/BullMQ can operate on committed data.
+      if (result && result._action === 'schedule_lobby_timers' && result.lobbyIds) {
+        try {
+          const LobbyTimerSvc = (await import('./LobbyTimerService')).default;
+          const { LOBBY_STATE: LB_STATE } = await import('../constants/lobbyStates');
+          logger.info(`[PostTx] Scheduling WAITING→READY_CHECK timers for ${result.lobbyIds.length} lobbies (multi-match reshuffle, delay=${result.delayMs}ms).`);
+          for (const lobbyId of result.lobbyIds) {
+            await LobbyTimerSvc.scheduleTransition(lobbyId, LB_STATE.READY_CHECK, result.delayMs || 300_000).catch(err => {
+              logger.warn(`[PostTx] Failed to schedule lobby timer for ${lobbyId}: ${err instanceof Error ? err.message : String(err)}`);
+            });
+          }
+
+          // Emit bracket update so frontend immediately sees lobbies in WAITING state
+          if ((global as any).io && result.tournamentId) {
+            await bracketCache.invalidate(result.tournamentId);
+            (global as any).io.to(`tournament:${result.tournamentId}`).emit('bracket_update', { tournamentId: result.tournamentId });
+            (global as any).io.to(`tournament:${result.tournamentId}`).emit('tournament_update', { type: 'lobbies_reset_for_next_match' });
+          }
+        } catch (timerErr) {
+          logger.warn(`[PostTx] schedule_lobby_timers handling failed (non-fatal): ${timerErr instanceof Error ? timerErr.message : String(timerErr)}`);
         }
       }
 
@@ -2180,26 +2231,26 @@ export default class RoundService {
    *   4. Best single placement   → ascending  (lower = better)
    *   5. userId string           → ascending  (deterministic final fallback)
    */
-  private static tiebreakComparator(
+  public static tiebreakComparator(
     a: { score: number; placements: number[]; userId: string },
     b: { score: number; placements: number[]; userId: string },
   ): number {
     // 1. Total score
     if (b.score !== a.score) return b.score - a.score;
     // 2. Sum of placements (lower is better: 1st+1st=2 beats 2nd+3rd=5)
-    const sumA = a.placements.reduce((s, p) => s + p, 0);
-    const sumB = b.placements.reduce((s, p) => s + p, 0);
+    const sumA = a.placements.reduce((s, p) => s + (Number(p) || 0), 0);
+    const sumB = b.placements.reduce((s, p) => s + (Number(p) || 0), 0);
     if (sumA !== sumB) return sumA - sumB;
     // 3. Count of 1st-place finishes
-    const wins1A = a.placements.filter(p => p === 1).length;
-    const wins1B = b.placements.filter(p => p === 1).length;
+    const wins1A = a.placements.filter(p => Number(p) === 1).length;
+    const wins1B = b.placements.filter(p => Number(p) === 1).length;
     if (wins1B !== wins1A) return wins1B - wins1A;
     // 4. Best (lowest) single placement
-    const bestA = a.placements.length > 0 ? Math.min(...a.placements) : 999;
-    const bestB = b.placements.length > 0 ? Math.min(...b.placements) : 999;
+    const bestA = a.placements.length > 0 ? Math.min(...a.placements.map(p => Number(p) || 999)) : 999;
+    const bestB = b.placements.length > 0 ? Math.min(...b.placements.map(p => Number(p) || 999)) : 999;
     if (bestA !== bestB) return bestA - bestB;
     // 5. Deterministic string fallback (prevents sort instability between runs)
-    return a.userId.localeCompare(b.userId);
+    return String(a.userId).localeCompare(String(b.userId));
   }
 
   private static async _advanceByPlacement(tx: Prisma.TransactionClient, round: any, topNPerLobby: number, phaseId?: string) {
@@ -2475,7 +2526,7 @@ export default class RoundService {
         .sort(RoundService.tiebreakComparator);
     }
 
-    logger.debug(`[Advancement Logic] Ranking (${scopeLabel}, top ${topN} advance): ${sortedParticipants.map((p, i) => `#${i+1} ${p.userId}(${p.score}pts placements:[${p.placements}])`).join(', ')}`);
+    logger.debug(`[Advancement Logic] Ranking (${scopeLabel}, top ${topN} advance): ${sortedParticipants.map((p, i) => `#${i + 1} ${p.userId}(${p.score}pts placements:[${p.placements}])`).join(', ')}`);
 
     // Guard: if fewer or equal participants than topN, advance all
     if (sortedParticipants.length <= topN) {

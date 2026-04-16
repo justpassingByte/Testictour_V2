@@ -33,9 +33,10 @@ export function TournamentScheduleCard({ tournament }: TournamentScheduleCardPro
 
   // Smart Countdown Logic
   const getSmartCountdown = () => {
-    if (tournament.status === 'in_progress') return t("started");
-    if (tournament.status === 'COMPLETED') return t("finished");
-    if (tournament.status === 'CANCELLED') return t("cancelled");
+    const status = tournament.status?.toLowerCase();
+    if (status === 'in_progress') return t("started");
+    if (status === 'completed') return t("finished");
+    if (status === 'cancelled') return t("cancelled");
 
     const diffInSeconds = differenceInSeconds(startDate, now);
     
@@ -54,7 +55,8 @@ export function TournamentScheduleCard({ tournament }: TournamentScheduleCardPro
   };
 
   const getCountdownColor = () => {
-    if (tournament.status !== 'UPCOMING' && tournament.status !== 'REGISTRATION' && tournament.status !== 'DRAFT') return "text-muted-foreground";
+    const status = tournament.status?.toUpperCase();
+    if (status !== 'UPCOMING' && status !== 'REGISTRATION' && status !== 'DRAFT') return "text-muted-foreground";
     const diffInSeconds = differenceInSeconds(startDate, now);
     if (diffInSeconds <= 0) return "text-emerald-500 font-bold animate-pulse";
     if (diffInSeconds < 900) return "text-red-500 font-bold animate-pulse"; // Under 15 mins

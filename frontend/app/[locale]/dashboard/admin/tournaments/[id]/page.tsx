@@ -55,6 +55,8 @@ export default function TournamentManagePage() {
   const [totalParticipants, setTotalParticipants] = useState(0)
   const [listPage, setListPage] = useState(1)
   const LIMIT = 10
+  // Full participant list for ranking calculations (used when tournament is completed)
+  const [allParticipants, setAllParticipants] = useState<IParticipant[]>([])
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -87,6 +89,13 @@ export default function TournamentManagePage() {
       setTournament(t)
       setParticipants(p.participants || [])
       setTotalParticipants(p.total || 0)
+      // If tournament is completed, fetch full participant list for accurate rankings
+      if (t.status === 'COMPLETED') {
+        const full = await TournamentService.listParticipants(tournamentId, 1, 1000).catch(() => ({ participants: [], total: 0 }))
+        setAllParticipants(full.participants || [])
+      } else {
+        setAllParticipants([])
+      }
       setEditForm({
         name: t.name,
         description: t.description || "",
@@ -105,6 +114,7 @@ export default function TournamentManagePage() {
         matchesPerRound: p.matchesPerRound || 1,
         advancementType: p.advancementCondition?.type || "top_n_scores",
         advancementValue: p.advancementCondition?.value || 4,
+        lobbyAssignment: p.lobbyAssignment || (p.type === 'swiss' ? 'swiss' : 'none'),
       })) || [])
       setDeletedPhaseIds([])
 
@@ -138,9 +148,11 @@ export default function TournamentManagePage() {
     const handleUpdate = () => { refresh() }
     socket.on('tournament_update', handleUpdate)
     socket.on('bracket_update', handleUpdate)
+    socket.on('leaderboard_update', handleUpdate)
     return () => {
       socket.off('tournament_update', handleUpdate)
       socket.off('bracket_update', handleUpdate)
+      socket.off('leaderboard_update', handleUpdate)
       socket.disconnect()
     }
   }, [tournamentId])
@@ -193,7 +205,8 @@ export default function TournamentManagePage() {
             lobbySize: p.lobbySize,
             numberOfRounds: p.numberOfRounds,
             matchesPerRound: p.matchesPerRound,
-            advancementCondition: { type: p.advancementType, value: p.advancementValue }
+            advancementCondition: { type: p.advancementType, value: p.advancementValue },
+            lobbyAssignment: p.lobbyAssignment
           }
         }))
       }
@@ -1119,20 +1132,34 @@ export default function TournamentManagePage() {
                               <Select value={phase.type} onValueChange={(v) => setEditPhases(prev => prev.map((p, i) => i === index ? { ...p, type: v } : p))}>
                                 <SelectTrigger className="bg-black/40"><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="elimination">Group Elimination (Loại theo bảng - BO1/BO2..)</SelectItem>
-                                  <SelectItem value="points">Global Points (Sảnh chung tính điểm)</SelectItem>
+                                  <SelectItem value="elimination">Group Elimination (Loại theo bảng - BO1)</SelectItem>
+                                  <SelectItem value="points">Points (Sảnh chung đánh nhiều trận)</SelectItem>
                                   <SelectItem value="swiss">Swiss (Thụy Sĩ / Tính điểm tích luỹ)</SelectItem>
                                   <SelectItem value="round_robin">Round Robin (Vòng tròn)</SelectItem>
                                   <SelectItem value="checkmate">Checkmate (Tới ngưỡng checkmate)</SelectItem>
                                 </SelectContent>
                               </Select>
                               <p className="text-[9px] text-muted-foreground mt-1 px-1">
-                                {phase.type === 'elimination' && "Chia bảng đấu cố định trống suốt số vòng. Cuối cùng loại những người bét bảng."}
-                                {phase.type === 'points' && "Gom tất cả người chơi vào sảnh chung, xào lại sau mỗi trận, tính tổng điểm."}
+                                {phase.type === 'elimination' && "Bo1 - Mỗi bảng 1 trận duy nhất. Loại những người xếp cuối."}
+                                {phase.type === 'points' && "Đánh nhiều trận, tính tổng điểm. Có thể đặt luồng xào Lobby tuỳ ý."}
                                 {phase.type === 'swiss' && "Thi đấu nhiều trận, cộng dồn điểm, ưu tiên bắt cặp đồng điểm."}
                                 {phase.type === 'round_robin' && "Thi đấu vòng tròn tính điểm."}
                                 {phase.type === 'checkmate' && "Người chơi phải đạt đủ số điểm ngưỡng, sau đó dành Top 1 để vô địch."}
                               </p>
+                            </div>
+
+                            <div className="space-y-1.5 md:col-span-3">
+                              <Label className="text-[11px] uppercase tracking-wide text-cyan-400">Shuffle Settings (Xào lobby)</Label>
+                              <Select value={phase.lobbyAssignment || "none"} onValueChange={(v) => setEditPhases(prev => prev.map((p, i) => i === index ? { ...p, lobbyAssignment: v } : p))}>
+                                <SelectTrigger className="bg-black/40 border-cyan-500/50"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">None (Giữ nguyên lobby cũ)</SelectItem>
+                                  <SelectItem value="random">Random (Xào ngẫu nhiên)</SelectItem>
+                                  <SelectItem value="swiss">Swiss (Xếp rank: Cùng điểm gặp nhau)</SelectItem>
+                                  <SelectItem value="snake">Snake (Ziczac cân bằng sức mạnh)</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <p className="text-[9px] text-muted-foreground mt-0.5 px-1">Cách chia lại nhóm người chơi giữa các trận thi đấu liên tiếp.</p>
                             </div>
 
                             <div className="space-y-1.5">
@@ -1146,8 +1173,8 @@ export default function TournamentManagePage() {
                                 } : p));
                               }} className="bg-black/40 border-orange-500/50" />
                               <p className="text-[9px] text-muted-foreground mt-0.5 px-1">
-                                {phase.type === 'elimination' && "Số trận mỗi bảng (1 = BO1). Loại theo thứ hạng."}
-                                {phase.type === 'points' && "Số trận cùng lobby (2=BO2, 3=BO3). Cộng tổng điểm, top N đi tiếp."}
+                                {phase.type === 'elimination' && "Số trận mỗi bảng (mặc định 1 trận)."}
+                                {phase.type === 'points' && "Số trận đánh tích luỹ điểm của Phase (Vd: đánh 3 trận tổng)."}
                                 {(phase.type !== 'elimination' && phase.type !== 'points') && "Số trận của phase thi đấu (xào lobby sau mỗi trận)."}
                               </p>
                             </div>
@@ -1215,16 +1242,19 @@ export default function TournamentManagePage() {
             <div className="space-y-4">
               {/* Podium */}
               {(() => {
-                const sorted = [...participants].sort((a, b) => (b.scoreTotal || 0) - (a.scoreTotal || 0));
+                // Use full participant list for accurate podium when available
+                const rankingList = allParticipants.length > 0 ? allParticipants : participants;
+                const sorted = [...rankingList].sort((a, b) => (b.scoreTotal || 0) - (a.scoreTotal || 0));
                 const prizeStructure = tournament.prizeStructure as number[] | null;
-                const totalPot = tournament.budget || (participants.length * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)));
+                const totalPot = tournament.budget || (rankingList.length * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)));
                 const getPrize = (rank: number) => prizeStructure && prizeStructure[rank] ? ((prizeStructure[rank] / 100) * totalPot) : 0;
-                const podium = [sorted[1], sorted[0], sorted[2]]; // 2nd, 1st, 3rd
-                const podiumHeights = ['h-20', 'h-28', 'h-16'];
-                const podiumColors = ['bg-gray-400/20 border-gray-400/40', 'bg-yellow-500/20 border-yellow-500/40', 'bg-amber-700/20 border-amber-700/40'];
-                const podiumTextColors = ['text-gray-300', 'text-yellow-400', 'text-amber-600'];
-                const medals = ['🥈', '🥇', '🥉'];
-                const podiumRanks = [2, 1, 3];
+                // Correct podium order: 1st, 2nd, 3rd
+                const podium = [sorted[0], sorted[1], sorted[2]]; // 1st, 2nd, 3rd
+                const podiumHeights = ['h-28', 'h-20', 'h-16'];
+                const podiumColors = ['bg-yellow-500/20 border-yellow-500/40', 'bg-gray-400/20 border-gray-400/40', 'bg-amber-700/20 border-amber-700/40'];
+                const podiumTextColors = ['text-yellow-400', 'text-gray-300', 'text-amber-600'];
+                const medals = ['🥇', '🥈', '🥉'];
+                const podiumRanks = [1, 2, 3];
                 return (
                   <Card className="bg-card/60 border-white/10">
                     <CardHeader>
@@ -1285,12 +1315,13 @@ export default function TournamentManagePage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {[...participants]
+                      {[...(allParticipants.length > 0 ? allParticipants : participants)]
                         .sort((a, b) => (b.scoreTotal || 0) - (a.scoreTotal || 0))
                         .map((p, i) => {
                           const rank = i + 1;
                           const prizeStructure = tournament.prizeStructure as number[] | null;
-                          const totalPot = tournament.budget || (participants.length * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)));
+                          const rankingList = allParticipants.length > 0 ? allParticipants : participants;
+                          const totalPot = tournament.budget || (rankingList.length * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)));
                           const prizePercent = prizeStructure && prizeStructure[i] ? prizeStructure[i] : 0;
                           const prizeAmount = (prizePercent / 100) * totalPot;
                           const hasPrize = prizeAmount > 0;

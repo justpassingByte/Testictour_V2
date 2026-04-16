@@ -1217,7 +1217,7 @@ router.post('/automation/simulate-match', async (req: Request, res: Response) =>
           where: { id: lobby.id },
           data: {
             completedMatchesCount: { increment: 1 },
-            fetchedResult: isLobbyFullyDone  // Only true when all BO matches are done
+            fetchedResult: true  // Always true — autoAdvance will reset for multi-match rounds
           }
         });
 
@@ -1242,8 +1242,8 @@ router.post('/automation/simulate-match', async (req: Request, res: Response) =>
           const LobbyStateService = require('../services/LobbyStateService').default;
           await LobbyStateService.transitionPhase(lobby.id, 'PLAYING', 'FINISHED');
         } else {
-          // More matches still needed (BO2/BO3) — keep lobby ready for next match
-          console.log(`[DevTools] Lobby ${lobby.id}: match ${matchesAfterThis}/${matchesPerRound} done. Waiting for more matches.`);
+          // More matches needed — autoAdvance will reshuffle and reset lobby state
+          console.log(`[DevTools] Lobby ${lobby.id}: match ${matchesAfterThis}/${matchesPerRound} done. autoAdvance will handle reshuffle.`);
         }
 
         try {
@@ -1391,7 +1391,7 @@ router.post('/automation/simulate-match-mock', async (req: Request, res: Respons
 
       await prisma.lobby.update({
         where: { id: lobby.id },
-        data: { completedMatchesCount: { increment: 1 }, fetchedResult: isLobbyFullyDone }
+        data: { completedMatchesCount: { increment: 1 }, fetchedResult: true }
       });
 
       // Update player profile summaries
@@ -1407,7 +1407,7 @@ router.post('/automation/simulate-match-mock', async (req: Request, res: Respons
         const LobbyStateService = require('../services/LobbyStateService').default;
         await LobbyStateService.transitionPhase(lobby.id, 'PLAYING', 'FINISHED');
       } else {
-        console.log(`[DevTools Mock] Lobby ${lobby.id}: match ${matchesAfterThis}/${matchesPerRound} done. Waiting for more matches.`);
+        console.log(`[DevTools Mock] Lobby ${lobby.id}: match ${matchesAfterThis}/${matchesPerRound} done. autoAdvance will handle reshuffle.`);
       }
 
       try {

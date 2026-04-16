@@ -375,7 +375,7 @@ export default function LobbyPageClient({ lobbyId, tournamentId, initialState, l
                               <p className="font-semibold text-sm">Match Results</p>
                               <div className="text-xs text-muted-foreground mt-0.5">
                                 Status: <Badge variant={isSynced ? 'default' : 'secondary'} className="text-[10px] ml-1">
-                                  {isSynced ? 'Completed' : (idx === (liveLobbyData?.completedMatchesCount || 0) && state.state === 'PLAYING' ? 'In Progress' : (idx > (liveLobbyData?.completedMatchesCount || 0) ? 'Scheduled' : 'Pending Start'))}
+                                  {isSynced ? 'Completed' : (idx === (liveLobbyData?.completedMatchesCount || 0) && state.state === 'PLAYING' && !(state.fetchedResult ?? false) ? 'In Progress' : (idx > (liveLobbyData?.completedMatchesCount || 0) ? 'Scheduled' : 'Pending Start'))}
                                 </Badge>
                               </div>
                             </div>

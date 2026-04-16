@@ -165,18 +165,12 @@ export default class ParticipantService {
       include: { 
         user: { select: { id: true, username: true, riotGameName: true, riotGameTag: true, rank: true, topFourRate: true, firstPlaceRate: true, region: true } },
         rewards: true 
-      },
-      orderBy: [
-        { scoreTotal: 'desc' },
-        { id: 'asc' }
-      ]
+      }
     });
 
-    // Count matches played for each participant dynamically
     const userIds = participants.map(p => p.user?.id).filter(Boolean) as string[];
-    const [matchCounts, tournament] = await Promise.all([
-      prisma.matchResult.groupBy({
-        by: ['userId'],
+    const [allMatchResults, tournament] = await Promise.all([
+      prisma.matchResult.findMany({
         where: {
           userId: { in: userIds },
           match: {
@@ -187,17 +181,38 @@ export default class ParticipantService {
             }
           }
         },
-        _count: { id: true }
+        select: { userId: true, placement: true, points: true }
       }),
       prisma.tournament.findUnique({
         where: { id: tournamentId },
         include: { escrow: true, _count: { select: { participants: true } } }
       })
     ]);
-    const matchCountMap = new Map<string, number>();
-    for (const mc of matchCounts) {
-      matchCountMap.set(mc.userId, mc._count.id);
+
+    const playerStatsMap = new Map<string, { matches: number; placements: number[]; computedScore: number }>();
+    for (const res of allMatchResults) {
+      const stats = playerStatsMap.get(res.userId) || { matches: 0, placements: [], computedScore: 0 };
+      stats.matches += 1;
+      stats.placements.push(res.placement);
+      stats.computedScore += (res.points || 0);
+      playerStatsMap.set(res.userId, stats);
     }
+
+    const { default: RoundService } = await import('./RoundService');
+
+    participants.sort((a, b) => {
+      const aUserId = a.user?.id || '';
+      const bUserId = b.user?.id || '';
+      const statsA = playerStatsMap.get(aUserId) || { matches: 0, placements: [], computedScore: 0 };
+      const statsB = playerStatsMap.get(bUserId) || { matches: 0, placements: [], computedScore: 0 };
+
+      // DO NOT OVERWRITE scoreTotal with globally computedScore! 
+      // This ensures we respect the carryOverScores=false logic when DB resets scoreTotal to 0.
+      return RoundService.tiebreakComparator(
+        { score: a.scoreTotal || 0, placements: statsA.placements, userId: aUserId },
+        { score: b.scoreTotal || 0, placements: statsB.placements, userId: bUserId }
+      );
+    });
 
     // Calculate projected prizes if tournament has prize structure
     let projectedDistribution: any[] = [];
@@ -271,7 +286,7 @@ export default class ParticipantService {
       return {
         ...p,
         rewards,
-        matchesPlayed: p.user?.id ? (matchCountMap.get(p.user.id) || 0) : 0
+        matchesPlayed: p.user?.id ? (playerStatsMap.get(p.user.id)?.matches || 0) : 0
       };
     });
   }

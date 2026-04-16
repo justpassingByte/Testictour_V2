@@ -284,19 +284,20 @@ export default class MatchResultService {
         const isLobbyFullyDone = !isCheckmatePhase && matchesAfterThis >= matchesPerRound;
 
         if (!isCheckmatePhase) {
-          // Always increment completedMatchesCount (tracks progress for bracket display)
+          // Always increment completedMatchesCount AND set fetchedResult=true after each match.
+          // For multi-match rounds (BO2/BO3), autoAdvance detects intermediate completion
+          // (minCompletedMatches < matchesPerRound) and reshuffles lobbies, resetting
+          // fetchedResult=false and state='WAITING' for the next match.
           await tx.lobby.update({
             where: { id: lobby.id },
-            data: { completedMatchesCount: { increment: 1 } },
+            data: {
+              completedMatchesCount: { increment: 1 },
+              fetchedResult: true,
+            },
           });
 
-          if (isLobbyFullyDone && !freshLobby?.fetchedResult) {
-            logger.info(`[LobbyCompletion] Lobby ${lobby.id}: match ${matchesAfterThis}/${matchesPerRound} done — marking fetchedResult=true.`);
-            await tx.lobby.update({
-              where: { id: lobby.id },
-              data: { fetchedResult: true },
-            });
-
+          if (isLobbyFullyDone) {
+            logger.info(`[LobbyCompletion] Lobby ${lobby.id}: match ${matchesAfterThis}/${matchesPerRound} done — final match completed.`);
             if (ioClient) {
               ioClient.emit('worker_lobby_update', {
                 tournamentId,
@@ -308,21 +309,8 @@ export default class MatchResultService {
                 matchesPerRound,
               });
             }
-
-            logger.info(`[LobbyCompletion] Triggering round completion check for round ${round.id}.`);
-            if (checkRoundCompletionQueue) {
-              await checkRoundCompletionQueue.add(
-                'checkRoundCompletion',
-                { roundId: round.id },
-                { jobId: `check-round-completion-${round.id}`, removeOnComplete: true, removeOnFail: true }
-              );
-            } else {
-              const _roundIdCheck = round.id;
-              setTimeout(() => { checkAndAdvanceRound(_roundIdCheck).catch(e => logger.error(`[NoRedis] checkAndAdvanceRound: ${e}`)); }, 300);
-            }
-          } else if (!isLobbyFullyDone) {
-            logger.info(`[LobbyCompletion] Lobby ${lobby.id}: match ${matchesAfterThis}/${matchesPerRound} done — waiting for more matches.`);
-            // Emit progress update so FE can show updated score/placement mid-round
+          } else {
+            logger.info(`[LobbyCompletion] Lobby ${lobby.id}: match ${matchesAfterThis}/${matchesPerRound} done — autoAdvance will reshuffle for next match.`);
             if (ioClient) {
               ioClient.emit('worker_lobby_update', {
                 tournamentId,
@@ -333,6 +321,22 @@ export default class MatchResultService {
                 matchesPerRound,
               });
             }
+          }
+
+          // Always trigger round completion check after each match.
+          // For final match: autoAdvance finalizes the round.
+          // For intermediate match (BO2/BO3): autoAdvance reshuffles lobbies
+          // and schedules READY_CHECK timers via schedule_lobby_timers sentinel.
+          logger.info(`[LobbyCompletion] Triggering round completion check for round ${round.id}.`);
+          if (checkRoundCompletionQueue) {
+            await checkRoundCompletionQueue.add(
+              'checkRoundCompletion',
+              { roundId: round.id },
+              { jobId: `check-round-completion-${round.id}`, removeOnComplete: true, removeOnFail: true }
+            );
+          } else {
+            const _roundIdCheck = round.id;
+            setTimeout(() => { checkAndAdvanceRound(_roundIdCheck).catch(e => logger.error(`[NoRedis] checkAndAdvanceRound: ${e}`)); }, 300);
           }
         } else {
           // Checkmate: fetchedResult is reset by the checkmate advancement logic after each match.

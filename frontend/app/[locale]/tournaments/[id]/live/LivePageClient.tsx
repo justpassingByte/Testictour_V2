@@ -79,6 +79,10 @@ export default function LivePageClient({ tournament: initialTournament, liveStat
       window.dispatchEvent(new CustomEvent('bracket_update'));
     });
 
+    socket.on('leaderboard_update', () => {
+      window.dispatchEvent(new CustomEvent('leaderboard_update'));
+    });
+
     return () => {
       socket.disconnect();
     };
@@ -261,7 +265,7 @@ export default function LivePageClient({ tournament: initialTournament, liveStat
               </TabsContent>
 
               <TabsContent value="recent-results" className="m-0 animate-fade-in-up">
-                <TournamentRecentResultsTab tournamentId={tournament.id} />
+                <TournamentRecentResultsTab tournamentId={tournament.id} tournament={tournament} />
               </TabsContent>
 
               <TabsContent value="statistics" className="m-0 space-y-4 animate-fade-in-up">

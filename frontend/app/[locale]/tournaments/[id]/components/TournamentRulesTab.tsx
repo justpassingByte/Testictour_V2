@@ -92,6 +92,11 @@ export const TournamentRulesTab = ({ tournament }: TournamentRulesTabProps) => {
                               {t("matches_n_per_round", { count: phase.matchesPerRound })}
                             </Badge>
                           )}
+                          {phase.lobbyAssignment && (
+                            <Badge variant="outline" className="text-[10px] bg-cyan-500/10 text-cyan-400 border-cyan-500/20 uppercase tracking-widest">
+                                {phase.lobbyAssignment === 'none' ? 'No Shuffle' : `Shuffle: ${phase.lobbyAssignment}`}
+                            </Badge>
+                          )}
                         </div>
                         <p className="text-sm text-muted-foreground mt-0.5">
                           {desc}
@@ -136,12 +141,20 @@ export const TournamentRulesTab = ({ tournament }: TournamentRulesTabProps) => {
               </h4>
               <div className="space-y-3">
                 <div className="p-3 rounded-lg bg-white/5 border border-white/5">
-                  <p className="text-sm font-semibold">{t("random_assignment")}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{t("random_assignment_desc")}</p>
+                  <p className="text-sm font-semibold flex items-center gap-2"><RefreshCw className="h-4 w-4 text-cyan-400"/> Random Assignment</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t("random_assignment_desc", { fallback: "Players are completely randomly reassigned to new lobbies before each match." })}</p>
                 </div>
                 <div className="p-3 rounded-lg bg-white/5 border border-white/5">
-                  <p className="text-sm font-semibold">{t("seeded_assignment")}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{t("seeded_assignment_desc")}</p>
+                  <p className="text-sm font-semibold flex items-center gap-2"><BarChart2 className="h-4 w-4 text-cyan-400"/> Swiss / Seeded Assignment</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t("seeded_assignment_desc", { fallback: "Players with the same amount of points (or nearest) are placed in the same lobbies. Ensures competitive parity." })}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-white/5 border border-white/5">
+                  <p className="text-sm font-semibold flex items-center gap-2"><TableIcon className="h-4 w-4 text-cyan-400" /> Snake Assignment</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t("snake_assignment_desc", { fallback: "Players are distributed using a zigzag draft order based on points, balancing average power level per lobby." })}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-white/5 border border-white/5">
+                   <p className="text-sm font-semibold flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-cyan-400" /> No Shuffle (Fixed Lobbies)</p>
+                   <p className="text-xs text-muted-foreground mt-1">{t("no_shuffle_assignment_desc", { fallback: "Players stay in the exact same lobby against the same opponents for the entire BoX series." })}</p>
                 </div>
               </div>
             </div>

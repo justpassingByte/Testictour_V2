@@ -15,7 +15,10 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
-export function TournamentRecentResultsTab({ tournamentId }: { tournamentId: string }) {
+import { Copy, TrendingUp, User } from 'lucide-react';
+import { toast } from '@/components/ui/use-toast';
+
+export function TournamentRecentResultsTab({ tournamentId, tournament }: { tournamentId: string, tournament: any }) {
   const t = useTranslations("common");
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,7 +27,25 @@ export function TournamentRecentResultsTab({ tournamentId }: { tournamentId: str
     try {
       const res = await api.get(`/tournaments/${tournamentId}/leaderboard`);
       if (res.data?.leaderboard) {
-        setLeaderboard(res.data.leaderboard);
+        // Deterministic sorting with tiebreakers on frontend as a safety layer
+        const sorted = [...res.data.leaderboard].sort((a, b) => {
+          if ((b.scoreTotal || 0) !== (a.scoreTotal || 0)) return (b.scoreTotal || 0) - (a.scoreTotal || 0);
+          
+          // Secondary tiebreakers (matches similarity with RoundService.tiebreakComparator)
+          const placementsA = a.placements || [];
+          const placementsB = b.placements || [];
+          
+          const sumA = placementsA.reduce((s: number, p: any) => s + (Number(p) || 0), 0);
+          const sumB = placementsB.reduce((s: number, p: any) => s + (Number(p) || 0), 0);
+          if (sumA !== sumB) return sumA - sumB;
+
+          const winsA = placementsA.filter((p: any) => Number(p) === 1).length;
+          const winsB = placementsB.filter((p: any) => Number(p) === 1).length;
+          if (winsB !== winsA) return winsB - winsA;
+
+          return (a.id || "").localeCompare(b.id || "");
+        });
+        setLeaderboard(sorted);
       }
     } catch (e) {
       console.error('Failed to fetch leaderboard:', e);
@@ -36,13 +57,14 @@ export function TournamentRecentResultsTab({ tournamentId }: { tournamentId: str
   useEffect(() => {
     fetchLeaderboard();
     
-    // Auto refresh mechanism
     const handleUpdate = () => fetchLeaderboard();
     window.addEventListener('bracket_update', handleUpdate);
     window.addEventListener('tournament_update', handleUpdate);
+    window.addEventListener('leaderboard_update', handleUpdate);
     return () => {
       window.removeEventListener('bracket_update', handleUpdate);
       window.removeEventListener('tournament_update', handleUpdate);
+      window.removeEventListener('leaderboard_update', handleUpdate);
     };
   }, [tournamentId]);
 
@@ -69,116 +91,202 @@ export function TournamentRecentResultsTab({ tournamentId }: { tournamentId: str
   const getPlacementIcon = (placement: number) => {
     switch(placement) {
       case 1: return <Crown className="w-5 h-5 text-yellow-500 drop-shadow-md" />;
-      case 2: return <Medal className="w-5 h-5 text-gray-300 drop-shadow-md" />;
-      case 3: return <Medal className="w-5 h-5 text-amber-700 drop-shadow-md" />;
+      case 2: return <Medal className="w-5 h-5 text-slate-300 drop-shadow-md" />;
+      case 3: return <Medal className="w-5 h-5 text-amber-600 drop-shadow-md" />;
       default: return null;
     }
   };
 
   const getPlacementColor = (placement: number) => {
     switch(placement) {
-      case 1: return "bg-gradient-to-r from-yellow-500/20 to-transparent border-l-4 border-l-yellow-500";
-      case 2: return "bg-gradient-to-r from-gray-400/10 to-transparent border-l-4 border-l-gray-400";
-      case 3: return "bg-gradient-to-r from-amber-700/10 to-transparent border-l-4 border-l-amber-700";
+      case 1: return "bg-gradient-to-r from-yellow-500/10 to-transparent border-l-4 border-l-yellow-500";
+      case 2: return "bg-gradient-to-r from-slate-400/5 to-transparent border-l-4 border-l-slate-400";
+      case 3: return "bg-gradient-to-r from-amber-700/5 to-transparent border-l-4 border-l-amber-700";
       default: return "";
     }
   };
 
-  return (
-    <Card className="border shadow-sm bg-card/60 dark:bg-card/40 backdrop-blur-lg border-white/10 animate-fade-in-up">
-      <CardHeader className="bg-muted/30 border-b border-border/50 py-4 flex flex-row items-center justify-between">
-        <CardTitle className="text-lg flex items-center">
-          <Trophy className="mr-2 h-5 w-5 text-primary" />
-          {t("leaderboard_results") || "Tournament Leaderboard"}
-        </CardTitle>
-        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 shadow-sm">
-          {t("live_updating") || "Live Status"} <span className="ml-1.5 w-2 h-2 rounded-full bg-primary animate-pulse" />
-        </Badge>
-      </CardHeader>
-      <CardContent className="p-0">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent bg-muted/10">
-                <TableHead className="w-[80px] text-center">{t("rank") || "Rank"}</TableHead>
-                <TableHead className="w-[200px]">{t("player") || "Player"}</TableHead>
-                <TableHead className="text-center">{t("region") || "Region"}</TableHead>
-                <TableHead className="text-center">{t("top_four_rate") || "Top 4 %"}</TableHead>
-                <TableHead className="text-center">{t("first_place_rate") || "Top 1 %"}</TableHead>
-                <TableHead className="text-center">{t("matches") || "Matches"}</TableHead>
-                <TableHead className="text-center">{t("prize") || "Prize"}</TableHead>
-                <TableHead className="text-right">{t("total_points") || "Total Points"}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {leaderboard.map((participant, index) => {
-                const rank = index + 1;
-                const name = participant.user?.riotGameName || participant.user?.username || participant.inGameName;
-                const tag = participant.user?.riotGameTag || participant.gameSpecificId;
-                const totalPoints = participant.scoreTotal || 0;
-                
-                // Determine if there is a reward
-                const reward = participant.rewards && participant.rewards.length > 0 ? participant.rewards[0] : null;
+  // Podium Logic
+  const podium = leaderboard.slice(0, 3);
+  const podiumHeights = ['h-28', 'h-20', 'h-16'];
+  const podiumColors = ['bg-yellow-500/20 border-yellow-500/40', 'bg-slate-400/20 border-slate-400/40', 'bg-amber-700/20 border-amber-700/40'];
+  const medals = ['🥇', '🥈', '🥉'];
 
-                return (
-                  <TableRow key={participant.id} className={`group hover:bg-muted/40 transition-colors ${getPlacementColor(rank)}`}>
-                    <TableCell className="font-bold text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        {getPlacementIcon(rank)}
-                        <span className={rank <= 3 ? "text-lg" : "text-base text-muted-foreground"}>{rank}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      <div className="flex flex-col">
-                        <span className="font-bold text-base text-foreground group-hover:text-primary transition-colors">{name}</span>
-                        {tag && <span className="text-[10px] text-muted-foreground">#{tag}</span>}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {participant.user?.region ? <Badge variant="outline" className="text-xs bg-background/50">{participant.user.region}</Badge> : <span className="text-muted-foreground opacity-50">-</span>}
-                    </TableCell>
-                    <TableCell className="text-center text-muted-foreground">
-                      {participant.user?.topFourRate !== undefined ? `${participant.user.topFourRate}%` : '-'}
-                    </TableCell>
-                    <TableCell className="text-center text-muted-foreground">
-                      {participant.user?.firstPlaceRate !== undefined ? `${participant.user.firstPlaceRate}%` : '-'}
-                    </TableCell>
-                    <TableCell className="text-center text-muted-foreground">
-                      <Badge variant="secondary" className="bg-background/50">
-                        {participant.matchesPlayed ?? Math.max(Math.floor(totalPoints / 5), 1)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {reward ? (
-                        <div className="flex flex-col items-center">
-                          <Badge className="bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/30 border-emerald-500/30 transition-all shadow-sm">
-                            <Star className="w-3 h-3 mr-1 fill-emerald-500" />
-                            ${reward.amount}
-                          </Badge>
-                          <span className="text-[9px] text-muted-foreground mt-1 uppercase font-bold tracking-wider text-center max-w-[60px] truncate leading-[10px]">
-                            {reward.status === 'projected' ? (t("projected") || "Projected") : (t("awarded") || "Awarded")}
+  return (
+    <div className="space-y-6 animate-fade-in-up">
+      {/* ── Podium Section ── */}
+      <Card className="bg-card/40 backdrop-blur-xl border-white/10 overflow-hidden relative">
+        <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+          <Trophy className="w-32 h-32 text-white" />
+        </div>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2 font-bold tracking-tight">
+            <Trophy className="h-4 w-4 text-yellow-500" />
+            {t("podium") || "Bục thưởng"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-end justify-center gap-2 sm:gap-8 pt-6 pb-2">
+            {[1, 0, 2].map((idx) => {
+              const p = podium[idx];
+              if (!p) return <div key={idx} className="w-24" />;
+              
+              const name = p.user?.riotGameName || p.user?.username || p.inGameName;
+              const reward = p.rewards && p.rewards.length > 0 ? p.rewards[0] : null;
+
+              return (
+                <div key={p.id} className={`flex flex-col items-center gap-2 ${idx === 0 ? 'order-2' : idx === 1 ? 'order-1' : 'order-3'}`}>
+                  <div className="text-center animate-bounce-subtle">
+                    <p className="text-sm font-black text-white drop-shadow-md truncate max-w-[100px]">{name}</p>
+                    <p className="text-[10px] font-bold text-primary/80 mt-0.5">{p.scoreTotal || 0} PTS</p>
+                    {reward && (
+                       <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[9px] px-1.5 py-0 mt-1">
+                         ${reward.amount}
+                       </Badge>
+                    )}
+                  </div>
+                  <div className={`w-20 sm:w-28 ${podiumHeights[idx]} rounded-t-2xl border-2 ${podiumColors[idx]} flex flex-col items-center justify-center relative shadow-2xl backdrop-blur-md`}>
+                    <span className="text-3xl sm:text-4xl filter drop-shadow-lg">{medals[idx]}</span>
+                    <div className="absolute -bottom-1 w-full h-1 bg-white/10 blur-sm" />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Leaderboard Table ── */}
+      <Card className="border shadow-2xl bg-card/40 backdrop-blur-xl border-white/10 overflow-hidden">
+        <CardHeader className="bg-muted/20 border-b border-white/5 py-4 flex flex-row items-center justify-between">
+          <div className="space-y-1">
+            <CardTitle className="text-lg flex items-center font-black tracking-tight">
+              <TrendingUp className="mr-2 h-5 w-5 text-primary" />
+              {t("leaderboard_results") || "Tournament Leaderboard"}
+            </CardTitle>
+            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">{t("points_aggregate") || "Thống kê điểm số tổng hợp"}</p>
+          </div>
+          <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 shadow-sm px-3 py-1">
+            {t("live_updating") || "Live Updates"} <span className="ml-2 w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          </Badge>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent bg-white/5 border-white/5">
+                  <TableHead className="w-[70px] text-center text-[10px] font-black uppercase tracking-tighter opacity-70">{t("rank") || "Rank"}</TableHead>
+                  <TableHead className="w-[200px] text-[10px] font-black uppercase tracking-tighter opacity-70">{t("player") || "Player"}</TableHead>
+                  <TableHead className="text-center text-[10px] font-black uppercase tracking-tighter opacity-70">{t("region") || "Region"}</TableHead>
+                  <TableHead className="text-center text-[10px] font-black uppercase tracking-tighter opacity-70">{t("performance") || "Performance"}</TableHead>
+                  <TableHead className="text-center text-[10px] font-black uppercase tracking-tighter opacity-70">{t("prize") || "Prize"}</TableHead>
+                  <TableHead className="text-right text-[10px] font-black uppercase tracking-tighter opacity-70">{t("total_points") || "Points"}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {leaderboard.map((participant, index) => {
+                  const rank = index + 1;
+                  const name = participant.user?.riotGameName || participant.user?.username || participant.inGameName;
+                  const tag = participant.user?.riotGameTag || participant.gameSpecificId;
+                  const totalPoints = participant.scoreTotal || 0;
+                  const reward = participant.rewards && participant.rewards.length > 0 ? participant.rewards[0] : null;
+
+                  return (
+                    <TableRow key={participant.id} className={`group hover:bg-white/5 border-white/5 transition-all duration-300 ${getPlacementColor(rank)}`}>
+                      <TableCell className="font-bold text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          {getPlacementIcon(rank)}
+                          <span className={rank <= 3 ? "text-lg font-black" : "text-sm font-medium text-muted-foreground"}>{rank}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center border border-primary/20 shrink-0">
+                            <User className="w-4 h-4 text-primary" />
+                          </div>
+                          <div className="flex flex-col min-w-0">
+                            <span className="font-bold text-sm text-white truncate max-w-[140px] group-hover:text-primary transition-colors">{name}</span>
+                            {tag && <span className="text-[9px] font-medium text-muted-foreground opacity-60">#{tag}</span>}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {participant.user?.region ? (
+                           <Badge variant="outline" className="text-[10px] bg-black/40 border-white/10 text-white font-medium">
+                             {participant.user.region}
+                           </Badge>
+                        ) : <span className="text-muted-foreground opacity-20">-</span>}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex flex-col items-center gap-1">
+                          <div className="flex gap-1">
+                            {participant.placements?.slice(0, 5).map((p: number, i: number) => (
+                              <div key={i} className={`w-4 h-4 rounded-sm flex items-center justify-center text-[8px] font-bold ${p === 1 ? 'bg-yellow-500 text-black' : p <= 4 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-muted/40 text-muted-foreground'}`}>
+                                {p}
+                              </div>
+                            ))}
+                          </div>
+                          <span className="text-[9px] text-muted-foreground font-medium opacity-60">
+                             Avg: {(participant.placements?.reduce((a: any, b: any) => a + b, 0) / (participant.placements?.length || 1)).toFixed(1)}
                           </span>
                         </div>
-                      ) : (
-                        <Badge variant="outline" className="text-muted-foreground opacity-50 bg-transparent">TBD</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="inline-flex items-end flex-col">
-                        <span className="text-xl font-black text-primary drop-shadow-sm flex items-baseline">
-                          {totalPoints}
-                          <span className="text-[10px] font-semibold text-muted-foreground ml-1 uppercase">pts</span>
-                        </span>
-                        {rank === 1 && <span className="text-[9px] text-yellow-600 uppercase font-black tracking-widest mt-0.5 max-w-[80px] break-words text-right">{t("tournament_leader") || "Tournament Leader"}</span>}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {reward ? (
+                          <div className="flex flex-col items-center">
+                            <Badge className="bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border-emerald-500/30 transition-all shadow-lg font-bold text-xs">
+                              ${reward.amount.toLocaleString()}
+                            </Badge>
+                            <span className={`text-[8px] mt-1 uppercase font-black tracking-tighter ${reward.status === 'projected' ? 'text-amber-500/70' : 'text-emerald-500/70'}`}>
+                              {reward.status === 'projected' ? (t("projected") || "Dự kiến") : (t("awarded") || "Đã trao")}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground/30 font-bold italic">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex flex-col items-end">
+                          <span className="text-xl font-black text-white hover:text-primary transition-colors flex items-baseline leading-none">
+                            {totalPoints}
+                            <span className="text-[9px] font-bold text-muted-foreground ml-1 uppercase">pts</span>
+                          </span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+      
+      {/* ── Additional Info ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
+        <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 flex items-start gap-4">
+          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+            <TrendingUp className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h4 className="font-bold text-sm text-white mb-1">{t("tiebreak_rules") || "Quy định Tiebreak"}</h4>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Thứ tự ưu tiên: 1. Tổng điểm &gt; 2. Tổng hạng (thấp hơn tốt hơn) &gt; 3. Số lần đạt Top 1 &gt; 4. Hạng đơn tốt nhất.
+            </p>
+          </div>
         </div>
-      </CardContent>
-    </Card>
+        <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/10 flex items-start gap-4">
+          <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+            <Trophy className="w-5 h-5 text-emerald-400" />
+          </div>
+          <div>
+            <h4 className="font-bold text-sm text-white mb-1">{t("prize_eligibility") || "Điều kiện nhận thưởng"}</h4>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Giải thưởng được tính dựa trên cơ cấu giải của giải đấu và thứ hạng cuối cùng sau khi đã áp dụng mọi chỉ số phụ.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

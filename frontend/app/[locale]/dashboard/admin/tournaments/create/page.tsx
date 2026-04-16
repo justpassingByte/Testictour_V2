@@ -25,6 +25,7 @@ interface PhaseFormData {
   advancementValue: number
   matchesPerRound: number
   carryOverScores: boolean
+  lobbyAssignment: string
 }
 
 export default function CreateTournamentPage() {
@@ -76,7 +77,7 @@ export default function CreateTournamentPage() {
   }
 
   const [phases, setPhases] = useState<PhaseFormData[]>([
-    { name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "top_n_scores", advancementValue: 4, matchesPerRound: 1, carryOverScores: false }
+    { name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "top_n_scores", advancementValue: 4, matchesPerRound: 1, carryOverScores: false, lobbyAssignment: "none" }
   ])
 
   const updateForm = (field: string, value: any) => {
@@ -93,6 +94,7 @@ export default function CreateTournamentPage() {
       advancementValue: 4,
       matchesPerRound: 1,
       carryOverScores: false,
+      lobbyAssignment: "none",
     }])
   }
 
@@ -120,7 +122,7 @@ export default function CreateTournamentPage() {
         numberOfRounds: p.numberOfRounds,
         matchesPerRound: p.matchesPerRound,
         advancementCondition: { type: p.advancementType, value: p.advancementValue },
-        lobbyAssignment: p.type === 'swiss' ? 'swiss' : 'random',
+        lobbyAssignment: p.lobbyAssignment,
         carryOverScores: p.carryOverScores,
       }))
 
@@ -364,23 +366,41 @@ export default function CreateTournamentPage() {
                     </div>
                     <div className="space-y-2">
                       <Label>Type</Label>
-                      <Select value={phase.type} onValueChange={(v) => updatePhase(index, "type", v)}>
+                      <Select value={phase.type} onValueChange={(v) => {
+                        updatePhase(index, "type", v);
+                        if (v === 'swiss') updatePhase(index, "lobbyAssignment", 'swiss');
+                        if (v === 'elimination' || v === 'points') updatePhase(index, "lobbyAssignment", 'none');
+                      }}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="elimination">Group Elimination (Loại theo bảng - BO1/BO2..)</SelectItem>
-                          <SelectItem value="points">Global Points (Sảnh chung tính điểm)</SelectItem>
+                          <SelectItem value="elimination">Group Elimination (Loại theo bảng - BO1)</SelectItem>
+                          <SelectItem value="points">Points (Sảnh chung đánh nhiều trận)</SelectItem>
                           <SelectItem value="swiss">Swiss (Thụy Sĩ / Tính điểm tích luỹ)</SelectItem>
                           <SelectItem value="round_robin">Round Robin (Vòng tròn)</SelectItem>
                           <SelectItem value="checkmate">Checkmate (Tới ngưỡng checkmate)</SelectItem>
                         </SelectContent>
                       </Select>
                       <p className="text-[10px] text-muted-foreground mt-1">
-                        {phase.type === 'elimination' && "Chia bảng đấu cố định trống suốt số vòng. Cuối cùng loại những người bét bảng."}
-                        {phase.type === 'points' && "Gom tất cả người chơi vào sảnh chung, xào lại sau mỗi trận, tính tổng điểm."}
+                        {phase.type === 'elimination' && "Bo1 - Mỗi bảng 1 trận duy nhất. Loại những người xếp cuối."}
+                        {phase.type === 'points' && "Đánh nhiều trận, tính tổng điểm. Có thể đặt luồng xào Lobby tuỳ ý."}
                         {phase.type === 'swiss' && "Thi đấu nhiều trận, cộng dồn điểm, ưu tiên bắt cặp đồng điểm."}
                         {phase.type === 'round_robin' && "Thi đấu vòng tròn tính điểm."}
                         {phase.type === 'checkmate' && "Người chơi phải đạt đủ số điểm ngưỡng, sau đó dành Top 1 để vô địch."}
                       </p>
+                    </div>
+
+                    <div className="space-y-2">
+                       <Label className="text-cyan-400 font-medium">Shuffle Settings (Xào lobby)</Label>
+                       <Select value={phase.lobbyAssignment || "random"} onValueChange={(v) => updatePhase(index, "lobbyAssignment", v)}>
+                         <SelectTrigger className="border-cyan-500/50"><SelectValue /></SelectTrigger>
+                         <SelectContent>
+                           <SelectItem value="none">None (Giữ nguyên lobby cũ)</SelectItem>
+                           <SelectItem value="random">Random (Xào ngẫu nhiên)</SelectItem>
+                           <SelectItem value="swiss">Swiss (Xếp rank: Cùng điểm gặp nhau)</SelectItem>
+                           <SelectItem value="snake">Snake (Ziczac cân bằng sức mạnh)</SelectItem>
+                         </SelectContent>
+                       </Select>
+                       <p className="text-[10px] text-muted-foreground mt-1">Cách chia lại nhóm người chơi giữa các trận thi đấu liên tiếp.</p>
                     </div>
 
                     <div className="space-y-2 relative">
@@ -391,8 +411,8 @@ export default function CreateTournamentPage() {
                         updatePhase(index, "numberOfRounds", 1);
                       }} className="border-orange-500/50 focus-visible:ring-orange-500/30" />
                       <p className="text-[10px] text-muted-foreground mt-1">
-                        {phase.type === 'elimination' && "Số trận mỗi bảng (1 = BO1). Loại theo thứ hạng."}
-                        {phase.type === 'points' && "Số trận cùng lobby (2=BO2, 3=BO3). Cộng tổng điểm, top N đi tiếp."}
+                        {phase.type === 'elimination' && "Số trận mỗi bảng (mặc định 1 trận)."}
+                        {phase.type === 'points' && "Số trận đánh tích luỹ điểm của Phase (Vd: đánh 3 trận tổng)."}
                         {(phase.type !== 'elimination' && phase.type !== 'points') && "Số trận của phase thi đấu (xào lobby sau mỗi trận)."}
                       </p>
                     </div>

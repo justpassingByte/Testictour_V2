@@ -31,6 +31,8 @@ export interface ILobbyStateSnapshot {
   totalDelaysUsed: number;
   pausedAt?: string;
   remainingDurationOnPause?: number; // seconds
+  /** Indicates if the lobby has just finished a match and is awaiting reshuffle */
+  fetchedResult?: boolean;
 }
 
 export interface IIncomingMatch {
@@ -91,7 +93,7 @@ export interface IPhaseConfig {
 export interface IPhase {
   id: string;
   tournamentId: string;
-  name:string;
+  name: string;
   phaseNumber: number;
   type: 'elimination' | 'points' | 'checkmate' | 'swiss' | 'round_robin' | 'GROUP_STAGE' | 'KNOCKOUT';
   numberOfGroups?: number;
