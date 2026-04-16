@@ -598,7 +598,8 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                               <Label className="text-[11px] uppercase tracking-wide text-orange-400">Matches to Play (Số Trận Đấu)</Label>
                               <Input type="number" min={1} value={phase.matchesPerRound} onChange={(e) => updatePhase(index, "matchesPerRound", parseInt(e.target.value))} className="bg-black/40 border-orange-500/50 focus-visible:ring-orange-500/50" />
                               <p className="text-[9px] text-muted-foreground mt-1 px-1">
-                                Sẽ xào lobby liên tục cho đến khi đủ số trận.
+                                {phase.type === 'points' && "Cùng lobby đánh N trận, cộng tổng điểm sau cùng."}
+                                {phase.type === 'swiss' && "Xào lobby liên tục sau mỗi trận cho đến khi đủ số trận."}
                               </p>
                             </div>
                           )}

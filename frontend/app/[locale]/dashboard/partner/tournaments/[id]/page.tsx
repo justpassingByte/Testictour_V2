@@ -738,7 +738,7 @@ export default function TournamentManagePage() {
                           }`}>
                             <div className="flex items-center justify-between mb-2">
                               <span className="text-sm font-semibold">
-                                {phase.type === 'elimination' || phase.type === 'GROUP_STAGE' 
+                                {phase.type === 'elimination' || phase.type === 'points' || phase.type === 'GROUP_STAGE' 
                                   ? t('group_n', { letter: String.fromCharCode(64 + round.roundNumber) })
                                   : t('match_n', { number: round.roundNumber, fallback: `Match ${round.roundNumber}` })
                                 }

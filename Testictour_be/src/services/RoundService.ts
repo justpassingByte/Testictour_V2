@@ -282,7 +282,8 @@ export default class RoundService {
       let phaseGroups: any[] = [];
       const matchesPerRound = phase.matchesPerRound || 1;
       const isMultiMatch = matchesPerRound > 1;
-      const isMultiMatchElimination = phase.type === 'elimination' && isMultiMatch && phase.rounds.length > 1;
+      // 'points' type also uses multi-match display (multiple columns per match, same lobby each time)
+      const isMultiMatchElimination = (phase.type === 'elimination' || phase.type === 'points') && isMultiMatch && phase.rounds.length > 1;
 
       if (isMultiMatchElimination) {
         // Elimination BO with multiple groups: show "Vòng 1, Vòng 2..." aggregating all groups
@@ -559,6 +560,8 @@ export default class RoundService {
     }
 
     // 5. Compute per-player stats (mirrors frontend logic exactly)
+    // 'elimination': single-match placement ranking (last match score used for ranking)
+    // 'points', 'swiss', 'checkmate', etc.: cumulative total across all matches
     const isElimination = phase.type === 'elimination';
     const advancementN = (phase.advancementCondition as any)?.value ?? null;
     const matchesPerRound = phase.matchesPerRound || 1;
@@ -1167,9 +1170,9 @@ export default class RoundService {
 
               const lobbyAssignment = (currentRound.phase.lobbyAssignment || 'random') as string;
               
-              if (currentRound.phase.type === 'elimination' || lobbyAssignment === 'none') {
-                // ELIMINATION BO2/BO3: Do NOT shuffle! Players play against the same opponents.
-                logger.info(`[MultiMatch] Elimination phase: Skipping reshuffle, recreating same lobbies for next match.`);
+              if (currentRound.phase.type === 'elimination' || currentRound.phase.type === 'points' || lobbyAssignment === 'none') {
+                // ELIMINATION / POINTS BO2/BO3: Do NOT shuffle! Players play against the same opponents.
+                logger.info(`[MultiMatch] ${currentRound.phase.type} phase: Skipping reshuffle, recreating same lobbies for next match.`);
                 for (let i = 0; i < currentRound.lobbies.length; i++) {
                   const lobby = currentRound.lobbies[i];
                   await tx.lobby.update({

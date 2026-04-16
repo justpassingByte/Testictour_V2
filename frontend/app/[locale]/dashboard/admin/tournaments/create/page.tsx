@@ -391,7 +391,9 @@ export default function CreateTournamentPage() {
                         updatePhase(index, "numberOfRounds", 1);
                       }} className="border-orange-500/50 focus-visible:ring-orange-500/30" />
                       <p className="text-[10px] text-muted-foreground mt-1">
-                        {phase.type === 'elimination' ? "Số trận mỗi bảng (1 = BO1, 2 = BO2)." : "Số trận của phase thi đấu (xào lobby sau mỗi trận)."}
+                        {phase.type === 'elimination' && "Số trận mỗi bảng (1 = BO1). Loại theo thứ hạng."}
+                        {phase.type === 'points' && "Số trận cùng lobby (2=BO2, 3=BO3). Cộng tổng điểm, top N đi tiếp."}
+                        {(phase.type !== 'elimination' && phase.type !== 'points') && "Số trận của phase thi đấu (xào lobby sau mỗi trận)."}
                       </p>
                     </div>
                     <div className="space-y-2">

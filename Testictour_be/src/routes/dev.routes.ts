@@ -652,10 +652,6 @@ router.post('/automation/seed-env', async (req: Request, res: Response) => {
       if (phasesConfig && Array.isArray(phasesConfig) && phasesConfig.length > 0) {
         for (let i = 0; i < phasesConfig.length; i++) {
           const config = phasesConfig[i];
-          // For elimination: user's numberOfRounds = BO count (matches per lobby), NOT group count.
-          // Groups are auto-calculated by preAssignGroups from player count.
-          // For swiss: numberOfRounds = actual rounds (reshuffle after each).
-          const isElimination = (config.type || 'elimination') === 'elimination';
           const createdPhase = await prisma.phase.create({
             data: {
               tournamentId: tour.id,
@@ -664,14 +660,10 @@ router.post('/automation/seed-env', async (req: Request, res: Response) => {
               type: config.type || 'elimination',
               status: 'WAITING',
               lobbySize: config.lobbySize || 8,
-              matchesPerRound: isElimination
-                ? (config.numberOfRounds || config.matchesPerRound || 1)
-                : (config.matchesPerRound || 1),
-              numberOfRounds: isElimination
-                ? 1  // Will be auto-calculated by preAssignGroups based on player count
-                : (config.numberOfRounds || 1),
+              matchesPerRound: config.matchesPerRound || 1,
+              numberOfRounds: 1,  // Auto-calculated later by preAssignGroups
               pointsMapping: config.pointsMapping || [8, 7, 6, 5, 4, 3, 2, 1],
-              advancementCondition: config.advancementCondition !== undefined ? config.advancementCondition : (isElimination ? { type: 'placement', value: 4 } : undefined)
+              advancementCondition: config.advancementCondition !== undefined ? config.advancementCondition : ((config.type === 'elimination' || config.type === 'points') ? { type: 'placement', value: 4 } : undefined)
             }
           });
           if (i === 0) firstPhaseId.push(createdPhase.id);
@@ -702,7 +694,7 @@ router.post('/automation/seed-env', async (req: Request, res: Response) => {
            data: { phaseId: firstPhaseId[0], roundNumber: 1, status: 'pending', startTime: new Date(Date.now() + 6 * 60 * 1000) }
          });
          
-         const roundsToCreate = phasesConfig ? (phasesConfig[0]?.numberOfRounds || 1) : numberOfGroups;
+         const roundsToCreate = numberOfGroups;
          for (let g = 2; g <= roundsToCreate; g++) {
            await prisma.round.create({
              data: { phaseId: firstPhaseId[0], roundNumber: g, status: 'pending', startTime: new Date(Date.now() + 6 * 60 * 1000) }
@@ -725,6 +717,87 @@ router.post('/automation/seed-env', async (req: Request, res: Response) => {
     }
   } catch (err: any) {
     console.error('[DevTools] error:', err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /dev/automation/seed-tournament-participants
+ * Seeds participants to a specific tournament by ID, keeping 1 slot open.
+ */
+router.post('/automation/seed-tournament-participants', async (req: Request, res: Response) => {
+  try {
+    const { prisma } = require('../services/prisma');
+    const { tournamentId, numPlayers } = req.body;
+
+    if (!tournamentId) {
+      return res.status(400).json({ success: false, error: 'tournamentId is required' });
+    }
+
+    const tournament = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      include: { participants: true }
+    });
+
+    if (!tournament) {
+      return res.status(404).json({ success: false, error: 'Tournament not found' });
+    }
+
+    const currentCount = tournament.participants.length;
+    // Keep 1 slot open for the user to join
+    let targetCount = numPlayers ? parseInt(numPlayers) : (tournament.maxPlayers - 1);
+    
+    // Ensure we don't exceed maxPlayers - 1
+    if (targetCount > tournament.maxPlayers - 1) {
+      targetCount = tournament.maxPlayers - 1;
+    }
+
+    const needed = targetCount - currentCount;
+    if (needed <= 0) {
+      return res.json({ success: true, message: 'Tournament already has enough participants (or 1 slot is already left)', seededCount: 0 });
+    }
+
+    const allUsers = [];
+    for (let i = 0; i < needed; i++) {
+        // create dummy user
+        const dummyId = `dummy_${Date.now()}_${i}`;
+        const dummyPuuiid = `puuid_${Date.now()}_${i}`;
+        const dummy = await prisma.user.create({
+          data: {
+            username: `Dummy_${Date.now().toString(36)}_${i}`,
+            email: `${dummyPuuiid}@test.com`,
+            puuid: dummyPuuiid,
+            riotGameName: `DummyPlayer_${Date.now().toString(36)}_${i}`,
+            riotGameTag: 'VN1',
+            password: 'dummy_dev_password',
+            region: tournament.region || 'sea',
+          }
+        });
+        allUsers.push(dummy);
+        await prisma.participant.create({ data: { userId: dummy.id, tournamentId: tournament.id, paid: true } });
+    }
+
+    // Update actualCounts
+    await prisma.tournament.update({
+      where: { id: tournament.id },
+      data: {
+        expectedParticipants: currentCount + needed,
+        actualParticipantsCount: currentCount + needed
+      }
+    });
+
+    try {
+      const io = (global as any).__io || (global as any).io;
+      if (io) io.emit('tournaments_refresh');
+    } catch (_) { }
+
+    return res.json({
+      success: true,
+      message: `Seeded ${needed} dummy participants into tournament ${tournamentId}. Left 1 slot open.`,
+      seededCount: needed
+    });
+  } catch (err: any) {
+    console.error('[DevTools] seed-participants error:', err.message);
     return res.status(500).json({ success: false, error: err.message });
   }
 });

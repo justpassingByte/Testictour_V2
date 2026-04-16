@@ -31,8 +31,11 @@ async function checkAndAdvanceRound(roundId: string) {
     }
 
     // ── PLACEMENT MODE: Eliminate per-lobby IMMEDIATELY (don't wait for all lobbies) ──
+    // Exception: 'points' type phases rank by cumulative score across ALL matches,
+    // so elimination must wait until every match in the round is done (handled by autoAdvance).
     const advancementType = (round.phase as any).advancementCondition?.type;
-    if (advancementType === 'placement') {
+    const phaseType = (round.phase as any).type;
+    if (advancementType === 'placement' && phaseType !== 'points') {
       const topNPerLobby = (round.phase as any).advancementCondition?.value;
       if (topNPerLobby) {
         try {

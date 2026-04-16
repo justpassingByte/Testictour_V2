@@ -55,10 +55,8 @@ export const TournamentRulesTab = ({ tournament }: TournamentRulesTabProps) => {
           <div className="space-y-6">
             {phases.map((phase, phaseIdx) => {
               let type = (phase.type || '').toLowerCase();
-              const isEliminationBO = type === 'elimination' && phase.matchesPerRound && phase.matchesPerRound > 1;
-              if (isEliminationBO) {
-                type = 'elimination_bo';
-              }
+              // Note: 'elimination_bo' kept in maps as fallback for legacy tournament data
+              // but new tournaments now store 'points' directly
 
               const icon = ICON_MAP[type] || <Star className="h-4 w-4" />;
               const colorClass = COLOR_MAP[type] || 'text-primary';

@@ -743,10 +743,10 @@ export default function TournamentManagePage() {
                           <div key={round.id} className="bg-white/5 rounded-lg p-3">
                             <div className="flex items-center justify-between mb-1">
                               <span className="text-sm font-medium">
-                                {phase.type === 'elimination' || phase.type === 'GROUP_STAGE'
-                                  ? t('group_n', { letter: String.fromCharCode(64 + round.roundNumber) })
-                                  : t('match_n', { number: round.roundNumber, fallback: `Match ${round.roundNumber}` })
-                                }
+                                {phase.type === 'elimination' || phase.type === 'points' || phase.type === 'GROUP_STAGE'
+                                   ? t('group_n', { letter: String.fromCharCode(64 + round.roundNumber) })
+                                   : t('match_n', { number: round.roundNumber, fallback: `Match ${round.roundNumber}` })
+                                 }
                               </span>
                               <Badge variant="outline" className="text-[10px] px-1.5">{round.status}</Badge>
                             </div>
@@ -858,7 +858,7 @@ export default function TournamentManagePage() {
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2">
                                   <span className="text-sm font-medium">
-                                    {phase.type === 'elimination' || phase.type === 'GROUP_STAGE'
+                                   {phase.type === 'elimination' || phase.type === 'points' || phase.type === 'GROUP_STAGE'
                                       ? t('group_n', { letter: String.fromCharCode(64 + round.roundNumber) })
                                       : t('match_n', { number: round.roundNumber, fallback: `Match ${round.roundNumber}` })
                                     }
@@ -1146,7 +1146,9 @@ export default function TournamentManagePage() {
                                 } : p));
                               }} className="bg-black/40 border-orange-500/50" />
                               <p className="text-[9px] text-muted-foreground mt-0.5 px-1">
-                                {phase.type === 'elimination' ? "Số trận mỗi bảng (1 = BO1, 2 = BO2)." : "Số trận của phase thi đấu (xào lobby sau mỗi trận)."}
+                                {phase.type === 'elimination' && "Số trận mỗi bảng (1 = BO1). Loại theo thứ hạng."}
+                                {phase.type === 'points' && "Số trận cùng lobby (2=BO2, 3=BO3). Cộng tổng điểm, top N đi tiếp."}
+                                {(phase.type !== 'elimination' && phase.type !== 'points') && "Số trận của phase thi đấu (xào lobby sau mỗi trận)."}
                               </p>
                             </div>
                             <div className="space-y-1.5">

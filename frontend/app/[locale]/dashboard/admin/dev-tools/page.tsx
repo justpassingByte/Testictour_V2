@@ -8,7 +8,7 @@ import {
   PlaySquare, Bot, Key, ExternalLink, ShieldCheck, ArrowRight,
   CheckCircle2, XCircle, Clock, DollarSign, Lock, Unlock,
   AlertTriangle, RefreshCw, Activity, ChevronRight, Terminal,
-  Banknote, Send, ShieldAlert
+  Banknote, Send, ShieldAlert, Users
 } from "lucide-react";
 import { useMiniTourLobbyStore } from "@/app/stores/miniTourLobbyStore";
 import { Button } from "@/components/ui/button";
@@ -196,9 +196,9 @@ export default function DevToolsPage() {
   const [simRegion, setSimRegion] = useState("sea");
   const [simTourPlayers, setSimTourPlayers] = useState("16");
   const [simPhasesConfigRaw, setSimPhasesConfigRaw] = useState(JSON.stringify([
-    { name: "Vòng Sơ Loại 1", type: "elimination", matchesPerRound: 2, numberOfRounds: 1, lobbySize: 8 },
-    { name: "Vòng Sơ Loại 2", type: "elimination", matchesPerRound: 1, numberOfRounds: 1, lobbySize: 8 },
-    { name: "Vòng Bảng Thụy Sĩ", type: "swiss", matchesPerRound: 1, numberOfRounds: 3, lobbySize: 8 }
+    { name: "Vòng Sơ Loại (BO1)", type: "elimination", matchesPerRound: 1, lobbySize: 8 },
+    { name: "Vòng Bảng Tính Điểm (BO2)", type: "points", matchesPerRound: 2, lobbySize: 8 },
+    { name: "Vòng Bảng Thụy Sĩ", type: "swiss", matchesPerRound: 3, lobbySize: 8 }
   ], null, 2));
 
   const getRiotRegion = (r: string) => {
@@ -942,6 +942,15 @@ export default function DevToolsPage() {
                 <Input placeholder="Auto-detect latest if empty" value={lobbyId} onChange={e => setLobbyId(e.target.value)} className="bg-black/30 border-white/10 h-8 text-xs font-mono" />
               </div>
             </div>
+            {lobbyType === 'tournament' && (
+              <div className="pt-2 border-t border-white/5">
+                <Button size="sm" variant="outline" className="border-emerald-500/30 text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20"
+                  onClick={() => handleAutomation('seed-tournament-participants', { tournamentId: seededTournamentId })}>
+                  <Users className="w-3 h-3 mr-2" />
+                  Seed Tournament Participants (Leave 1 slot)
+                </Button>
+              </div>
+            )}
           </div>
 
           <div className="grid lg:grid-cols-2 gap-6 items-start">
