@@ -714,6 +714,8 @@
   "elimination_phase_desc": "Players who lose a match are eliminated from the tournament. The tournament continues until only a set number of players remain or a champion is crowned.",
   "elimination_rule": "Elimination Rule",
   "elimination_rule_short": "Elimination Rule",
+  "top_n_per_lobby": "Top {value} per lobby",
+  "swiss_reshuffle_note": "Lobbies are reshuffled based on points after each match",
   "email": "Email",
   "emerald": "Emerald",
   "enable_automatic_processing_through_paym_desc": "Enable automatic processing through payment gateway instead of manual management",

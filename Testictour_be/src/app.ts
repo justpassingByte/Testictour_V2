@@ -75,7 +75,24 @@ if (REDIS_ENABLED && lobbyTimerQueue) {
     async (job: any) => {
       const { roundId } = job.data;
       logger.info(`AutoAdvanceRoundWorker: Processing round ${roundId}`);
-      return RoundService.autoAdvance(roundId);
+      const result = await RoundService.autoAdvance(roundId);
+      
+      if (result && typeof result === 'object' && '_action' in result) {
+        if (result._action === 'schedule_lobby_timers' && result.lobbyIds) {
+          logger.info(`AutoAdvanceRoundWorker: Scheduling ready check timers for ${result.lobbyIds.length} lobbies with ${result.delayMs}ms delay`);
+          const { LOBBY_STATE } = require('./constants/lobbyStates');
+          const LobbyTimerService = require('./services/LobbyTimerService').default;
+          
+          for (const lobbyId of result.lobbyIds) {
+            try {
+              await LobbyTimerService.scheduleTransition(lobbyId, LOBBY_STATE.READY_CHECK, result.delayMs || 300_000);
+            } catch (err) {
+              logger.error(`Failed to schedule timer for lobby ${lobbyId}: ${err}`);
+            }
+          }
+        }
+      }
+      return result;
     },
     { connection: redisConnectionOptions, concurrency: 5 }
   );

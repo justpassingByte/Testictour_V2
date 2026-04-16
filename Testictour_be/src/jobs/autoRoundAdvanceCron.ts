@@ -51,7 +51,7 @@ cron.schedule('* * * * *', async () => {
 // If they haven't been pre-assigned yet (no lobbies in first phase), trigger preAssignGroups
 cron.schedule('* * * * *', async () => {
   try {
-    const fiveMinutesFromNow = new Date(Date.now() + 5 * 60 * 1000);
+    const thirtyMinutesFromNow = new Date(Date.now() + 30 * 60 * 1000);
     const now = new Date();
 
     // Find tournaments that are about to start (within 5 minutes) and have pending/upcoming status
@@ -60,7 +60,7 @@ cron.schedule('* * * * *', async () => {
         status: { in: ['pending', 'UPCOMING', 'REGISTRATION'] },
         startTime: {
           gte: now,
-          lte: fiveMinutesFromNow,
+          lte: thirtyMinutesFromNow,
         },
       },
       include: {
@@ -85,7 +85,7 @@ cron.schedule('* * * * *', async () => {
       if (firstRound && firstRound.lobbies.length > 0) continue;
 
       try {
-        logger.info(`[PreAssignCron] Tournament ${tournament.id} starts at ${tournament.startTime}. Pre-assigning groups now.`);
+        logger.info(`[PreAssignCron] Tournament ${tournament.id} starts at ${tournament.startTime}. Pre-assigning groups now (30m trigger).`);
         await RoundService.preAssignGroups(tournament.id);
       } catch (error) {
         logger.error(`[PreAssignCron] Failed to pre-assign for tournament ${tournament.id}: ${error instanceof Error ? error.message : String(error)}`);
@@ -131,6 +131,53 @@ cron.schedule('* * * * *', async () => {
     }
   } catch (error) {
     logger.error(`[AutoCancelCron] Error: ${error instanceof Error ? error.message : String(error)}`);
+  }
+});
+
+// STUCK ROUND RECOVERY CRON: Runs every minute
+// Finds rounds that are 'in_progress' but whose lobbies are all 'fetchedResult: true'.
+// This is a safety net for race conditions or failed event triggers.
+cron.schedule('* * * * *', async () => {
+  try {
+    const stuckRounds = await prisma.round.findMany({
+      where: {
+        status: 'in_progress',
+        lobbies: {
+          every: { fetchedResult: true }
+        }
+      },
+      include: {
+        lobbies: { select: { id: true } }
+      }
+    });
+
+    // Filtering out rounds that actually have NO lobbies yet (just in case)
+    const trulyStuck = stuckRounds.filter(r => r.lobbies.length > 0);
+
+    if (trulyStuck.length > 0) {
+      logger.warn(`[RecoveryCron] Found ${trulyStuck.length} stuck rounds. Advancing them now.`);
+      for (const round of trulyStuck) {
+        try {
+          logger.info(`[RecoveryCron] Triggering autoAdvance for stuck round: ${round.id}`);
+          if (autoAdvanceRoundQueue) {
+            await autoAdvanceRoundQueue.add('autoAdvanceRound', { roundId: round.id }, {
+              jobId: `recovery-${round.id}`,
+              removeOnComplete: true,
+              removeOnFail: true
+            });
+          } else {
+            // Direct call for NoRedis
+            RoundService.autoAdvance(round.id).catch(err => {
+              logger.error(`[RecoveryCron] Direct autoAdvance failed for round ${round.id}: ${err instanceof Error ? err.message : String(err)}`);
+            });
+          }
+        } catch (err) {
+          logger.error(`[RecoveryCron] Failed to queue/advance round ${round.id}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+    }
+  } catch (error) {
+    logger.error(`[RecoveryCron] Error: ${error instanceof Error ? error.message : String(error)}`);
   }
 });
  

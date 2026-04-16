@@ -4,127 +4,6 @@ import logger from '../utils/logger';
 import { autoAdvanceRoundQueue, redisConnectionOptions, REDIS_ENABLED } from '../lib/queues';
 import RoundService from '../services/RoundService';
 
-async function checkAndAdvanceRound(roundId: string) {
-  try {
-    const round = await prisma.round.findUnique({
-      where: { id: roundId },
-      include: {
-        phase: true,
-        _count: { select: { lobbies: true } }
-      }
-    });
-
-    if (!round) {
-      logger.warn(`Round ${roundId} not found during completion check.`);
-      return;
-    }
-
-    if (round.status !== 'in_progress') {
-      // Allow recovery for completed rounds if their phase is stuck as 'in_progress'
-      if (round.status === 'completed' && round.phase.status === 'in_progress') {
-        logger.info(`[Recovery] Round ${roundId} is completed but phase ${round.phase.id} is stuck as 'in_progress'. Triggering recovery via autoAdvance.`);
-        // Fall through to trigger autoAdvance which has recovery logic
-      } else {
-        logger.info(`Round ${roundId} is not in 'in_progress' state (${round.status}). Skipping completion check.`);
-        return;
-      }
-    }
-
-    // ── PLACEMENT MODE: Eliminate per-lobby IMMEDIATELY (don't wait for all lobbies) ──
-    // Exception: 'points' type phases rank by cumulative score across ALL matches,
-    // so elimination must wait until every match in the round is done (handled by autoAdvance).
-    const advancementType = (round.phase as any).advancementCondition?.type;
-    const phaseType = (round.phase as any).type;
-    if (advancementType === 'placement' && phaseType !== 'points') {
-      const topNPerLobby = (round.phase as any).advancementCondition?.value;
-      if (topNPerLobby) {
-        try {
-          await RoundService.eliminateCompletedLobbies(roundId, topNPerLobby, round.phase.tournamentId);
-        } catch (err) {
-          const errMsg = err instanceof Error ? err.message : String(err);
-          logger.error(`[Placement/Immediate] Per-lobby elimination error for round ${roundId}: ${errMsg}`);
-        }
-      }
-    }
-
-    const incompleteLobbiesCount = await prisma.lobby.count({
-      where: { roundId: roundId, fetchedResult: false },
-    });
-
-    const allLobbiesComplete = incompleteLobbiesCount === 0;
-    logger.info(`Round Completion Check for ${roundId}: All lobbies complete? ${allLobbiesComplete}. Incomplete: ${incompleteLobbiesCount}.`);
-
-    if (allLobbiesComplete) {
-      logger.info(`All lobbies for round ${roundId} are complete. Triggering auto-advance.`);
-
-      if (autoAdvanceRoundQueue) {
-        // Redis available — use BullMQ queue for reliable processing
-        await autoAdvanceRoundQueue.add('autoAdvanceRound', { roundId: round.id }, {
-          removeOnComplete: true,
-          removeOnFail: true,
-          jobId: `advance-${round.id}` // Deterministic ID prevents duplicate jobs
-        });
-      } else {
-        // No Redis — call directly with a small delay so this handler finishes first
-        logger.info(`[NoRedis] Queue unavailable — directly advancing round ${roundId}`);
-        setTimeout(() => {
-          RoundService.autoAdvance(roundId)
-            .then(async (result) => {
-              if (result && typeof result === 'object' && '_action' in result) {
-                if (result._action === 'payout_prizes' && result.tournamentId) {
-                  logger.info(`[NoRedis] Handling deferred payout_prizes for tournament: ${result.tournamentId}`);
-                  try {
-                    // DO NOT distribute prizes automatically!
-                    // We have an Escrow system. The host must trigger the payout manually via the EscrowService.
-                    logger.info(`[NoRedis] Skipped automatic payout for tournament ${result.tournamentId} (Delegating to Escrow System).`);
-                    
-                    if ((global as any).io) {
-                      (global as any).io.to(`tournament:${result.tournamentId}`).emit('leaderboard_update', { tournamentId: result.tournamentId });
-                      (global as any).io.to(`tournament:${result.tournamentId}`).emit('tournament_update', { type: 'tournament_completed' });
-                    }
-                  } catch (err) {
-                    logger.error(`[NoRedis] Failed to distribute prizes: ${err instanceof Error ? err.message : String(err)}`);
-                  }
-                } else if (result._action === 'create_next_phase_rounds' && result.completedPhaseId && result.nextPhaseId) {
-                  logger.info(`[NoRedis] Handling deferred round creation for phase: ${result.nextPhaseId}`);
-                  const { prisma } = await import('../services/prisma');
-                  const numberOfRounds = result.numberOfRounds || 1;
-                  try {
-                    for (let i = 1; i <= numberOfRounds; i++) {
-                      await prisma.round.create({
-                        data: {
-                          phaseId: result.nextPhaseId,
-                          roundNumber: i,
-                          startTime: new Date(Date.now() + 5 * 60 * 1000),
-                          status: 'pending'
-                        }
-                      });
-                    }
-                    if ((global as any).io && result.tournamentId) {
-                      const { bracketCache } = await import('../services/BracketCacheService');
-                      await bracketCache.invalidate(result.tournamentId);
-                      (global as any).io.to(`tournament:${result.tournamentId}`).emit('bracket_update', { tournamentId: result.tournamentId });
-                      (global as any).io.to(`tournament:${result.tournamentId}`).emit('tournament_update', { type: 'phase_started' });
-                    }
-                  } catch (err) {
-                    logger.error(`[NoRedis] Failed to create rounds: ${err instanceof Error ? err.message : String(err)}`);
-                  }
-                }
-              }
-            })
-            .catch(err => {
-              logger.error(`[NoRedis] Direct autoAdvance failed for round ${roundId}: ${err instanceof Error ? err.message : String(err)}`);
-            });
-        }, 200);
-      }
-    }
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    logger.error(`Error in checkAndAdvanceRound for round ${roundId}: ${errorMessage}`);
-    throw error;
-  }
-}
-
 // Only start the BullMQ Worker if Redis is available
 export let roundCompletionWorker: Worker | null = null;
 
@@ -144,5 +23,74 @@ if (REDIS_ENABLED) {
 }
 
 // Export the check function so it can be called directly when Redis is unavailable
-export { checkAndAdvanceRound };
+export async function checkAndAdvanceRound(roundId: string) {
+  try {
+    await prisma.$transaction(async (tx) => {
+      // 1. Acquire an exclusive lock on the Round to prevent parallel completion checks
+      const round = await tx.round.findUnique({
+        where: { id: roundId },
+        include: {
+          phase: true,
+        }
+      });
+
+      if (!round) {
+        logger.warn(`Round ${roundId} not found during completion check.`);
+        return;
+      }
+
+      if (round.status !== 'in_progress') {
+        if (round.status === 'completed' && round.phase.status === 'in_progress') {
+          logger.info(`[Recovery] Round ${roundId} is completed but phase ${round.phase.id} is stuck. Triggering logic.`);
+        } else {
+          return;
+        }
+      }
+
+      // 2. Count incomplete lobbies INSIDE the transaction with the lock
+      const incompleteLobbiesCount = await tx.lobby.count({
+        where: { roundId: roundId, fetchedResult: false },
+      });
+
+      const allLobbiesComplete = incompleteLobbiesCount === 0;
+      logger.info(`[LockingCheck] Round ${roundId}: Incomplete lobbies count = ${incompleteLobbiesCount}. All complete? ${allLobbiesComplete}`);
+
+      if (allLobbiesComplete) {
+        // 3. Trigger auto-advance (it will start its own transaction, which is fine since we return here)
+        if (autoAdvanceRoundQueue) {
+          await autoAdvanceRoundQueue.add('autoAdvanceRound', { roundId: round.id }, {
+            removeOnComplete: true,
+            removeOnFail: true,
+            jobId: `advance-${round.id}`
+          });
+        } else {
+          // No Redis
+          setTimeout(async () => {
+            try {
+              const result = await RoundService.autoAdvance(round.id);
+              if (result && typeof result === 'object' && result._action === 'schedule_lobby_timers' && result.lobbyIds) {
+                logger.info(`[NoRedis] Scheduling ready check timers for ${result.lobbyIds.length} lobbies with ${result.delayMs}ms delay`);
+                const LobbyTimerService = (await import('../services/LobbyTimerService')).default;
+                const { LOBBY_STATE } = await import('../constants/lobbyStates');
+                
+                for (const lobbyId of result.lobbyIds) {
+                  try {
+                    await LobbyTimerService.scheduleTransition(lobbyId, LOBBY_STATE.READY_CHECK, result.delayMs || 300_000);
+                  } catch (err) {
+                    logger.error(`[NoRedis] Failed to schedule timer for lobby ${lobbyId}: ${err}`);
+                  }
+                }
+              }
+            } catch (e) {
+              logger.error(`[NoRedis] autoAdvance failed: ${e}`);
+            }
+          }, 0);
+        }
+      }
+    }, { timeout: 10000 }); // 10s timeout for the lock
+  } catch (error) {
+    logger.error(`Error in checkAndAdvanceRound for round ${roundId}: ${error instanceof Error ? error.message : String(error)}`);
+    throw error;
+  }
+}
 

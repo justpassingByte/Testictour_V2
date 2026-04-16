@@ -66,6 +66,7 @@ router.get('/:id/live-summary', async (req: Request, res: Response, next: NextFu
         id: true, name: true, description: true, status: true,
         startTime: true, endTime: true, image: true, region: true,
         maxPlayers: true, entryFee: true, hostFeePercent: true,
+        escrow: { select: { fundedAmount: true } },
         isCommunityMode: true, prizeStructure: true,
         lastSyncTime: true, syncStatus: true, discordUrl: true,
         organizer: { select: { id: true, username: true } },
@@ -82,7 +83,7 @@ router.get('/:id/live-summary', async (req: Request, res: Response, next: NextFu
                 lobbies: {
                   select: {
                     id: true, name: true, state: true,
-                    completedMatchesCount: true,
+                    completedMatchesCount: true, phaseStartedAt: true,
                   }
                 }
               }
@@ -90,27 +91,32 @@ router.get('/:id/live-summary', async (req: Request, res: Response, next: NextFu
           }
         }
       }
-    });
+    }) as any;
 
     if (!tournament) {
       return res.status(404).json({ success: false, message: 'Tournament not found' });
     }
 
     // Flatten to compute live stats server-side
-    const allLobbies = tournament.phases.flatMap(p => p.rounds.flatMap(r => r.lobbies));
-    const playingCount = allLobbies.filter(l => l.state === 'PLAYING').length;
+    const allLobbies = tournament.phases.flatMap((p: any) => p.rounds.flatMap((r: any) => r.lobbies));
+    const playingCount = allLobbies.filter((l: any) => l.state === 'PLAYING').length;
 
     res.json({
       success: true,
       tournament: {
         ...tournament,
         registered: tournament._count.participants,
+        budget: Math.max(
+          tournament.escrow?.fundedAmount || 0,
+          (tournament._count.participants || 0) * (tournament.entryFee || 0) * (1 - (tournament.hostFeePercent || 0.1))
+        ),
         _count: undefined,
+        escrow: undefined,
       },
       liveStats: {
         totalLobbies: allLobbies.length,
         playingLobbies: playingCount,
-        finishedLobbies: allLobbies.filter(l => l.state === 'FINISHED').length,
+        finishedLobbies: allLobbies.filter((l: any) => l.state === 'FINISHED').length,
       }
     });
   } catch (error) {

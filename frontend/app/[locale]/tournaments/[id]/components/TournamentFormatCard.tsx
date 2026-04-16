@@ -49,25 +49,34 @@ export function TournamentFormatCard({ tournament }: TournamentFormatCardProps) 
           <div className="text-muted-foreground">{t("elimination_rule_short")}:</div>
           <div className="font-medium">
             {tournament.phases.map((phase) => {
-              console.log('Debug advancementCondition:', phase.advancementCondition);
               let ruleString = phase.type.charAt(0).toUpperCase() + phase.type.slice(1).replace(/_/g, ' ');
 
               if (phase.advancementCondition && typeof phase.advancementCondition === 'object') {
-                // Check if it's IAdvancementConditionTopN or IAdvancementConditionPlacement (both have 'type' and 'value')
-                if ('type' in phase.advancementCondition && typeof (phase.advancementCondition as any).type === 'string') {
-                  if ((phase.advancementCondition as any).type === 'top_n_scores') {
-                    ruleString += ` (Top ${(phase.advancementCondition as any).value} Score)`;
-                  } else if ((phase.advancementCondition as any).type === 'placement') {
-                    ruleString += ` (Top ${(phase.advancementCondition as any).value} Placement)`;
-                  }
-                }
-                // Check if it's IAdvancementConditionCheckmate (has 'winCondition' and 'pointsToActivate')
-                else if ('winCondition' in phase.advancementCondition && 'pointsToActivate' in phase.advancementCondition) {
-                  ruleString += ` (Points to Activate: ${(phase.advancementCondition as any).pointsToActivate})`;
+                const condition = phase.advancementCondition as any;
+                if (condition.type === 'top_n_scores') {
+                  ruleString += ` (Top ${condition.value} Score)`;
+                } else if (condition.type === 'placement') {
+                  // Explicitly clarify "per lobby" for placement rules
+                  ruleString += ` (${t("top_n_per_lobby", { value: condition.value })})`;
+                } else if ('winCondition' in condition && 'pointsToActivate' in condition) {
+                  ruleString += ` (Points to Activate: ${condition.pointsToActivate})`;
                 }
               }
-              return ruleString;
-            }).filter(Boolean).join(', ')}
+
+              // Add a hint about Swiss reshuffling
+              if (phase.type === 'swiss') {
+                return (
+                  <div key={phase.id} className="flex flex-col">
+                    <span>{ruleString}</span>
+                    <span className="text-[10px] text-primary/80 italic font-normal">
+                      * {t("swiss_reshuffle_note")}
+                    </span>
+                  </div>
+                );
+              }
+
+              return <span key={phase.id}>{ruleString}</span>;
+            })}
           </div>
         </div>
       </CardContent>

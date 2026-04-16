@@ -138,6 +138,18 @@ const autoAdvanceRoundWorker = new Worker(
         } catch (err) {
           logger.error(`Failed to create rounds for phase ${result.nextPhaseId}: ${err instanceof Error ? err.message : String(err)}`);
         }
+      } else if (result._action === 'schedule_lobby_timers' && result.lobbyIds) {
+        logger.info(`AutoAdvanceRoundWorker: Scheduling ready check timers for ${result.lobbyIds.length} lobbies with ${result.delayMs}ms delay`);
+        const LobbyTimerService = (await import('./services/LobbyTimerService')).default;
+        const { LOBBY_STATE } = await import('./constants/lobbyStates');
+        
+        for (const lobbyId of result.lobbyIds) {
+          try {
+            await LobbyTimerService.scheduleTransition(lobbyId, LOBBY_STATE.READY_CHECK, result.delayMs || 300_000);
+          } catch (err) {
+            logger.error(`Failed to schedule timer for lobby ${lobbyId}: ${err}`);
+          }
+        }
       }
     }
 

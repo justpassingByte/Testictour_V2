@@ -299,8 +299,10 @@ export default class RoundService {
                 state: completed > m ? 'FINISHED' : completed === m ? lobby.state : 'WAITING',
                 fetchedResult: completed > m,
                 completedMatchesCount: completed,
-                // Always show current participants (on-demand detail shows historical per-match)
-                players: (lobby.participants as string[]).map(userId => userMap.get(userId) || { id: userId, username: 'Unknown' }),
+                // Hide players for future matches in Swiss/MultiMatch rounds
+                players: m > completed
+                  ? []
+                  : (lobby.participants as string[]).map(userId => userMap.get(userId) || { id: userId, username: 'Unknown' }),
                 roundId: round.id,
               });
             }
@@ -341,7 +343,10 @@ export default class RoundService {
                     state: completed > m ? 'FINISHED' : completed === m ? lobby.state : 'WAITING',
                     fetchedResult: completed > m,
                     completedMatchesCount: completed,
-                    players: (lobby.participants as string[]).map(userId => userMap.get(userId) || { id: userId, username: 'Unknown' }),
+                    // Hide players for future matches in Swiss/MultiMatch rounds
+                    players: m > completed
+                      ? []
+                      : (lobby.participants as string[]).map(userId => userMap.get(userId) || { id: userId, username: 'Unknown' }),
                   };
                 }),
               });
@@ -1037,13 +1042,17 @@ export default class RoundService {
       // maxWait: how long Prisma waits to obtain a connection (5s default → 10s)
       // timeout: max transaction duration (5s default → 30s)
       result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        // [LOCKING] Fetch round with fresh data inside transaction. 
+        // We use a separate count for lobbies if prisma version doesn't support interactive locking.
         const currentRound = await tx.round.findUnique({
           where: { id: roundId },
           include: {
             phase: { include: { tournament: true } },
-            lobbies: true,
+            lobbies: {
+               include: { matches: { include: { matchResults: true } } }
+            },
           },
-        });
+        }) as any;
 
         if (!currentRound) throw new ApiError(404, 'Round not found for auto-advancement.');
 
@@ -1084,7 +1093,17 @@ export default class RoundService {
             });
 
 
-            for (const round of allRoundsInPhase) {
+            const participants = await tx.participant.findMany({
+              where: { tournamentId: tournament.id, eliminated: false },
+            });
+            const shuffled = participants.sort(() => Math.random() - 0.5);
+
+            const lobbySize = currentRound.phase.lobbySize || 8;
+            const maxLobbiesPerGroup = 4;
+            const maxPlayersPerGroup = lobbySize * maxLobbiesPerGroup; // 32 per group
+
+            for (let i = 0; i < allRoundsInPhase.length; i++) {
+              const round = allRoundsInPhase[i];
               if (round.status === 'pending') {
                 await tx.round.update({
                   where: { id: round.id },
@@ -1095,14 +1114,18 @@ export default class RoundService {
 
               // If this round has no lobbies yet, assign them now (pre-assign may have failed)
               if (round.lobbies.length === 0) {
-                const participants = await tx.participant.findMany({
-                  where: { tournamentId: tournament.id, eliminated: false },
-                });
-                const lobbySize = currentRound.phase.lobbySize || 8;
-                const lobbyAssignment = (currentRound.phase.lobbyAssignment || 'random') as 'random' | 'seeded' | 'swiss' | 'snake';
-                const matchesPerRound = currentRound.phase.matchesPerRound || 1;
-                await LobbyService.autoAssignLobbies(round.id, participants, lobbySize, lobbyAssignment, matchesPerRound, tx);
-                // Note: returned transitionsToSchedule are scheduled post-transaction via DB query [PostTx].
+                const start = i * maxPlayersPerGroup;
+                const end = Math.min(start + maxPlayersPerGroup, shuffled.length);
+                const groupParticipants = shuffled.slice(start, end);
+
+                if (groupParticipants.length > 0) {
+                  const lobbyAssignment = (currentRound.phase.lobbyAssignment || 'random') as 'random' | 'seeded' | 'swiss' | 'snake';
+                  const matchesPerRound = currentRound.phase.matchesPerRound || 1;
+                  await LobbyService.autoAssignLobbies(round.id, groupParticipants, lobbySize, lobbyAssignment, matchesPerRound, tx);
+                  logger.info(`[ParallelGroups] Auto-assigned ${groupParticipants.length} participants to Group ${this.groupNameFromNumber(round.roundNumber)}`);
+                } else {
+                  logger.warn(`[ParallelGroups] No participants available for Group ${this.groupNameFromNumber(round.roundNumber)} (Round ${round.id})`);
+                }
               }
             }
           } else {
@@ -1136,25 +1159,30 @@ export default class RoundService {
           return { message: 'Round(s) started successfully', roundId };
         }
 
-        // --- LOGIC TO COMPLETE AN IN_PROGRESS ROUND ---
+          // --- LOGIC TO COMPLETE AN IN_PROGRESS ROUND ---
         if (currentRound.status === 'in_progress') {
-          // Removed verbose log for completing round.
-          // logger.info(`Completing round ${currentRound.id}...`);
+          // Freshly count non-fetched lobbies to avoid stale memory issues
+          const pendingLobbiesCount = await tx.lobby.count({
+            where: { roundId: roundId, fetchedResult: false }
+          });
+          const allLobbiesFetched = pendingLobbiesCount === 0;
+          
+          logger.debug(`Round ${currentRound.id}: pendingLobbiesCount = ${pendingLobbiesCount}.`);
 
-          const allLobbiesFetched = currentRound.lobbies.every(l => l.fetchedResult);
-          logger.debug(`Round ${currentRound.id}: allLobbiesFetched = ${allLobbiesFetched}. Lobbies: ${JSON.stringify(currentRound.lobbies.map(l => ({ id: l.id, fetchedResult: l.fetchedResult })))}`);
-
-          // For checkmate phases, we bypass the allLobbiesFetched check, as matches are created continuously.
-          // The _advanceCheckmate function will determine completion for this phase type.
+          // For checkmate phases, we bypass the allLobbiesFetched check
           if (!allLobbiesFetched && currentRound.phase.type !== 'checkmate') {
-            throw new ApiError(400, 'Cannot complete round. Not all lobbies have results fetched yet.');
+            return { message: `Cannot complete round. ${pendingLobbiesCount} lobbies still pending results.` };
           }
 
           // ═══ MULTI-MATCH SUPPORT: matchesPerRound > 1 → play multiple matches, reshuffle between each ═══
           const matchesPerRound = currentRound.phase.matchesPerRound || 1;
           if (matchesPerRound > 1) {
-            // FIX: Must wait for ALL lobbies to complete their matches before proceeding, use min instead of max.
-            const minCompletedMatches = Math.min(...currentRound.lobbies.map((l: any) => l.completedMatchesCount || 0));
+            // Fetch fresh lobby match counts to avoid stale data blocking multi-round advancement
+            const lobbiesFresh = await tx.lobby.findMany({
+                where: { roundId: currentRound.id },
+                select: { completedMatchesCount: true }
+            });
+            const minCompletedMatches = Math.min(...lobbiesFresh.map((l: any) => l.completedMatchesCount || 0));
             logger.info(`[MultiMatch] Round ${currentRound.id}: Match (min) ${minCompletedMatches}/${matchesPerRound} completed.`);
 
             if (minCompletedMatches < matchesPerRound) {
@@ -1193,9 +1221,14 @@ export default class RoundService {
               if (lobbyAssignment === 'swiss' || lobbyAssignment === 'seeded' || lobbyAssignment === 'snake') {
                 const parts = await tx.participant.findMany({
                   where: { userId: { in: uniqueParticipantIds }, tournamentId: currentRound.phase.tournamentId },
-                  select: { userId: true, scoreTotal: true }
+                  select: { userId: true, scoreTotal: true, user: { select: { username: true } } }
                 });
                 parts.sort((a, b) => (b.scoreTotal || 0) - (a.scoreTotal || 0));
+
+                logger.info(`[MultiMatch] Sorted logic (${lobbyAssignment}) for Round ${currentRound.id}:`);
+                parts.forEach((p: any, idx) => {
+                  logger.info(`  ${idx + 1}. ${p.user?.username || p.userId}: ${p.scoreTotal} pts`);
+                });
                 
                 if (lobbyAssignment === 'snake') {
                   const numLobbies = Math.ceil(parts.length / (currentRound.phase.lobbySize || 8));
@@ -1247,7 +1280,16 @@ export default class RoundService {
                 (global as any).io.to(`tournament:${tId}`).emit('tournament_update', { type: 'lobbies_reshuffled', matchNumber: minCompletedMatches, matchesPerRound });
               }
 
-              return { message: `Match ${minCompletedMatches}/${matchesPerRound} completed. Lobbies reshuffled for next match.`, matchNumber: minCompletedMatches, matchesPerRound };
+
+              return { 
+                _action: 'schedule_lobby_timers',
+                lobbyIds: currentRound.lobbies.map(l => l.id),
+                delayMs: 300_000, // 5 minutes preparation time
+                message: `Match ${minCompletedMatches}/${matchesPerRound} completed. Lobbies reshuffled for next match.`, 
+                matchNumber: minCompletedMatches, 
+                matchesPerRound,
+                tournamentId: currentRound.phase.tournamentId
+              };
             }
             logger.info(`[MultiMatch] All ${matchesPerRound} matches done for round ${currentRound.id}. Finalizing round.`);
           }
@@ -1275,7 +1317,8 @@ export default class RoundService {
             if (topNPerLobby) {
               logger.info(`[ParallelGroups/Placement] Group ${currentRound.roundNumber} done. Applying per-lobby elimination (top ${topNPerLobby}/lobby) immediately.`);
               // Pass no phaseId → operates only on THIS round's lobbies
-              await this._advanceByPlacement(tx, currentRound, topNPerLobby);
+              // Phase-wide advancement if transitioning, or round-specific if just one round
+              await this._advanceByPlacement(tx, currentRound, topNPerLobby, currentPhase.id);
             }
             // If more groups are still running, stop here (don't advance phase yet)
             if (totalRoundsInPhase > 1 && completedRoundsInPhase < totalRoundsInPhase) {
@@ -1298,6 +1341,10 @@ export default class RoundService {
               return { message: `Round ${currentRound.id} completed. Waiting for next round in Checkmate phase.` };
             }
           }
+
+          // ═══ PHASE TRANSITION: ALL parallel groups completed! ═══
+          logger.info(`[ParallelGroups] All ${totalRoundsInPhase} groups completed. Checking for phase transition.`);
+          // (Delay removed for better UX, relying on post-transaction RaceConditionFix for final consistency)
 
           logger.debug(`Round ${currentRound.id}: All rounds in current phase (${currentPhase.id}) are completed. Checking for next phase.`);
           // Check if this was the last phase
@@ -1411,11 +1458,12 @@ export default class RoundService {
           }
 
           // ═══ ALL rounds completed but phase stuck as in_progress — RE-RUN PHASE TRANSITION ═══
-          logger.warn(`[Recovery] Phase ${currentPhase.id} stuck as 'in_progress' with ALL ${totalRoundsInPhase} rounds completed! Re-running phase transition.`);
+          logger.warn(`[Recovery] Phase ${currentPhase.id} stuck as 'in_progress' with ALL ${totalRoundsInPhase} rounds completed! Waiting 1s for DB consistency...`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
 
-          // Apply advancement condition if it's score-based (placement was already applied per-round)
+          // Apply advancement condition if scores or placement need recalculation
           const advancementType = (currentPhase as any).advancementCondition?.type;
-          if (advancementType !== 'placement') {
+          if (advancementType) {
             try {
               const advancementResult = await this._applyAdvancementCondition(tx, currentRound, currentPhase);
               if (!advancementResult.continue) {

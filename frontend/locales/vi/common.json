@@ -714,6 +714,8 @@
   "elimination_phase_desc": "Người chơi thua một trận sẽ bị loại khỏi giải đấua. Giải đấu tiếp tục cho đến khi chỉ còn một số lượng người chơi nhất định hoặc tìm ra nhà vô địch.",
   "elimination_rule": "Luật loại",
   "elimination_rule_short": "Luật loại",
+  "top_n_per_lobby": "Top {value} mỗi bảng",
+  "swiss_reshuffle_note": "Bảng được xếp lại theo điểm số sau mỗi trận",
   "email": "Email",
   "emerald": "ngọc lục bảo",
   "enable_automatic_processing_through_paym_desc": "Cho phép xử lý tự động thông qua cổng thanh toán thay vì quản lý thủ công",
