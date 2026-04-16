@@ -1283,7 +1283,7 @@ export default class RoundService {
 
               return { 
                 _action: 'schedule_lobby_timers',
-                lobbyIds: currentRound.lobbies.map(l => l.id),
+                lobbyIds: (currentRound.lobbies as any[]).map((l: any) => l.id),
                 delayMs: 300_000, // 5 minutes preparation time
                 message: `Match ${minCompletedMatches}/${matchesPerRound} completed. Lobbies reshuffled for next match.`, 
                 matchNumber: minCompletedMatches, 
