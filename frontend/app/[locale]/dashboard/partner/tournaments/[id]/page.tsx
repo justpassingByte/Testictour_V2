@@ -55,7 +55,7 @@ export default function TournamentManagePage() {
 
   const [tournament, setTournament] = useState<ITournament | null>(null)
   const [participants, setParticipants] = useState<IParticipant[]>([])
-  const [allParticipants, setAllParticipants] = useState<IParticipant[]>([])
+  const [topPlayers, setTopPlayers] = useState<IParticipant[]>([])
   const [totalParticipants, setTotalParticipants] = useState(0)
   const [listPage, setListPage] = useState(1)
   const [searchParticipant, setSearchParticipant] = useState("")
@@ -88,9 +88,10 @@ export default function TournamentManagePage() {
         TournamentService.listParticipants(tournamentId, listPage, LIMIT).catch(() => ({ participants: [], total: 0 })),
       ])
       
+      // Lightweight: only fetch top 3 for winner banner/podium instead of ALL participants
       if (t.status === 'COMPLETED') {
-        const allRes = await TournamentService.listParticipants(tournamentId, 1, 9999).catch(() => ({ participants: [] }));
-        setAllParticipants(allRes.participants || []);
+        const topRes = await TournamentService.topParticipants(tournamentId, 3).catch(() => ({ participants: [] }));
+        setTopPlayers(topRes.participants || []);
       }
 
       setTournament(t)
@@ -475,10 +476,9 @@ export default function TournamentManagePage() {
 
       {/* ─── Winner Banner (shown when COMPLETED) ─── */}
       {tournament.status === 'COMPLETED' && (() => {
-        const sortedByScore = [...allParticipants].sort((a, b) => (b.scoreTotal || 0) - (a.scoreTotal || 0));
-        const winner = sortedByScore[0];
+        const winner = topPlayers[0];
         const prizeStructure = tournament.prizeStructure as number[] | null;
-        const totalPot = tournament.budget || (allParticipants.length * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)));
+        const totalPot = tournament.budget || (totalParticipants * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)));
         const winnerPrize = prizeStructure && prizeStructure.length > 0 ? ((prizeStructure[0] / 100) * totalPot) : null;
         return winner ? (
           <div className="relative overflow-hidden rounded-xl border border-yellow-500/30 bg-gradient-to-r from-yellow-500/10 via-amber-500/5 to-yellow-500/10 p-5">
@@ -919,7 +919,7 @@ export default function TournamentManagePage() {
             tournamentName={tournament.name}
             tournamentStatus={tournament.status}
             isCommunityMode={tournament.isCommunityMode!}
-            participants={allParticipants.length > 0 ? allParticipants : participants}
+            participants={participants}
           />
         </TabsContent>
 
@@ -1121,9 +1121,9 @@ export default function TournamentManagePage() {
             <div className="space-y-4">
               {/* Podium */}
               {(() => {
-                const sorted = [...allParticipants].sort((a, b) => (b.scoreTotal || 0) - (a.scoreTotal || 0));
+                const sorted = topPlayers; // Already sorted by scoreTotal desc from API
                 const prizeStructure = tournament.prizeStructure as number[] | null;
-                const totalPot = tournament.budget || (allParticipants.length * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)));
+                const totalPot = tournament.budget || (totalParticipants * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)));
                 const getPrize = (rank: number) => prizeStructure && prizeStructure[rank] ? ((prizeStructure[rank] / 100) * totalPot) : 0;
                 const podium = [sorted[1], sorted[0], sorted[2]];
                 const podiumHeights = ['h-20', 'h-28', 'h-16'];
@@ -1190,12 +1190,11 @@ export default function TournamentManagePage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {[...allParticipants]
-                        .sort((a, b) => (b.scoreTotal || 0) - (a.scoreTotal || 0))
+                      {topPlayers
                         .map((p, i) => {
                           const rank = i + 1;
                           const prizeStructure = tournament.prizeStructure as number[] | null;
-                          const totalPot = tournament.budget || (allParticipants.length * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)));
+                          const totalPot = tournament.budget || (totalParticipants * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)));
                           const prizePercent = prizeStructure && prizeStructure[i] ? prizeStructure[i] : 0;
                           const prizeAmount = (prizePercent / 100) * totalPot;
                           const hasPrize = prizeAmount > 0;

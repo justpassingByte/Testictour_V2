@@ -303,6 +303,46 @@ export default class ParticipantService {
     });
   }
 
+  /**
+   * Paginated leaderboard — uses DB-level sorting + LIMIT/OFFSET
+   * Much faster than the full leaderboard() method for large tournaments.
+   */
+  static async paginatedLeaderboard(tournamentId: string, page: number = 1, limit: number = 50) {
+    const skip = (page - 1) * limit;
+
+    const [data, total] = await Promise.all([
+      prisma.participant.findMany({
+        where: { tournamentId, eliminated: false },
+        include: {
+          user: { select: { id: true, username: true, riotGameName: true, riotGameTag: true, rank: true, region: true } },
+          rewards: true,
+        },
+        orderBy: { scoreTotal: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.participant.count({ where: { tournamentId, eliminated: false } }),
+    ]);
+
+    return { data, total, page, limit };
+  }
+
+  /**
+   * Lightweight top-N participants for winner banners etc.
+   * Only fetches the top N participants sorted by score.
+   */
+  static async topParticipants(tournamentId: string, limit: number = 3) {
+    return prisma.participant.findMany({
+      where: { tournamentId },
+      include: {
+        user: { select: { id: true, username: true, riotGameName: true, riotGameTag: true, puuid: true, rank: true, region: true } },
+        rewards: true,
+      },
+      orderBy: { scoreTotal: 'desc' },
+      take: limit,
+    });
+  }
+
   static async update(participantId: string, data: any) {
     return prisma.participant.update({ where: { id: participantId }, data });
   }

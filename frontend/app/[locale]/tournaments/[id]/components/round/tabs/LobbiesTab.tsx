@@ -24,13 +24,13 @@ function LobbyStateBadge({ state, t }: { state?: string, t: any }) {
 
   const config: Record<string, { label: string; class: string; pulse?: boolean }> = {
     WAITING: { label: t('waiting'), class: 'text-muted-foreground border-muted' },
-    READY_CHECK: { label: t('ready_check'), class: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40', pulse: true },
-    GRACE_PERIOD: { label: t('grace_period'), class: 'bg-orange-500/20 text-orange-400 border-orange-500/40', pulse: true },
-    STARTING: { label: t('starting'), class: 'bg-green-500/20 text-green-400 border-green-500/40', pulse: true },
+    READY_CHECK: { label: t('ready_check'), class: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border-yellow-500/40', pulse: true },
+    GRACE_PERIOD: { label: t('grace_period'), class: 'bg-orange-500/20 text-orange-700 dark:text-orange-400 border-orange-500/40', pulse: true },
+    STARTING: { label: t('starting'), class: 'bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/40', pulse: true },
     PLAYING: { label: t('in_progress'), class: 'bg-primary/20 text-primary border-primary/40', pulse: true },
-    FINISHED: { label: t('finished'), class: 'bg-green-700/20 text-green-600 border-green-700/30' },
-    PAUSED: { label: t('paused'), class: 'bg-orange-500/20 text-orange-400 border-orange-500/40' },
-    ADMIN_INTERVENTION: { label: t('admin_review'), class: 'bg-red-500/20 text-red-400 border-red-500/40', pulse: true },
+    FINISHED: { label: t('finished'), class: 'bg-green-700/20 text-green-700 dark:text-green-500 border-green-700/30' },
+    PAUSED: { label: t('paused'), class: 'bg-orange-500/20 text-orange-700 dark:text-orange-400 border-orange-500/40' },
+    ADMIN_INTERVENTION: { label: t('admin_review'), class: 'bg-red-500/20 text-red-700 dark:text-red-400 border-red-500/40', pulse: true },
   }
 
   const entry = config[state] ?? { label: state, class: 'text-muted-foreground border-muted' }
@@ -142,9 +142,9 @@ export function LobbiesTab({ round, allPlayers, tournamentId }: LobbiesTabProps)
                           <Badge
                             variant="outline"
                             className={`
-                                  ${player.status === "advanced" ? "bg-green-500/20 text-green-500" :
-                                player.status === "eliminated" ? "bg-red-500/20 text-red-500" :
-                                  "bg-slate-500/20 text-slate-400"
+                                  ${player.status === "advanced" ? "bg-green-500/20 text-green-700 dark:text-green-400" :
+                                player.status === "eliminated" ? "bg-red-500/20 text-red-700 dark:text-red-400" :
+                                  "bg-slate-500/20 text-slate-700 dark:text-slate-400"
                               }
                                 `}
                           >

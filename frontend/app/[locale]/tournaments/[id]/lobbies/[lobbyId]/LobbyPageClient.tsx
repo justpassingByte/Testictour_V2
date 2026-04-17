@@ -588,8 +588,10 @@ export default function LobbyPageClient({ lobbyId, tournamentId, initialState, l
           </div>
         </div>
       ) : (
-        <div className="flex items-center justify-center h-64 text-muted-foreground">
-          Loading lobby…
+        <div className="flex flex-col items-center justify-center min-h-[60vh] text-muted-foreground w-full">
+          <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
+          <h2 className="text-xl font-semibold">Connecting to Lobby...</h2>
+          <p className="text-sm">Fetching real-time state and players data</p>
         </div>
       )}
     </div>

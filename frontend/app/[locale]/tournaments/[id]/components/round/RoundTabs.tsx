@@ -156,7 +156,7 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
               const hasAnyData = isGrimoire || !!matchInfo;
 
               if (!hasAnyData) return (
-                <Card key={match.id} className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20">
+                <Card key={match.id} className="bg-card dark:bg-card/80 backdrop-blur-lg border border-white/20">
                   <CardHeader>
                     <CardTitle>{t("match")} {matchIndex + 1}</CardTitle>
                     <CardDescription>{t("match_data_loading")}</CardDescription>
@@ -201,7 +201,7 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
               return (
                 <Card 
                   key={match.id}
-                  className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1 animate-fade-in-up"
+                  className="bg-card dark:bg-card/80 backdrop-blur-lg border border-white/20 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1 animate-fade-in-up"
                   style={{ animationDelay: `${(lobbyIndex * 100) + (matchIndex * 50)}ms` }}
                 >
                   <CardHeader>
@@ -298,10 +298,10 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
                                         <td className="py-2 px-4 text-center">
                                           <span className={`
                                             inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium
-                                            ${result.placement === 1 ? "bg-yellow-500/20 text-yellow-500" : ""}
-                                            ${result.placement === 2 ? "bg-gray-400/20 text-gray-400" : ""}
-                                            ${result.placement === 3 ? "bg-amber-700/20 text-amber-700" : ""}
-                                            ${result.placement > 3 ? "bg-secondary" : ""}
+                                            ${result.placement === 1 ? "bg-yellow-500/20 text-yellow-700 dark:text-yellow-500" : ""}
+                                            ${result.placement === 2 ? "bg-gray-400/20 text-gray-700 dark:text-gray-300" : ""}
+                                            ${result.placement === 3 ? "bg-amber-500/20 text-amber-700 dark:text-amber-500" : ""}
+                                            ${result.placement > 3 ? "bg-secondary text-secondary-foreground" : ""}
                                           `}>
                                             {result.placement}
                                           </span>
@@ -324,7 +324,7 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
             })}
             
             {(!lobby.matches || lobby.matches.length === 0) && (
-              <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20">
+              <Card className="bg-card dark:bg-card/80 backdrop-blur-lg border border-white/20">
                 <CardContent className="py-4">
                   <p className="text-center text-muted-foreground">{t("no_matches_lobby")}</p>
                 </CardContent>
@@ -334,7 +334,7 @@ export function RoundTabs({ round, tournament, allPlayers, numMatches }: RoundTa
         ))}
         
         {(!round.lobbies || round.lobbies.length === 0) && (
-          <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20">
+          <Card className="bg-card dark:bg-card/80 backdrop-blur-lg border border-white/20">
             <CardHeader>
               <CardTitle>{t("match_details")}</CardTitle>
               <CardDescription>{t("detailed_breakdown_matches")}</CardDescription>

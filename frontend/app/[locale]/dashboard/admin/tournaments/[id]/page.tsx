@@ -57,8 +57,8 @@ export default function TournamentManagePage() {
   const [listPage, setListPage] = useState(1)
   const [searchParticipant, setSearchParticipant] = useState("")
   const LIMIT = 10
-  // Full participant list for ranking calculations (used when tournament is completed)
-  const [allParticipants, setAllParticipants] = useState<IParticipant[]>([])
+  // Top participants for podium/winner display (lightweight fetch — only top 3)
+  const [topPlayers, setTopPlayers] = useState<IParticipant[]>([])
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -91,12 +91,12 @@ export default function TournamentManagePage() {
       setTournament(t)
       setParticipants(p.participants || [])
       setTotalParticipants(p.total || 0)
-      // If tournament is completed, fetch full participant list for accurate rankings
+      // Lightweight: only fetch top 3 for winner banner/podium instead of ALL participants
       if (t.status === 'COMPLETED') {
-        const full = await TournamentService.listParticipants(tournamentId, 1, 1000).catch(() => ({ participants: [], total: 0 }))
-        setAllParticipants(full.participants || [])
+        const topRes = await TournamentService.topParticipants(tournamentId, 3).catch(() => ({ participants: [] }))
+        setTopPlayers(topRes.participants || [])
       } else {
-        setAllParticipants([])
+        setTopPlayers([])
       }
       setEditForm({
         name: t.name,
@@ -1255,11 +1255,10 @@ export default function TournamentManagePage() {
             <div className="space-y-4">
               {/* Podium */}
               {(() => {
-                // Use full participant list for accurate podium when available
-                const rankingList = allParticipants.length > 0 ? allParticipants : participants;
-                const sorted = [...rankingList].sort((a, b) => (b.scoreTotal || 0) - (a.scoreTotal || 0));
+                // Use lightweight top players from API for accurate podium
+                const sorted = topPlayers; // Already sorted by scoreTotal desc from API
                 const prizeStructure = tournament.prizeStructure as number[] | null;
-                const totalPot = tournament.budget || (rankingList.length * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)));
+                const totalPot = tournament.budget || (totalParticipants * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)));
                 const getPrize = (rank: number) => prizeStructure && prizeStructure[rank] ? ((prizeStructure[rank] / 100) * totalPot) : 0;
                 // Correct podium order: 1st, 2nd, 3rd
                 const podium = [sorted[0], sorted[1], sorted[2]]; // 1st, 2nd, 3rd
@@ -1328,13 +1327,11 @@ export default function TournamentManagePage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {[...(allParticipants.length > 0 ? allParticipants : participants)]
-                        .sort((a, b) => (b.scoreTotal || 0) - (a.scoreTotal || 0))
+                      {topPlayers
                         .map((p, i) => {
                           const rank = i + 1;
                           const prizeStructure = tournament.prizeStructure as number[] | null;
-                          const rankingList = allParticipants.length > 0 ? allParticipants : participants;
-                          const totalPot = tournament.budget || (rankingList.length * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)));
+                          const totalPot = tournament.budget || (totalParticipants * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)));
                           const prizePercent = prizeStructure && prizeStructure[i] ? prizeStructure[i] : 0;
                           const prizeAmount = (prizePercent / 100) * totalPot;
                           const hasPrize = prizeAmount > 0;

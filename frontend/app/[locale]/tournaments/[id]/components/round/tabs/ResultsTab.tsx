@@ -141,7 +141,7 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
       </div>
 
       {/* Results Table */}
-      <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20">
+      <Card className="bg-card dark:bg-card/80 backdrop-blur-lg border border-white/20">
         <CardContent className="pt-6">
           <Table>
             <TableHeader>
@@ -199,20 +199,20 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
                     <TableCell key={i} className="text-center">
                       {player.placements[i] !== undefined ? (
                         <div className="flex flex-col items-center">
-                          <span
-                            className={`
-                                inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium mb-1
-                                ${player.placements[i] === 1 ? "bg-yellow-500/20 text-yellow-500" : ""}
-                                ${player.placements[i] === 2 ? "bg-gray-400/20 text-gray-400" : ""}
-                                ${player.placements[i] === 3 ? "bg-amber-700/20 text-amber-700" : ""}
-                                ${player.placements[i] > 3 ? "bg-secondary" : ""}
-                              `}
-                          >
-                            {player.placements[i]}
-                          </span>
-                          <span className="text-xs font-medium">{player.points[i]} pts</span>
-                          {isCheckmate && player.placements[i] === 1 && i === player.placements.length - 1 && (
-                            <Badge variant="outline" className="mt-1 bg-yellow-500/20 text-yellow-500 text-xs">
+                            <span
+                              className={`
+                                  inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium mb-1
+                                  ${player.placements[i] === 1 ? "bg-yellow-500/20 text-yellow-700 dark:text-yellow-500" : ""}
+                                  ${player.placements[i] === 2 ? "bg-gray-400/20 text-gray-700 dark:text-gray-300" : ""}
+                                  ${player.placements[i] === 3 ? "bg-amber-500/20 text-amber-700 dark:text-amber-500" : ""}
+                                  ${player.placements[i] > 3 ? "bg-secondary text-secondary-foreground" : ""}
+                                `}
+                            >
+                              {player.placements[i]}
+                            </span>
+                            <span className="text-xs font-medium">{player.points[i]} pts</span>
+                            {isCheckmate && player.placements[i] === 1 && i === player.placements.length - 1 && (
+                              <Badge variant="outline" className="mt-1 bg-yellow-500/20 text-yellow-700 dark:text-yellow-500 text-xs">
                               {t("winner")}
                             </Badge>
                           )}
@@ -227,11 +227,11 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
                       <Badge
                         variant="outline"
                         className={`
-                              ${displayStatus === "advanced" ? "bg-green-500/20 text-green-500" : ""}
-                              ${displayStatus === "eliminated" ? "bg-red-500/20 text-red-500" : ""}
-                              ${displayStatus === "rewarded" ? "bg-purple-500/20 text-purple-500" : ""}
-                              ${displayStatus === "completed" ? "bg-blue-500/20 text-blue-400" : ""}
-                              ${displayStatus === "pending" ? "bg-slate-500/20 text-slate-400" : ""}
+                              ${displayStatus === "advanced" ? "bg-green-500/20 text-green-700 dark:text-green-400" : ""}
+                              ${displayStatus === "eliminated" ? "bg-red-500/20 text-red-700 dark:text-red-400" : ""}
+                              ${displayStatus === "rewarded" ? "bg-purple-500/20 text-purple-700 dark:text-purple-400" : ""}
+                              ${displayStatus === "completed" ? "bg-blue-500/20 text-blue-700 dark:text-blue-400" : ""}
+                              ${displayStatus === "pending" ? "bg-slate-500/20 text-slate-700 dark:text-slate-400" : ""}
                             `}
                       >
                         {displayStatus === "pending" ? t("awaiting") : displayStatus === "completed" ? t("finished") : t(displayStatus as any)}

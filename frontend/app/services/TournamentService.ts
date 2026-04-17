@@ -17,12 +17,11 @@ export const TournamentService = {
   async detail(id: string): Promise<ITournament> {
     try {
       const response = await api.get(`/tournaments/${id}`);
-      console.log("Raw response from TournamentService.detail:", response.data);
       const rawTournament = response.data.tournament; // Access the nested tournament object
       const tournament: ITournament = {
         ...rawTournament,
         rounds: rawTournament.config?.phases || [], // Map phases to rounds
-        participants: rawTournament.participants || [], // Assuming participants will be here or an empty array
+        participants: rawTournament.participants || [], // May be empty — use listParticipants for full data
       };
       return tournament;
     } catch  {
@@ -95,6 +94,34 @@ export const TournamentService = {
     } catch  {
       console.error('Error fetching tournament participants:');
       throw new Error('Error fetching tournament participants');
+    }
+  },
+
+  /**
+   * Lightweight endpoint: fetch only top N participants (sorted by score desc).
+   * Use for winner banners, podium displays, etc.
+   */
+  async topParticipants(tournamentId: string, limit: number = 3): Promise<{ participants: IParticipant[] }> {
+    try {
+      const response = await api.get(`/tournaments/${tournamentId}/top-participants?limit=${limit}`);
+      return response.data;
+    } catch {
+      console.error('Error fetching top participants:');
+      return { participants: [] };
+    }
+  },
+
+  /**
+   * Paginated leaderboard: DB-sorted by scoreTotal desc with pagination.
+   * Use for results pages and final standings.
+   */
+  async paginatedLeaderboard(tournamentId: string, page: number = 1, limit: number = 50): Promise<{ data: IParticipant[], total: number, page: number, limit: number }> {
+    try {
+      const response = await api.get(`/tournaments/${tournamentId}/leaderboard/paginated?page=${page}&limit=${limit}`);
+      return response.data;
+    } catch {
+      console.error('Error fetching paginated leaderboard:');
+      return { data: [], total: 0, page, limit };
     }
   },
 

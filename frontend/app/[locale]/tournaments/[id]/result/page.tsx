@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { SyncStatus } from "@/components/sync-status"
 import { useTranslations } from "next-intl"
 import api from "@/app/lib/apiConfig"
+import { TournamentService } from "@/app/services/TournamentService"
 
 interface FinalResult {
   rank: number
@@ -53,6 +54,9 @@ export default function TournamentResultsPage({ params }: { params: { id: string
   const [selectedRegion, setSelectedRegion] = useState<string>("all")
   const [sortBy, setSortBy] = useState<string>("rank")
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
+  const [leaderboardPage, setLeaderboardPage] = useState(1)
+  const [leaderboardTotal, setLeaderboardTotal] = useState(0)
+  const LEADERBOARD_LIMIT = 50
   // Track whether initial data has been loaded to avoid skeleton flash on manual sync
   const hasLoadedRef = useRef(false)
 
@@ -60,26 +64,26 @@ export default function TournamentResultsPage({ params }: { params: { id: string
     try {
       // Only show full-screen skeleton on very first load
       if (!hasLoadedRef.current) setLoading(true)
-      const [tourRes, participantsRes] = await Promise.all([
-        api.get(`/tournaments/${params.id}`),
-        api.get(`/tournaments/${params.id}/participants`),
-      ])
+      const tourRes = await api.get(`/tournaments/${params.id}`)
 
       const tour = tourRes.data?.data || tourRes.data
+      const tourDetails = tour.tournament || tour
       setTournament({
-        id: tour.id,
-        name: tour.name,
-        status: tour.status,
-        totalRounds: tour.phases?.reduce((acc: number, p: any) => acc + (p.rounds?.length || 0), 0) || 0,
-        totalPlayers: tour.participants?.length || 0,
-        prizePool: tour.prizePool || tour.entryFee * (tour.participants?.length || 0) || "N/A",
+        id: tourDetails.id,
+        name: tourDetails.name,
+        status: tourDetails.status,
+        totalRounds: tourDetails.phases?.reduce((acc: number, p: any) => acc + (p.rounds?.length || 0), 0) || 0,
+        totalPlayers: tourDetails.registered || tourDetails.participants?.length || 0,
+        prizePool: tourDetails.prizePool || tourDetails.entryFee * (tourDetails.registered || 0) || "N/A",
       })
 
-      // Build final standings from participants sorted by scoreTotal
-      const parts: any[] = participantsRes.data?.data || participantsRes.data || []
-      const sorted = [...parts].sort((a, b) => (b.scoreTotal || 0) - (a.scoreTotal || 0))
-
-      setFinalResults(sorted.map((p, i) => ({
+      // Use paginated leaderboard instead of fetching ALL participants
+      const leaderboardRes = await TournamentService.paginatedLeaderboard(params.id, 1, LEADERBOARD_LIMIT)
+      setLeaderboardTotal(leaderboardRes.total)
+      setLeaderboardPage(1)
+      
+      const sorted = leaderboardRes.data || []
+      setFinalResults(sorted.map((p: any, i: number) => ({
         rank: i + 1,
         userId: p.userId || p.id,
         player: p.user?.riotGameName || p.user?.username || p.inGameName || "Unknown",
@@ -92,9 +96,9 @@ export default function TournamentResultsPage({ params }: { params: { id: string
       })))
 
       // Build round-by-round from phases
-      if (tour.phases?.length) {
+      if (tourDetails.phases?.length) {
         const rr: RoundResult[] = []
-        for (const phase of tour.phases) {
+        for (const phase of tourDetails.phases) {
           for (const round of phase.rounds || []) {
             const matchRows: { match: number; lobby: string; winner: string; avgPlacement: number }[] = []
             for (const lobby of round.lobbies || []) {
@@ -123,6 +127,30 @@ export default function TournamentResultsPage({ params }: { params: { id: string
       setLoading(false)
     }
   }, [params.id])
+
+  // Load more leaderboard entries
+  const loadMoreResults = useCallback(async () => {
+    try {
+      const nextPage = leaderboardPage + 1
+      const res = await TournamentService.paginatedLeaderboard(params.id, nextPage, LEADERBOARD_LIMIT)
+      const offset = (nextPage - 1) * LEADERBOARD_LIMIT
+      const newResults = (res.data || []).map((p: any, i: number) => ({
+        rank: offset + i + 1,
+        userId: p.userId || p.id,
+        player: p.user?.riotGameName || p.user?.username || p.inGameName || "Unknown",
+        region: p.region || p.user?.region || "N/A",
+        totalPoints: p.scoreTotal || 0,
+        averagePlacement: p.stats?.averagePlacement || 0,
+        firstPlaces: p.stats?.firstPlaces || 0,
+        topFourRate: p.stats?.topFourRate ? p.stats.topFourRate * 100 : 0,
+        prize: undefined,
+      }))
+      setFinalResults(prev => [...prev, ...newResults])
+      setLeaderboardPage(nextPage)
+    } catch (err) {
+      console.error("Failed to load more results:", err)
+    }
+  }, [params.id, leaderboardPage])
 
   useEffect(() => {
     fetchData()
@@ -334,6 +362,17 @@ export default function TournamentResultsPage({ params }: { params: { id: string
                       ))}
                     </TableBody>
                   </Table>
+                )}
+                {finalResults.length < leaderboardTotal && (
+                  <div className="flex justify-center py-4 border-t border-white/10">
+                    <Button 
+                      variant="outline" 
+                      onClick={loadMoreResults}
+                      className="rounded-full px-8"
+                    >
+                      {t("load_more_participants")} ({finalResults.length}/{leaderboardTotal})
+                    </Button>
+                  </div>
                 )}
               </CardContent>
             </Card>

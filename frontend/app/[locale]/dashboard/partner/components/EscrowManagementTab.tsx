@@ -14,6 +14,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { useTranslations } from "next-intl"
 import api from "@/app/lib/apiConfig"
 import { IParticipant } from "@/app/types/tournament"
+import { TournamentService } from "@/app/services/TournamentService"
 import { useCurrencyRate } from "@/app/hooks/useCurrencyRate"
 
 interface EscrowState {
@@ -42,6 +43,8 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
   
   const [loading, setLoading] = useState(true)
   const [escrow, setEscrow] = useState<EscrowState | null>(null)
+  // Self-managed participant list for accurate payout calculations
+  const [payoutParticipants, setPayoutParticipants] = useState<IParticipant[]>([])
   
   // Funding state
   const [fundingLoading, setFundingLoading] = useState(false)
@@ -67,8 +70,22 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
     }
   }
 
+  // Fetch top participants for payout calculations (up to 10 prize winners)
+  const fetchPayoutParticipants = async () => {
+    if (tournamentStatus !== 'COMPLETED') return
+    try {
+      const { participants: topPlayers } = await TournamentService.topParticipants(tournamentId, 10)
+      setPayoutParticipants(topPlayers || [])
+    } catch {
+      // fallback to props if API fails
+      setPayoutParticipants(participants)
+    }
+  }
+
   const getCalculatedPayouts = () => {
-    const activeParticipants = [...participants]
+    // Use self-fetched participants for accurate calculations
+    const activeList = payoutParticipants.length > 0 ? payoutParticipants : participants
+    const activeParticipants = [...activeList]
       .filter(p => (p.scoreTotal || 0) > 0)
       .sort((a, b) => (b.scoreTotal || 0) - (a.scoreTotal || 0))
 
@@ -80,7 +97,7 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
       const keys = Object.keys(obj).sort((a, b) => Number(a) - Number(b))
       dist = keys.map(k => obj[k])
     } else {
-      const count = participants.length
+      const count = activeParticipants.length
       dist = count >= 8 ? [0.4, 0.3, 0.2, 0.1] : count >= 6 ? [0.5, 0.3, 0.2] : count >= 4 ? [0.6, 0.4] : [1.0]
     }
 
@@ -125,6 +142,7 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
 
   useEffect(() => {
     fetchEscrow()
+    fetchPayoutParticipants()
   }, [tournamentId])
 
   const handleFund = async () => {
@@ -151,7 +169,8 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
   const handleRequestPayout = async () => {
     setPayoutLoading(true)
     try {
-      const activeParticipants = [...participants]
+      const activeList = payoutParticipants.length > 0 ? payoutParticipants : participants
+      const activeParticipants = [...activeList]
         .filter(p => (p.scoreTotal || 0) > 0)
         .sort((a, b) => (b.scoreTotal || 0) - (a.scoreTotal || 0))
 
@@ -164,7 +183,7 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
         const keys = Object.keys(obj).sort((a, b) => Number(a) - Number(b))
         dist = keys.map(k => obj[k])
       } else {
-        const count = participants.length
+        const count = activeParticipants.length
         dist = count >= 8 ? [0.4, 0.3, 0.2, 0.1] : count >= 6 ? [0.5, 0.3, 0.2] : count >= 4 ? [0.6, 0.4] : [1.0]
       }
 

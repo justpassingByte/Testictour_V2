@@ -53,5 +53,24 @@ export const ParticipantController = {
       } catch (err) {
         next(err);
       }
+    },
+    async paginatedLeaderboard(req: Request, res: Response, next: NextFunction) {
+      try {
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+        const result = await ParticipantService.paginatedLeaderboard(req.params.tournamentId, page, limit);
+        res.json(result);
+      } catch (err) {
+        next(err);
+      }
+    },
+    async topParticipants(req: Request, res: Response, next: NextFunction) {
+      try {
+        const limit = Math.min(parseInt(req.query.limit as string) || 3, 10);
+        const topPlayers = await ParticipantService.topParticipants(req.params.tournamentId, limit);
+        res.json({ participants: topPlayers });
+      } catch (err) {
+        next(err);
+      }
     }
 }; 

@@ -4,16 +4,15 @@ import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTournamentSocket } from '@/app/hooks/useTournamentSocket'
 import { TournamentTabsContent } from './TournamentTabsContent'
-import { ITournament, IParticipant } from '@/app/types/tournament'
+import { ITournament } from '@/app/types/tournament'
 import { useTournamentStore } from '@/app/stores/tournamentStore'
 
 interface TabsContentClientWrapperProps {
   tournament: ITournament;
-  participants: IParticipant[];
 }
 
 // This is a client component wrapper for TournamentTabsContent
-export default function TabsContentClientWrapper({ tournament: initialTournament, participants }: TabsContentClientWrapperProps) {
+export default function TabsContentClientWrapper({ tournament: initialTournament }: TabsContentClientWrapperProps) {
   const fetchTournamentDetail = useTournamentStore(state => state.fetchTournamentDetail);
   const currentTournament = useTournamentStore(state => state.currentTournament);
   const queryClient = useQueryClient();
@@ -51,18 +50,9 @@ export default function TabsContentClientWrapper({ tournament: initialTournament
     return () => clearInterval(pollInterval);
   }, [fetchTournamentDetail, initialTournament.id, initialTournament.status, queryClient]);
 
-  // Mock function for fetchMoreParticipants since we're already loading all participants server-side
-  const fetchMoreParticipants = async () => {
-    console.log('Client-side fetch more participants called, but not implemented')
-    return Promise.resolve()
-  }
-
   return (
     <TournamentTabsContent 
       tournament={tournament} 
-      participants={participants} 
-      fetchMoreParticipants={fetchMoreParticipants} 
-      loading={false} 
     />
   )
 }

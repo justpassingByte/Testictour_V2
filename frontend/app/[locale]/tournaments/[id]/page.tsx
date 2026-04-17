@@ -9,7 +9,7 @@ import TabsContentClientWrapper from "@/app/[locale]/tournaments/[id]/components
 import TournamentInfoClient from "@/app/[locale]/tournaments/[id]/components/TournamentInfoClient"
 import TournamentSidebarClient from "@/app/[locale]/tournaments/[id]/components/TournamentSidebarClient"
 
-// Server-side data fetching
+// Server-side data fetching — lightweight, no participants
 async function getTournamentDetail(id: string) {
   try {
     const tournament = await TournamentService.detail(id)
@@ -20,22 +20,9 @@ async function getTournamentDetail(id: string) {
   }
 }
 
-async function getTournamentParticipants(tournamentId: string) {
-  try {
-    const { participants } = await TournamentService.listParticipants(tournamentId, 1, 100)
-    return participants
-  } catch (error) {
-    console.error(`Error fetching participants for tournament ${tournamentId}:`, error)
-    return []
-  }
-}
-
 export default async function TournamentPage({ params }: { params: { id: string } }) {
   const resolvedParams = await Promise.resolve(params)
-  const [tournament, participants] = await Promise.all([
-    getTournamentDetail(resolvedParams.id),
-    getTournamentParticipants(resolvedParams.id)
-  ])
+  const tournament = await getTournamentDetail(resolvedParams.id)
   
   if (!tournament) {
     notFound()
@@ -62,7 +49,6 @@ export default async function TournamentPage({ params }: { params: { id: string 
               <div id="tournament-tabs">
                 <TabsContentClientWrapper 
                   tournament={tournament}
-                  participants={participants}
                 />
               </div>
             </Suspense>

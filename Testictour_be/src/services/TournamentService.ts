@@ -115,6 +115,7 @@ export default class TournamentService {
       include: { 
         organizer: true,
         escrow: true,
+        _count: { select: { participants: true } },
         phases: { 
           orderBy: { phaseNumber: 'asc' },
           include: { 
@@ -123,8 +124,12 @@ export default class TournamentService {
                 lobbies: {
                   include: {
                     matches: {
-                      include: {
-                        matchResults: true
+                      select: {
+                        id: true,
+                        lobbyId: true,
+                        matchIdRiotApi: true,
+                        matchData: true,
+                        fetchedAt: true,
                       }
                     }
                   }
@@ -137,32 +142,11 @@ export default class TournamentService {
     });
     if (!tournament) throw new ApiError(404, 'Tournament not found');
 
-    // Fetch all participants for the tournament separately with their outcomes
-    const participants = await prisma.participant.findMany({
-      where: { tournamentId: id },
-      include: {
-        user: true,
-        roundOutcomes: {
-          include: {
-            round: {
-              select: {
-                id: true,
-                roundNumber: true,
-                phaseId: true,
-              }
-            }
-          }
-        }
-      }
-    });
+    // Use _count for registered count instead of fetching ALL participants
+    const registeredCount = tournament._count.participants;
 
-    // Create a map for easy lookup, but we won't inject details back into lobbies
-    // const participantsMap = new Map(participants.map(p => [p.userId, p]));
-
-    // Don't process the tournament object. Return the original + the full participant list.
     // The prize pool (budget) shows max potential if UPCOMING, adjusts actual when started
     const maxPlayers = tournament.maxPlayers || tournament.expectedParticipants || 0;
-    const registeredCount = participants.length;
     const multiplier = tournament.status === 'UPCOMING' ? Math.max(maxPlayers, registeredCount) : registeredCount;
     const totalCollected = multiplier * (tournament.entryFee || 0);
     const platformFee = Math.floor(totalCollected * (tournament.hostFeePercent || 0.1));
@@ -184,7 +168,7 @@ export default class TournamentService {
 
     const result = {
       ...tournament,
-      participants: participants,
+      participants: [],  // No longer fetched here — use /participants endpoint with pagination
       registered: registeredCount,
       budget: finalBudget
     };

@@ -4,9 +4,9 @@ import { Badge } from "@/components/ui/badge"
 import { IParticipant } from "@/app/types/tournament"
 import { Users, Loader2, Trophy, Target, Gamepad2, ArrowRight, Copy, Check } from "lucide-react"
 import Link from "next/link"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useTranslations } from "next-intl"
-import { PlayerService, PlayerStats } from "@/app/services/PlayerService"
+import { TournamentService } from "@/app/services/TournamentService"
 import {
   Table,
   TableBody,
@@ -17,10 +17,8 @@ import {
 } from "@/components/ui/table"
 
 interface TournamentPlayersTabProps {
-  participants: IParticipant[];
+  tournamentId: string;
   actualParticipantsCount?: number;
-  fetchMoreParticipants: (page: number, limit: number) => void;
-  loading: boolean;
 }
 
 import { getSubRegionConfig } from "@/app/config/regions";
@@ -78,26 +76,57 @@ function ParticipantRow({ participant, index, t }: { participant: IParticipant, 
   );
 }
 
-export function TournamentPlayersTab({ participants, actualParticipantsCount, fetchMoreParticipants, loading }: TournamentPlayersTabProps) {
-  const t = useTranslations("common");
-  const [localPage, setLocalPage] = useState(1);
-  const playersPerPage = 10;
+const PLAYERS_PER_PAGE = 20;
 
-  const visibleParticipants = participants.slice(0, localPage * playersPerPage);
+export function TournamentPlayersTab({ tournamentId, actualParticipantsCount }: TournamentPlayersTabProps) {
+  const t = useTranslations("common");
+  const [participants, setParticipants] = useState<IParticipant[]>([]);
+  const [total, setTotal] = useState(actualParticipantsCount || 0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const fetchPage = useCallback(async (pageNum: number, append: boolean = false) => {
+    try {
+      if (append) setLoadingMore(true); else setLoading(true);
+      const res = await TournamentService.listParticipants(tournamentId, pageNum, PLAYERS_PER_PAGE);
+      if (append) {
+        setParticipants(prev => [...prev, ...(res.participants || [])]);
+      } else {
+        setParticipants(res.participants || []);
+      }
+      if (res.total !== undefined) setTotal(res.total);
+    } catch (err) {
+      console.error('Failed to fetch participants:', err);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  }, [tournamentId]);
+
+  // Fetch first page on mount
+  useEffect(() => {
+    fetchPage(1);
+  }, [fetchPage]);
 
   const handleLoadMore = () => {
-    const nextPage = localPage + 1;
-    setLocalPage(nextPage);
-    
-    // Only fetch more from server if we are about to exhaust the locally available participants
-    if (nextPage * playersPerPage > participants.length && (!actualParticipantsCount || participants.length < actualParticipantsCount)) {
-      fetchMoreParticipants(nextPage, playersPerPage);
-    }
+    const nextPage = page + 1;
+    setPage(nextPage);
+    fetchPage(nextPage, true);
   };
 
-  const hasMorePlayers = actualParticipantsCount 
-    ? visibleParticipants.length < actualParticipantsCount
-    : visibleParticipants.length < participants.length;
+  const hasMore = participants.length < total;
+
+  if (loading) {
+    return (
+      <Card className="border shadow-sm bg-card/60 dark:bg-card/40 backdrop-blur-lg border-white/10">
+        <CardContent className="flex items-center justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-primary mr-2" />
+          <span className="text-muted-foreground">{t("loading")}...</span>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="border shadow-sm bg-card/60 dark:bg-card/40 backdrop-blur-lg border-white/10">
@@ -108,7 +137,7 @@ export function TournamentPlayersTab({ participants, actualParticipantsCount, fe
             {t("registered_participants")}
           </div>
           <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
-            {participants.length} {actualParticipantsCount !== undefined ? `/ ${actualParticipantsCount}` : ''} {t("total")}
+            {participants.length} / {total} {t("total")}
           </Badge>
         </CardTitle>
       </CardHeader>
@@ -125,22 +154,22 @@ export function TournamentPlayersTab({ participants, actualParticipantsCount, fe
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {visibleParticipants.map((participant, index) => (
+                  {participants.map((participant, index) => (
                     <ParticipantRow key={participant.id} participant={participant} index={index} t={t} />
                   ))}
                 </TableBody>
               </Table>
             </div>
             
-            {hasMorePlayers && (
+            {hasMore && (
               <div className="flex justify-center p-6 border-t border-white/5">
                 <Button 
                   onClick={handleLoadMore} 
-                  disabled={loading}
+                  disabled={loadingMore}
                   variant="outline"
                   className="rounded-full px-8 border-primary/30 hover:border-primary hover:bg-primary/10 transition-all font-semibold"
                 >
-                  {loading ? (
+                  {loadingMore ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin text-primary" />
                   ) : null}
                   {t("load_more_participants")}

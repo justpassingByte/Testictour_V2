@@ -165,13 +165,15 @@ export default function TournamentSidebarClient({ initialTournament }: Tournamen
       <Card className="overflow-hidden bg-card/80 dark:bg-card/60 backdrop-blur-xl border border-primary/20 shadow-xl shadow-primary/5 transition-all duration-300 hover:shadow-2xl hover:shadow-primary/10">
         <CardHeader className="p-0">
           <Image
-            width={1000}
-            height={1000}
+            width={800}
+            height={450}
             src={tournament.image || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80'}
             alt={tournament.name}
-            className="object-cover w-full h-full"
-            priority
+            className="object-cover w-full aspect-video"
+            priority={true}
+            fetchPriority="high"
             sizes="(max-width: 768px) 100vw, 33vw"
+            quality={85}
           />
         </CardHeader>
         <CardContent className="p-6 space-y-4">

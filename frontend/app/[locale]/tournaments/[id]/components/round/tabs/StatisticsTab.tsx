@@ -67,13 +67,13 @@ export function StatisticsTab({ allPlayers }: StatisticsTabProps) {
         <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border-blue-500/20">
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[11px] text-blue-400 font-semibold uppercase tracking-wide">{t("players")}</span>
-              <Users className="h-3.5 w-3.5 text-blue-400" />
+              <span className="text-[11px] text-blue-600 dark:text-blue-400 font-semibold uppercase tracking-wide">{t("players")}</span>
+              <Users className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
             </div>
             <p className="text-2xl font-bold">{allPlayers.length}</p>
             <div className="flex gap-1.5 mt-1.5 flex-wrap">
-              <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-green-500/10 text-green-400 border-green-500/20">{playersAdvanced} {t("adv")}</Badge>
-              <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-red-500/10 text-red-400 border-red-500/20">{playersEliminated} {t("out")}</Badge>
+              <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20">{playersAdvanced} {t("adv")}</Badge>
+              <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20">{playersEliminated} {t("out")}</Badge>
             </div>
           </CardContent>
         </Card>
@@ -81,10 +81,10 @@ export function StatisticsTab({ allPlayers }: StatisticsTabProps) {
         <Card className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border-emerald-500/20">
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[11px] text-emerald-400 font-semibold uppercase tracking-wide">{t("avg_points")}</span>
-              <TrendingUp className="h-3.5 w-3.5 text-emerald-400" />
+              <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold uppercase tracking-wide">{t("avg_points")}</span>
+              <TrendingUp className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
             </div>
-            <p className="text-2xl font-bold text-emerald-400">{avgPoints.toFixed(1)}</p>
+            <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{avgPoints.toFixed(1)}</p>
             <p className="text-[10px] text-muted-foreground mt-1">{totalPointsAwarded} {t("pts_total")}</p>
           </CardContent>
         </Card>
@@ -92,10 +92,10 @@ export function StatisticsTab({ allPlayers }: StatisticsTabProps) {
         <Card className="bg-gradient-to-br from-yellow-500/10 to-yellow-600/5 border-yellow-500/20">
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[11px] text-yellow-400 font-semibold uppercase tracking-wide">{t("top_score")}</span>
-              <Trophy className="h-3.5 w-3.5 text-yellow-400" />
+              <span className="text-[11px] text-yellow-600 dark:text-yellow-400 font-semibold uppercase tracking-wide">{t("top_score")}</span>
+              <Trophy className="h-3.5 w-3.5 text-yellow-600 dark:text-yellow-400" />
             </div>
-            <p className="text-2xl font-bold text-yellow-400">{highestScorePlayer?.total ?? 0}</p>
+            <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{highestScorePlayer?.total ?? 0}</p>
             <p className="text-[10px] text-muted-foreground mt-1 truncate">{highestScorePlayer?.name ?? "—"}</p>
           </CardContent>
         </Card>
@@ -103,8 +103,8 @@ export function StatisticsTab({ allPlayers }: StatisticsTabProps) {
         <Card className="bg-gradient-to-br from-violet-500/10 to-violet-600/5 border-violet-500/20">
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[11px] text-violet-400 font-semibold uppercase tracking-wide">{t("regions")}</span>
-              <Globe className="h-3.5 w-3.5 text-violet-400" />
+              <span className="text-[11px] text-violet-600 dark:text-violet-400 font-semibold uppercase tracking-wide">{t("regions")}</span>
+              <Globe className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
             </div>
             <p className="text-2xl font-bold">{regionSet.length}</p>
             <p className="text-[10px] text-muted-foreground mt-1">{regionStats[0]?.region ?? "—"} {t("leads")}</p>
@@ -114,7 +114,7 @@ export function StatisticsTab({ allPlayers }: StatisticsTabProps) {
 
       <div className="grid gap-4 md:grid-cols-2">
         {/* Placement Distribution Chart */}
-        <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20">
+        <Card className="bg-card dark:bg-card/80 backdrop-blur-lg border border-white/20">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <Target className="h-4 w-4 text-blue-400" />
@@ -136,7 +136,7 @@ export function StatisticsTab({ allPlayers }: StatisticsTabProps) {
         </Card>
 
         {/* Points Leaderboard Bar */}
-        <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20">
+        <Card className="bg-card dark:bg-card/80 backdrop-blur-lg border border-white/20">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <TrendingUp className="h-4 w-4 text-emerald-400" />
@@ -160,7 +160,7 @@ export function StatisticsTab({ allPlayers }: StatisticsTabProps) {
 
       {/* Regional Performance */}
       {regionStats.length > 0 && (
-        <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20">
+        <Card className="bg-card dark:bg-card/80 backdrop-blur-lg border border-white/20">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <Globe className="h-4 w-4 text-violet-400" />
@@ -182,7 +182,7 @@ export function StatisticsTab({ allPlayers }: StatisticsTabProps) {
                       </div>
                       <div className="flex items-center gap-3 text-xs">
                         <span className="font-medium">{r.avg.toFixed(1)} {t("avg_pts")}</span>
-                        <Badge variant="outline" className={`text-[9px] px-1.5 ${advRate >= 50 ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
+                        <Badge variant="outline" className={`text-[9px] px-1.5 ${advRate >= 50 ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20' : 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20'}`}>
                           {r.advanced}/{r.total} {t("adv")}
                         </Badge>
                       </div>

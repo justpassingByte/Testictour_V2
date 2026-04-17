@@ -2,7 +2,7 @@ import React, { useState, memo } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useTranslations } from "next-intl"
 
-import { ITournament, IParticipant } from '@/app/types/tournament';
+import { ITournament } from '@/app/types/tournament';
 import { TournamentBracketTab } from "@/app/[locale]/tournaments/[id]/components/TournamentBracketTab";
 import { TournamentPhasesTab } from "@/app/[locale]/tournaments/[id]/components/TournamentPhasesTab";
 import { TournamentPlayersTab } from "@/app/[locale]/tournaments/[id]/components/TournamentPlayersTab";
@@ -11,16 +11,10 @@ import { TournamentDetailsTab } from "@/app/[locale]/tournaments/[id]/components
 
 interface TournamentTabsContentProps {
   tournament: ITournament;
-  participants: IParticipant[];
-  fetchMoreParticipants: (tournamentId: string, page?: number, limit?: number) => Promise<void>;
-  loading: boolean;
 }
 
 export const TournamentTabsContent = memo(({
   tournament,
-  participants,
-  fetchMoreParticipants,
-  loading,
 }: TournamentTabsContentProps) => {
   const [activeTab, setActiveTab] = useState("phase");
   const t = useTranslations("common");
@@ -72,16 +66,10 @@ export const TournamentTabsContent = memo(({
         )}
       </TabsContent>
       <TabsContent value="players" className="space-y-4">
-        {participants && participants.length > 0 ? (
-          <TournamentPlayersTab
-            participants={participants}
-            actualParticipantsCount={tournament.registered || 0}
-            fetchMoreParticipants={(page, limit) => fetchMoreParticipants(tournament.id, page, limit)}
-            loading={loading}
-          />
-        ) : (
-          <p className="text-muted-foreground text-center">{t("no_players_registered")}</p>
-        )}
+        <TournamentPlayersTab
+          tournamentId={tournament.id}
+          actualParticipantsCount={tournament.registered || 0}
+        />
       </TabsContent>
       <TabsContent value="rules" className="space-y-4">
         <TournamentRulesTab tournament={tournament} />

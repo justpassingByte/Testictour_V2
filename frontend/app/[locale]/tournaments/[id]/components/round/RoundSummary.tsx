@@ -18,7 +18,7 @@ export function RoundSummary({
 }: RoundSummaryProps) {
   return (
     <div className="grid gap-4 md:grid-cols-4">
-      <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20">
+      <Card className="bg-card dark:bg-card/80 backdrop-blur-lg border border-white/20">
         <CardContent className="pt-6">
           <div className="flex items-center">
             <Trophy className="h-8 w-8 text-primary mr-3" />
@@ -29,7 +29,7 @@ export function RoundSummary({
           </div>
         </CardContent>
       </Card>
-      <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20">
+      <Card className="bg-card dark:bg-card/80 backdrop-blur-lg border border-white/20">
         <CardContent className="pt-6">
           <div className="flex items-center">
             <Medal className="h-8 w-8 text-primary mr-3" />
@@ -40,10 +40,10 @@ export function RoundSummary({
           </div>
         </CardContent>
       </Card>
-      <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20">
+      <Card className="bg-card dark:bg-card/80 backdrop-blur-lg border border-white/20">
         <CardContent className="pt-6">
           <div className="flex items-center">
-            <Star className="h-8 w-8 text-green-500 mr-3" />
+            <Star className="h-8 w-8 text-green-600 dark:text-green-500 mr-3" />
             <div>
               <p className="text-2xl font-bold">{playersAdvanced}</p>
               <p className="text-xs text-muted-foreground">Players Advanced</p>
@@ -51,10 +51,10 @@ export function RoundSummary({
           </div>
         </CardContent>
       </Card>
-      <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20">
+      <Card className="bg-card dark:bg-card/80 backdrop-blur-lg border border-white/20">
         <CardContent className="pt-6">
           <div className="flex items-center">
-            <Star className="h-8 w-8 text-red-500 mr-3" />
+            <Star className="h-8 w-8 text-red-600 dark:text-red-500 mr-3" />
             <div>
               <p className="text-2xl font-bold">{playersEliminated}</p>
               <p className="text-xs text-muted-foreground">Players Eliminated</p>
