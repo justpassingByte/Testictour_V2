@@ -229,7 +229,7 @@ export default function LivePageClient({ tournament: initialTournament, liveStat
                   </p>
                   <p className="text-[11px] text-muted-foreground opacity-70 mt-0.5">{formatVndText(calculatedPrizePool)}</p>
                 </div>
-                <p className="text-sm font-medium text-muted-foreground mt-1">{t("prize_pool") || "Current Prize Pool"} <span className="text-xs text-muted-foreground font-normal ml-1">[{tournament.registered || 0} Players]</span></p>
+                <p className="text-sm font-medium text-muted-foreground mt-1">{t("prize_pool") || "Estimated Prize Pool"} <span className="text-xs text-muted-foreground font-normal ml-1">[{tournament.registered || 0} Players]</span></p>
               </div>
             </CardContent>
           </Card>

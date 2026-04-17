@@ -431,7 +431,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
             </div>
             {form.entryFee > 0 && (
               <div className="text-sm bg-violet-500/10 border border-violet-500/20 rounded-md p-3">
-                Estimated Maximum Prize pool: <strong className="text-violet-400">
+                Estimated Prize Pool: <strong className="text-violet-400">
                   ${(form.maxPlayers * form.entryFee * (1 - form.hostFeePercent)).toLocaleString()} USD
                 </strong>
                 {" "}(When 100% full capacity)
