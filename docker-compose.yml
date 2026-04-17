@@ -1,4 +1,20 @@
 services:
+  # ─── Database (PostgreSQL) ───
+  postgres:
+    image: postgres:15-alpine
+    container_name: testictour-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=testictour_user
+      - POSTGRES_PASSWORD=testictour_pass
+      - POSTGRES_DB=testictour_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - vps-net
+
   # ─── Backend API (Express + Prisma + Socket.IO) ───
   backend:
     build:
@@ -31,6 +47,7 @@ services:
       - REDIS_URL=redis://redis:6379
     depends_on:
       - redis
+      - postgres
     networks:
       - vps-net
 
@@ -91,6 +108,7 @@ services:
     depends_on:
       - backend
       - redis
+      - postgres
     networks:
       - vps-net
 
@@ -100,3 +118,4 @@ networks:
 
 volumes:
   redis-data:
+  postgres-data:
