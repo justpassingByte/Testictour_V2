@@ -230,14 +230,21 @@ export default class ParticipantService {
     if (tournament) {
       const participantCount = tournament._count.participants;
       const totalPot = participantCount * tournament.entryFee;
-      const computedPrizePool = tournament.escrowRequiredAmount || (totalPot * (1 - (tournament.hostFeePercent || 0)));
+      
+      const sub = await prisma.partnerSubscription.findUnique({ where: { userId: tournament.organizerId } });
+      const planConfig = await prisma.subscriptionPlanConfig.findUnique({ where: { plan: sub?.plan || 'FREE' } });
+      const platformFeePercent = planConfig?.platformFeePercent ?? 0.05;
+      
+      const basePool = tournament.escrowRequiredAmount || totalPot;
+      const computedPrizePool = basePool * (1 - (tournament.hostFeePercent || 0) - platformFeePercent);
 
       let prizePool = computedPrizePool;
       if (!tournament.isCommunityMode && tournament.escrow) {
-        if (tournament.escrow.fundedAmount > computedPrizePool) {
-          prizePool = tournament.escrow.fundedAmount;
+        const netFunded = tournament.escrow.fundedAmount * (1 - (tournament.hostFeePercent || 0) - platformFeePercent);
+        if (tournament.escrow.fundedAmount > basePool) {
+          prizePool = netFunded;
         } else if (tournament.escrow.fundedAmount > 0) {
-          prizePool = Math.max(computedPrizePool, tournament.escrow.fundedAmount);
+          prizePool = Math.max(computedPrizePool, netFunded);
         }
       }
 

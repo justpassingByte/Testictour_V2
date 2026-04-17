@@ -370,7 +370,7 @@ export default function LobbyPageClient({ lobbyId, tournamentId, initialState, l
 
               <TabsContent value="matches" className="space-y-4 pt-4">
                 <div className="space-y-3">
-                  {Array.from({ length: Math.max(liveLobbyData?.round?.phase?.matchesPerRound || 1, liveLobbyData?.matches?.length || 0) }).map((_, idx: number) => {
+                  {Array.from({ length: ['SWISS', 'SNAKE'].includes(liveLobbyData?.round?.phase?.type) ? Math.max(1, liveLobbyData?.matches?.length || 0) : Math.max(liveLobbyData?.round?.phase?.matchesPerRound || 1, liveLobbyData?.matches?.length || 0) }).map((_, idx: number) => {
                     const match = liveLobbyData?.matches?.[idx];
                     const isSynced = match && !!match.fetchedAt && (match.matchResults?.length > 0 || match.miniTourMatchResults?.length > 0);
                     const hasGrimoire = match && isGrimoireMatchData(match.matchData);

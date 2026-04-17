@@ -127,6 +127,7 @@ export const updateSubscriptionPlan = async (req: Request, res: Response) => {
         const {
             monthlyPrice, annualPrice,
             maxLobbies, maxTournamentSize, maxTournamentsPerMonth,
+            platformFeePercent,
             features,
         } = req.body;
 
@@ -141,6 +142,7 @@ export const updateSubscriptionPlan = async (req: Request, res: Response) => {
                 ...(maxLobbies !== undefined && { maxLobbies: parseInt(maxLobbies) }),
                 ...(maxTournamentSize !== undefined && { maxTournamentSize: parseInt(maxTournamentSize) }),
                 ...(maxTournamentsPerMonth !== undefined && { maxTournamentsPerMonth: parseInt(maxTournamentsPerMonth) }),
+                ...(platformFeePercent !== undefined && { platformFeePercent: parseFloat(platformFeePercent) }),
                 ...(features !== undefined && { features }),
                 updatedBy: adminId,
             },

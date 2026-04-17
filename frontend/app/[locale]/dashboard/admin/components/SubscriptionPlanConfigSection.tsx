@@ -13,6 +13,7 @@ interface PlanConfig {
     id: string; plan: string;
     monthlyPrice: number; annualPrice: number;
     maxLobbies: number; maxTournamentSize: number; maxTournamentsPerMonth: number;
+    platformFeePercent: number;
     features: Record<string, boolean>;
 }
 
@@ -84,6 +85,7 @@ export default function SubscriptionPlanConfigSection() {
                 maxLobbies: d.maxLobbies,
                 maxTournamentSize: d.maxTournamentSize,
                 maxTournamentsPerMonth: d.maxTournamentsPerMonth,
+                platformFeePercent: d.platformFeePercent,
                 features: d.features,
             });
             toast({ title: `${planKey} plan updated`, description: "Changes take effect immediately for all partners on this plan." });
@@ -131,7 +133,7 @@ export default function SubscriptionPlanConfigSection() {
 
                             {/* Limits */}
                             <div className="space-y-2">
-                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Limits</p>
+                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Limits / Fees</p>
                                 {[
                                     { field: 'maxLobbies' as const, label: 'Max Lobbies' },
                                     { field: 'maxTournamentSize' as const, label: 'Max Tournament Size' },
@@ -142,6 +144,10 @@ export default function SubscriptionPlanConfigSection() {
                                         <Input type="number" min={-1} value={d[field]} onChange={e => updateDraft(p.plan, field, parseInt(e.target.value))} className="bg-black/20 border-white/10 h-8 text-sm" />
                                     </div>
                                 ))}
+                                <div className="space-y-1">
+                                    <label className="text-xs text-muted-foreground">Platform Fee Component (Decimal, e.g. 0.05)</label>
+                                    <Input type="number" step="0.01" min={0} max={1} value={d.platformFeePercent ?? 0.05} onChange={e => updateDraft(p.plan, 'platformFeePercent', parseFloat(e.target.value))} className="bg-black/20 border-white/10 h-8 text-sm" />
+                                </div>
                             </div>
 
                             {/* Features */}

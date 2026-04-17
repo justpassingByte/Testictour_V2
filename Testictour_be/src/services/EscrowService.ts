@@ -32,6 +32,7 @@ type PayoutRecipient = {
   amount: number;
   payoutDestination?: string;
   isHostFee?: boolean;
+  isPlatformFee?: boolean;
 };
 
 type PayoutRequest = {
@@ -695,6 +696,26 @@ export default class EscrowService {
               reviewNotes: (request.note || '') + ' [Partner Host Fee]',
               externalRefId: `hostfee_${tournament.id}_${crypto.randomBytes(8).toString('hex')}`,
               payoutDestination: recipient.payoutDestination,
+              paymentMethod: 'pending_release',
+            },
+          });
+          createdTransactions.push(payoutTransaction);
+          continue;
+        }
+
+        if (recipient.isPlatformFee) {
+          const payoutTransaction = await tx.transaction.create({
+            data: {
+              userId: tournament.organizerId, // Must use valid userId to satisfy Foreign Key
+              tournamentId: tournament.id,
+              escrowId: tournament.escrow.id,
+              type: 'payout',
+              amount: recipient.amount,
+              currency: 'usd',
+              status: 'pending',
+              reviewNotes: (request.note || '') + ' [Platform Fee]',
+              externalRefId: `platformfee_${tournament.id}_${crypto.randomBytes(8).toString('hex')}`,
+              payoutDestination: 'SYSTEM_WALLET_PLATFORM',
               paymentMethod: 'pending_release',
             },
           });

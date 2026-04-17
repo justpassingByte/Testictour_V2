@@ -42,6 +42,10 @@ const EscrowController = {
 
     if (!tournament) throw new ApiError(404, 'Tournament not found');
 
+    const sub = await prisma.partnerSubscription.findUnique({ where: { userId: tournament.organizerId } });
+    const planConfig = await prisma.subscriptionPlanConfig.findUnique({ where: { plan: sub?.plan || 'FREE' } });
+    
+    // Send response
     res.json({
       success: true,
       escrow: tournament.escrow,
@@ -53,8 +57,10 @@ const EscrowController = {
         isCommunityMode: tournament.isCommunityMode,
         escrowRequiredAmount: tournament.escrowRequiredAmount,
         communityThresholdSnapshot: tournament.communityThresholdSnapshot,
+        hostFeePercent: tournament.hostFeePercent,
         organizer: tournament.organizer,
       },
+      platformFeePercent: planConfig?.platformFeePercent ?? 0.05,
     });
   }),
 

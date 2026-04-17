@@ -43,6 +43,7 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
   
   const [loading, setLoading] = useState(true)
   const [escrow, setEscrow] = useState<EscrowState | null>(null)
+  const [tournamentData, setTournamentData] = useState<{ hostFeePercent: number; platformFeePercent: number } | null>(null)
   // Self-managed participant list for accurate payout calculations
   const [payoutParticipants, setPayoutParticipants] = useState<IParticipant[]>([])
   
@@ -60,6 +61,12 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
       setLoading(true)
       const res = await api.get(`/tournaments/${tournamentId}/escrow`)
       setEscrow(res.data.escrow)
+      if (res.data.tournament) {
+         setTournamentData({
+            hostFeePercent: res.data.tournament.hostFeePercent || 0,
+            platformFeePercent: res.data.platformFeePercent || 0
+         })
+      }
       if (res.data.escrow) {
         setFundingAmount(res.data.escrow.requiredAmount - res.data.escrow.fundedAmount)
       }
@@ -70,12 +77,12 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
     }
   }
 
-  // Fetch top participants for payout calculations (up to 10 prize winners)
+  // Fetch full sorted leaderboard with placements data for accurate tiebreaks
   const fetchPayoutParticipants = async () => {
     if (tournamentStatus !== 'COMPLETED') return
     try {
-      const { participants: topPlayers } = await TournamentService.topParticipants(tournamentId, 10)
-      setPayoutParticipants(topPlayers || [])
+      const res = await api.get(`/tournaments/${tournamentId}/leaderboard`)
+      setPayoutParticipants(res.data || [])
     } catch {
       // fallback to props if API fails
       setPayoutParticipants(participants)
@@ -83,11 +90,16 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
   }
 
   const getCalculatedPayouts = () => {
-    // Use self-fetched participants for accurate calculations
+    // The backend /leaderboard endpoint already guarantees correct sorting via tiebreakComparator.
+    // If not using that endpoint, we fallback to prop participants but just score-based (less accurate).
     const activeList = payoutParticipants.length > 0 ? payoutParticipants : participants
     const activeParticipants = [...activeList]
       .filter(p => (p.scoreTotal || 0) > 0)
-      .sort((a, b) => (b.scoreTotal || 0) - (a.scoreTotal || 0))
+    
+    // Fallback sort just in case. The backend already sorts it perfectly.
+    if (payoutParticipants.length === 0) {
+       activeParticipants.sort((a, b) => (b.scoreTotal || 0) - (a.scoreTotal || 0))
+    }
 
     let dist: number[] = []
     if (Array.isArray(prizeStructure)) {
@@ -101,26 +113,22 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
       dist = count >= 8 ? [0.4, 0.3, 0.2, 0.1] : count >= 6 ? [0.5, 0.3, 0.2] : count >= 4 ? [0.6, 0.4] : [1.0]
     }
 
-    const totalPool = escrow ? escrow.requiredAmount : 0
-    const prizePool = totalPool * 0.9; // 10% host fee
+    const totalPool = escrow ? Math.max(escrow.requiredAmount, escrow.fundedAmount) : 0
+    const hostFeePercent = tournamentData?.hostFeePercent || 0
+    const platformFeePercent = tournamentData?.platformFeePercent || 0
+    const totalFeePercent = hostFeePercent + platformFeePercent
+    
+    const prizePool = totalPool * (1 - totalFeePercent); 
     
     const results = []
     let currentRank = 1
-    let previousScore: number | null = null
-    let tiedRankCount = 0
 
+    // DO NOT USE simple score ties to distribute equally for multiple people. 
+    // In our system, tiebreakComparator always breaks ties natively in the array. 
+    // Payout follows exact array index.
     for (let i = 0; i < activeParticipants.length; i++) {
       const participant = activeParticipants[i]
-      
-      if (previousScore !== null && participant.scoreTotal! < previousScore) {
-        currentRank += tiedRankCount
-        tiedRankCount = 1
-      } else if (previousScore === null || participant.scoreTotal === previousScore) {
-        tiedRankCount++
-      } else {
-        tiedRankCount = 1
-      }
-      previousScore = participant.scoreTotal!
+      currentRank = i + 1
 
       const pPercentage = dist[currentRank - 1]
       let estimatedPayout = 0
@@ -169,60 +177,19 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
   const handleRequestPayout = async () => {
     setPayoutLoading(true)
     try {
-      const activeList = payoutParticipants.length > 0 ? payoutParticipants : participants
-      const activeParticipants = [...activeList]
-        .filter(p => (p.scoreTotal || 0) > 0)
-        .sort((a, b) => (b.scoreTotal || 0) - (a.scoreTotal || 0))
+      const calculatedPayouts = getCalculatedPayouts()
+      const winners = calculatedPayouts.map(p => ({
+         participantId: p.participant.id,
+         amount: p.estimatedPayout
+      }))
 
-      let dist: number[] = []
-      if (Array.isArray(prizeStructure)) {
-        dist = prizeStructure.map(p => Number(p))
-      } else if (typeof prizeStructure === 'object' && prizeStructure !== null) {
-        // assume object like {"1": 0.5, "2": 0.3}
-        const obj = prizeStructure as Record<string, number>
-        const keys = Object.keys(obj).sort((a, b) => Number(a) - Number(b))
-        dist = keys.map(k => obj[k])
-      } else {
-        const count = activeParticipants.length
-        dist = count >= 8 ? [0.4, 0.3, 0.2, 0.1] : count >= 6 ? [0.5, 0.3, 0.2] : count >= 4 ? [0.6, 0.4] : [1.0]
-      }
-
-      // We treat escrow.requiredAmount as the Gross Pool
-      const totalPool = escrow ? escrow.requiredAmount : 0
-      const hostFeePercent = 0.1 // Default 10%
-      const prizePool = totalPool * (1 - hostFeePercent)
-      const hostFeeAmount = totalPool * hostFeePercent
+      // Fees
+      const totalPool = escrow ? Math.max(escrow.requiredAmount, escrow.fundedAmount) : 0
+      const hostFeePercent = tournamentData?.hostFeePercent || 0
+      const platformFeePercent = tournamentData?.platformFeePercent || 0
       
-      const winners: any[] = []
-      let currentRank = 1
-      let previousScore: number | null = null
-      let tiedRankCount = 0
-
-      for (let i = 0; i < activeParticipants.length; i++) {
-        const participant = activeParticipants[i]
-        
-        if (previousScore !== null && participant.scoreTotal! < previousScore) {
-          currentRank += tiedRankCount
-          tiedRankCount = 1
-        } else if (previousScore === null || participant.scoreTotal === previousScore) {
-          tiedRankCount++
-        } else {
-          tiedRankCount = 1
-        }
-        previousScore = participant.scoreTotal!
-
-        const pPercentage = dist[currentRank - 1]
-        if (pPercentage !== undefined) {
-          const ratio = pPercentage > 1 ? pPercentage / 100 : pPercentage
-          const amount = prizePool * ratio
-          if (amount > 0) {
-            winners.push({
-              participantId: participant.id,
-              amount: amount
-            })
-          }
-        }
-      }
+      const hostFeeAmount = totalPool * hostFeePercent
+      const platformFeeAmount = totalPool * platformFeePercent
 
       // Add Host Fee payout for Organizer
       if (hostFeeAmount > 0) {
@@ -230,11 +197,20 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
           userId: (escrow as any)?.tournament?.organizerId || "SYSTEM_HOST_FEE",
           amount: hostFeeAmount,
           isHostFee: true
-        })
+        } as any)
+      }
+
+      // Add Platform Fee payout
+      if (platformFeeAmount > 0) {
+        winners.push({
+           userId: "SYSTEM_PLATFORM",
+           amount: platformFeeAmount,
+           isPlatformFee: true
+        } as any)
       }
       
       const res = await api.post(`/tournaments/${tournamentId}/payouts/request-release`, {
-        recipients: winners.length > 0 ? winners : [{ participantId: activeParticipants[0]?.id, amount: totalPool }], // Fallback to 1st place if logic fails
+        recipients: winners.length > 0 ? winners : [{ participantId: payoutParticipants[0]?.id, amount: totalPool }], // Fallback to 1st place if logic fails
         note: "Organizer yêu cầu xuất quỹ",
       })
       toast({ title: "Thành công", description: "Đã gửi yêu cầu rút quỹ. Vui lòng chờ admin duyệt." })
@@ -327,7 +303,7 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
         <Card className="border-white/10 bg-card/50">
            <CardHeader className="pb-2">
             <CardTitle className="text-sm text-muted-foreground flex items-center justify-between">
-              Đã nạp (Quỹ bảo lãnh)
+              Đã nạp (Gross Pool)
               <Banknote className="h-4 w-4 text-emerald-400" />
             </CardTitle>
           </CardHeader>
@@ -336,11 +312,30 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
               <div className="text-2xl font-bold text-emerald-400">
                 ${escrow.fundedAmount.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">/ ${escrow.requiredAmount.toLocaleString()} USD</span>
               </div>
-              <div className="text-[11px] text-emerald-400/70 mt-0.5">
+              <div className="text-[11px] text-emerald-400/70 mt-0.5 mb-2">
                 {formatVndText(escrow.fundedAmount)} <span className="opacity-70">/ {formatVndText(escrow.requiredAmount)}</span>
               </div>
+              {(() => {
+                 const displayPool = Math.max(escrow.requiredAmount, escrow.fundedAmount);
+                 return displayPool > 0 ? (
+                 <div className="space-y-1 border-t border-white/10 pt-2 text-xs">
+                    <div className="flex justify-between items-center text-muted-foreground">
+                       <span>Host Fee ({(tournamentData?.hostFeePercent || 0) * 100}%):</span>
+                       <span className="font-medium text-orange-400">${(displayPool * (tournamentData?.hostFeePercent || 0)).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-muted-foreground">
+                       <span>Platform Fee ({(tournamentData?.platformFeePercent || 0) * 100}%):</span>
+                       <span className="font-medium text-blue-400">${(displayPool * (tournamentData?.platformFeePercent || 0)).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-zinc-300 font-medium pt-1">
+                       <span>Net Prize Pool:</span>
+                       <span className="text-emerald-400">${(displayPool * (1 - (tournamentData?.hostFeePercent || 0) - (tournamentData?.platformFeePercent || 0))).toLocaleString()}</span>
+                    </div>
+                 </div>
+                 ) : null;
+              })()}
             </div>
-            <Progress value={fillPercent} className={`h-1.5 mt-2 ${isFullyFunded ? '[&>div]:bg-emerald-500' : '[&>div]:bg-blue-500'}`} />
+            <Progress value={fillPercent} className={`h-1.5 mt-3 ${isFullyFunded ? '[&>div]:bg-emerald-500' : '[&>div]:bg-blue-500'}`} />
           </CardContent>
         </Card>
 
