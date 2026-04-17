@@ -28,6 +28,7 @@ services:
       - PORT=4000
       - NODE_ENV=production
       - DATABASE_URL=${DATABASE_URL}
+      - DIRECT_URL=${DATABASE_URL}
       - JWT_SECRET=${JWT_SECRET}
       - FRONTEND_URL=https://testictour.com
       - BACKEND_SERVICE_URL=http://testictour-backend:4000
@@ -99,6 +100,7 @@ services:
     environment:
       - NODE_ENV=production
       - DATABASE_URL=${DATABASE_URL}
+      - DIRECT_URL=${DATABASE_URL}
       - REDIS_URL=redis://redis:6379
       - BACKEND_SERVICE_URL=http://testictour-backend:4000
       # Email (Resend)
