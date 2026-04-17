@@ -1,14 +1,15 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, TrendingUp, Sword, PieChart as PieChartIcon } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, PieChart as RechartsPieChart, Pie, Legend, LineChart, Line } from 'recharts';
 import api from '@/app/lib/apiConfig';
-import { useSocket } from '@/components/SocketProvider';
 import { Badge } from '@/components/ui/badge';
 import { useTranslations } from "next-intl";
+import { useQuery } from '@tanstack/react-query';
 import { ALL_SUB_REGIONS } from "@/app/config/regions";
+import { StatisticsTabSkeleton } from './TabSkeletons';
 
 const getUnitImgUrl = (name: string, payload?: any) => {
   if (payload?.iconUrl) return payload.iconUrl;
@@ -28,39 +29,20 @@ const getSubRegionConfig = (regionStr: string) => {
 
 export function TournamentStatisticsTab({ tournamentId, hideGeneralStats = false }: { tournamentId: string, hideGeneralStats?: boolean }) {
   const t = useTranslations("common");
-  const [stats, setStats] = useState<any>(null);
-  const [statsLoading, setStatsLoading] = useState(true);
-  const socket = useSocket();
 
-  const fetchStats = async () => {
-    try {
+  // ── React Query replaces manual fetch + socket.on listeners ──
+  // Socket invalidation is handled by useTournamentSocket at the page level
+  const { data: stats, isLoading: statsLoading } = useQuery({
+    queryKey: ['tournament-statistics', tournamentId],
+    queryFn: async () => {
       const res = await api.get(`/dev/tournament-statistics/${tournamentId}`);
       if (res.data?.success && res.data?.stats) {
-        setStats(res.data.stats);
-      } else {
-        setStats(null);
+        return res.data.stats;
       }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setStatsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchStats();
-    
-    // Auto refresh stats when a match completes (via bracket_update or tournament_update event)
-    if (socket) {
-      socket.on('bracket_update', fetchStats);
-      socket.on('tournament_update', fetchStats);
-      
-      return () => {
-        socket.off('bracket_update', fetchStats);
-        socket.off('tournament_update', fetchStats);
-      }
-    }
-  }, [tournamentId, socket]);
+      return null;
+    },
+    staleTime: 10000, // 10s — statistics are expensive to compute, don't refetch often
+  });
 
   const CustomUnitTick = (props: any): React.ReactElement => {
     const { x, y, payload } = props;
@@ -111,12 +93,7 @@ export function TournamentStatisticsTab({ tournamentId, hideGeneralStats = false
   };
 
   if (statsLoading) {
-    return (
-      <Card className="bg-card/40 backdrop-blur-xl border border-primary/10 shadow-2xl h-64 flex flex-col items-center justify-center">
-        <Loader2 className="h-10 w-10 animate-spin text-primary opacity-80" />
-        <p className="mt-4 text-sm text-muted-foreground animate-pulse">{t("loading_live_data")}</p>
-      </Card>
-    );
+    return <StatisticsTabSkeleton />;
   }
 
   if (!stats) {

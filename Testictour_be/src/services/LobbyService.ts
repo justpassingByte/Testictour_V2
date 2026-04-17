@@ -1,6 +1,7 @@
 import { prisma } from './prisma';
 import { Prisma } from '@prisma/client';
 import logger from '../utils/logger';
+import { fisherYatesShuffle } from '../utils/shuffle';
 
 export default class LobbyService {
   static async list(roundId: string) {
@@ -97,7 +98,7 @@ export default class LobbyService {
         assignedParticipants = tempLobbies.flat();
         break;
       default: // 'random'
-        assignedParticipants = [...participants].sort(() => Math.random() - 0.5);
+        assignedParticipants = fisherYatesShuffle(participants);
         break;
     }
 

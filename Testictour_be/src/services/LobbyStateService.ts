@@ -4,6 +4,8 @@ import LobbyTimerService from './LobbyTimerService';
 import logger from '../utils/logger';
 import { fetchMatchDataQueue } from '../lib/queues';
 import { bracketCache } from './BracketCacheService';
+import ConsistencyPipeline from './ConsistencyPipeline';
+import TournamentEventBus from './TournamentEventBus';
 
 // Redis client (ioredis) — imported lazily to support environments where Redis is optional
 let _redis: any = null;
@@ -28,9 +30,21 @@ async function acquireRedisLock(redis: any, key: string, ttlMs: number): Promise
 }
 
 async function releaseRedisLock(redis: any, key: string, token: string): Promise<void> {
-  const current = await redis.get(key);
-  if (current === token) {
-    await redis.del(key);
+  // Atomic: only delete if our token matches (Lua script for safety)
+  const script = `
+    if redis.call("get", KEYS[1]) == ARGV[1] then
+      return redis.call("del", KEYS[1])
+    else
+      return 0
+    end
+  `;
+
+  if (typeof redis.eval === 'function') {
+    await redis.eval(script, 1, key, token);
+  } else {
+    // MockRedis fallback — single-threaded so non-atomic is safe
+    const current = await redis.get(key);
+    if (current === token) await redis.del(key);
   }
 }
 
@@ -127,15 +141,14 @@ export default class LobbyStateService {
 
       // ── Critical: enqueue match polling job ──────────────────
       // TFT matches take ~25-30min. First poll after 20 minutes, then every 30s.
-      // Region is derived dynamically inside fetchMatchData from the lobby→round→phase→tournament chain.
       if (fetchMatchDataQueue) {
         await fetchMatchDataQueue.add('fetchMatchData', { lobbyId, region: '' }, {
           delay: 1_200_000, // 20 minutes — first poll after game likely ends
-          jobId: `fetch-init-${lobbyId}-${Date.now()}`,
+          jobId: `fetch-init-${lobbyId}`,
           removeOnComplete: true,
-          removeOnFail: 100,
-          attempts: 120,
-          backoff: { type: 'fixed', delay: 0 }, // Smart polling re-queues itself
+          removeOnFail: { count: 20 },
+          attempts: 30,
+          backoff: { type: 'exponential', delay: 30_000 },
         });
         logger.info(`LobbyStateService: enqueued fetchMatchData job for lobby ${lobbyId} (first poll in 20min)`);
       } else {
@@ -155,34 +168,27 @@ export default class LobbyStateService {
       await LobbyTimerService.scheduleAutoResolve(lobbyId, 900_000);
     }
 
+    // ── Post-transition: DB → Cache → Socket via ConsistencyPipeline ──
     try {
       const lobbyWithTourn = await prisma.lobby.findUnique({
         where: { id: lobbyId },
         include: { round: { include: { phase: true } } }
       });
-      
-      const io = (global as any).__io || (global as any).io;
+
       const tournamentId = lobbyWithTourn?.round?.phase?.tournamentId;
 
-      // Invalidate bracket cache so next fetch returns fresh lobby states
-      if (tournamentId) {
-        await bracketCache.invalidate(tournamentId);
-      }
+      // Pipeline handles: cache invalidation → typed socket emission
+      await ConsistencyPipeline.onLobbyStateChanged(lobbyId, tournamentId, from, to);
 
-      if (io) {
-        if (tournamentId) {
-          io.to(`tournament:${tournamentId}`).emit('tournament_update');
-          io.to(`tournament:${tournamentId}`).emit('bracket_update', { tournamentId });
-        }
-        
-        // Broadcast the new LobbyStateSnapshot to the lobby room
-        try {
-          const snapshot = await LobbyStateService.getLobbyState(lobbyId);
+      // Broadcast the new LobbyStateSnapshot to the lobby room
+      try {
+        const snapshot = await LobbyStateService.getLobbyState(lobbyId);
+        const io = (global as any).__io || (global as any).io;
+        if (io) {
           io.to(`lobby:${lobbyId}`).emit('lobby:state_update', snapshot);
-          logger.info(`LobbyStateService: emitted lobby:state_update for lobby ${lobbyId} to state ${to}`);
-        } catch (stateErr) {
-          logger.error(`LobbyStateService: failed to fetch state snapshot for lobby ${lobbyId} after transition ${stateErr}`);
         }
+      } catch (stateErr) {
+        logger.error(`LobbyStateService: failed to fetch state snapshot for lobby ${lobbyId} after transition ${stateErr}`);
       }
     } catch (_) {}
   }
@@ -524,15 +530,32 @@ export default class LobbyStateService {
 
     logger.warn(`LobbyStateService.autoResolveIntervention: lobby ${lobbyId} auto-resolved — ${participantUserIds.length} players given 8th place`);
 
-    // Invalidate bracket cache + notify frontend
+    // ── Sync Redis ZSET + invalidate caches via ConsistencyPipeline ──────────
+    // Without this, DB scoreTotal would diverge from the Redis leaderboard ZSET.
     const tournamentId = lobby.round.phase.tournamentId;
-    if (tournamentId) {
-      await bracketCache.invalidate(tournamentId);
-      const io = (global as any).__io || (global as any).io;
-      if (io) {
-        io.to(`tournament:${tournamentId}`).emit('tournament_update');
-        io.to(`tournament:${tournamentId}`).emit('bracket_update', { tournamentId });
-      }
+    const roundId = lobby.round.id;
+    const pipelineResults = participantUserIds.map(userId => ({
+      userId,
+      points: lastPlacePoints,
+      placement: 8,
+    }));
+    try {
+      await ConsistencyPipeline.onMatchProcessed({
+        tournamentId,
+        roundId,
+        lobbyId,
+        matchId: placeholderMatch.id,
+        results: pipelineResults,
+        matchNumber: 1,
+        totalMatches: 1,
+        isLastMatch: true,
+      });
+    } catch (pipeErr) {
+      logger.warn(`[autoResolve] ConsistencyPipeline failed (non-fatal): ${pipeErr instanceof Error ? pipeErr.message : String(pipeErr)}`);
     }
+
+    // Scoreboard cache is already invalidated by ConsistencyPipeline.onMatchProcessed (Step 2).
+    // bracket_update + tournament_update are already emitted by TournamentEventBus.emitMatchResult (Step 3).
+    // No further manual emissions needed.
   }
 }

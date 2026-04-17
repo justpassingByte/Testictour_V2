@@ -1,18 +1,19 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useCallback, useMemo, memo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
   Users, Swords, CircleUser, LayoutGrid, Info, Loader2,
   ShieldCheck, ShieldAlert, ChevronDown, ChevronUp, Activity, ArrowRight,
-  Eye, Trophy
+  Eye, Trophy, Copy, Check
 } from "lucide-react"
 import NextLink from "next/link"
 import { Button } from "@/components/ui/button"
 import { useTranslations } from "next-intl"
-import { useTournamentStore } from '@/app/stores/tournamentStore'
+import { useQuery } from '@tanstack/react-query'
+import { BracketTabSkeleton } from './TabSkeletons'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
@@ -71,7 +72,7 @@ interface TournamentBracketTabProps {
 /** Extract group letter from lobby name like "[A] Lobby 1" → "A" */
 function extractGroupLetter(lobbyName: string): string {
   const m = lobbyName.match(/\[(\w+)\]/)
-  return m ? m[1] : ''
+  return m ? m[1] : 'A'
 }
 
 /** Extract real lobby ID from virtual "abc_m0" → "abc" */
@@ -92,9 +93,19 @@ function getStateColor(state?: string) {
 
 export function TournamentBracketTab({ tournamentId }: TournamentBracketTabProps) {
   const t = useTranslations("common")
-  const [bracket, setBracket] = useState<BracketData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+
+  // ── React Query replaces manual fetch + window event listeners ──
+  const { data: bracketResponse, isLoading: loading, error: queryError } = useQuery({
+    queryKey: ['tournament-bracket', tournamentId],
+    queryFn: async () => {
+      const res = await fetch(`${BACKEND_URL}/api/tournaments/${tournamentId}/bracket`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    },
+    staleTime: 5000, // 5s guard against burst socket invalidations
+  })
+  const bracket: BracketData | null = bracketResponse?.success ? bracketResponse : null
+  const error = queryError?.message ?? null
   
   // Per-phase: which match tab is active (index into phase.groups for multi-match)
   const [activeMatchIdx, setActiveMatchIdx] = useState<Record<string, number>>({})
@@ -113,50 +124,12 @@ export function TournamentBracketTab({ tournamentId }: TournamentBracketTabProps
     return t('group_status_waiting')
   }, [t])
 
-  // ── Data fetching ──
-
-  const fetchBracket = useCallback(async () => {
-    try {
-      const res = await fetch(`${BACKEND_URL}/api/tournaments/${tournamentId}/bracket`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
-      if (data.success) setBracket(data)
-    } catch (err: any) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }, [tournamentId])
-
-  useEffect(() => { fetchBracket() }, [fetchBracket])
-
-  useEffect(() => {
-    const handler = () => fetchBracket()
-    const handleExportStart = (e: Event) => {
-      const customEvent = e as CustomEvent;
-      if (customEvent.detail?.tournament) {
-        setExportTournament(customEvent.detail.tournament);
-      }
-      setExportMode(true)
-    }
-    const handleExportEnd = () => {
-      setExportMode(false)
-      setTimeout(() => setExportTournament(null), 500)
-    }
-    window.addEventListener('bracket_update', handler)
-    window.addEventListener('export_bracket_start', handleExportStart as EventListener)
-    window.addEventListener('export_bracket_end', handleExportEnd)
-    return () => {
-      window.removeEventListener('bracket_update', handler)
-      window.removeEventListener('export_bracket_start', handleExportStart as EventListener)
-      window.removeEventListener('export_bracket_end', handleExportEnd)
-    }
-  }, [fetchBracket])
-
   // ── Detect multi-match phases ──
 
   const isMultiMatchPhase = useCallback((phase: BracketPhase) => {
-    return phase.groups.length > 0 && String(phase.groups[0].groupLetter || '').startsWith('Vòng')
+    return phase.groups.length > 0 && 
+           (String(phase.groups[0].groupLetter || '').startsWith('Vòng') || 
+            String(phase.groups[0].groupLetter || '').startsWith('Trận'))
   }, [])
 
   // ── Group lobbies by group letter for a given match ──
@@ -171,17 +144,24 @@ export function TournamentBracketTab({ tournamentId }: TournamentBracketTabProps
       // Prefer non-undefined roundId
       if (lobby.roundId && !groups[letter].roundId) groups[letter].roundId = lobby.roundId
     })
+    
+    // Sort lobbies numerically (e.g., "[A] Lobby 1" comes before "[A] Lobby 2")
+    Object.values(groups).forEach(g => {
+      g.lobbies.sort((a, b) => {
+        const numA = parseInt(a.name.match(/\d+/)?.[0] || '0', 10)
+        const numB = parseInt(b.name.match(/\d+/)?.[0] || '0', 10)
+        if (numA !== numB) return numA - numB
+        return a.name.localeCompare(b.name)
+      })
+    })
+
     return groups
   }, [])
 
   // ── Loading / Error / Empty states ──
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    )
+    return <BracketTabSkeleton />
   }
 
   if (error || !bracket) {
@@ -714,18 +694,30 @@ interface LobbyCardProps {
   exportMode?: boolean
 }
 
-function LobbyCard({ lobby, lobbyIndex, tournamentId, getStateLabel, stripGroupPrefix, exportMode }: LobbyCardProps) {
+// Memoized: prevents re-rendering 64+ cards when parent state changes (tab switch, timer, etc.)
+// Custom comparator only checks fields that affect visual output.
+const LobbyCard = memo(function LobbyCard({ lobby, lobbyIndex, tournamentId, getStateLabel, stripGroupPrefix, exportMode }: LobbyCardProps) {
   const displayName = stripGroupPrefix ? lobby.name.replace(/\[\w+\]\s*/, '') : lobby.name
   const realId = getRealLobbyId(lobby.id)
   const lobbyHref = `/tournaments/${tournamentId}/lobbies/${realId}`
   const playersToRender = exportMode ? lobby.players : lobby.players.slice(0, 4)
 
-  return (
-    <NextLink href={lobbyHref}>
+  const [copiedId, setCopiedId] = useState(false)
+  const handleCopyId = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    navigator.clipboard.writeText(`Tournament: ${tournamentId} - Lobby: ${lobby.id}`)
+    setCopiedId(true)
+    setTimeout(() => setCopiedId(false), 2000)
+  }
+
+  const isClickable = !exportMode && lobby.players.length > 0;
+
+  const cardContent = (
       <Card
         className={`
-          overflow-hidden transition-all duration-300 cursor-pointer
-          hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-0.5
+          overflow-hidden transition-all duration-300 relative
+          ${isClickable ? 'cursor-pointer hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-0.5' : 'opacity-80 grayscale-[30%]'}
           bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/10
           ${lobby.state === 'PLAYING' ? 'ring-1 ring-emerald-500/30' : ''}
           ${lobby.state === 'FINISHED' ? 'opacity-80' : ''}
@@ -733,12 +725,24 @@ function LobbyCard({ lobby, lobbyIndex, tournamentId, getStateLabel, stripGroupP
         `}
         style={{ animationDelay: exportMode ? '0ms' : `${lobbyIndex * 50}ms` }}
       >
+        {!isClickable && lobby.players.length === 0 && (
+           <div className="absolute inset-0 bg-background/40 backdrop-blur-[1px] z-10 flex flex-col items-center justify-center p-3 text-center border overflow-hidden rounded-xl">
+             <span className="text-xs font-semibold text-muted-foreground uppercase opacity-80 z-20 mix-blend-plus-lighter bg-background/80 px-2 py-1 rounded">Chưa chia bảng</span>
+           </div>
+        )}
         <CardHeader className="p-3 pb-2 flex flex-row items-center justify-between">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
             <div className="h-6 w-6 rounded-md bg-primary/20 flex items-center justify-center">
               <Users className="h-3.5 w-3.5 text-primary" />
             </div>
             {displayName}
+            <button 
+              onClick={handleCopyId}
+              className="opacity-0 group-hover/lobby:opacity-100 transition-all duration-300 flex items-center justify-center p-1 rounded-md hover:bg-white/10 text-muted-foreground hover:text-white transform -translate-x-2 group-hover/lobby:translate-x-0"
+              title="Copy Lobby ID for Support"
+            >
+              {copiedId ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+            </button>
           </CardTitle>
           <Badge variant="outline" className={`${getStateColor(lobby.state)} text-[10px] px-1.5`}>
             {getStateLabel(lobby.state)}
@@ -787,6 +791,22 @@ function LobbyCard({ lobby, lobbyIndex, tournamentId, getStateLabel, stripGroupP
           </div>
         </CardContent>
       </Card>
-    </NextLink>
   )
-}
+
+  return isClickable ? (
+    <NextLink href={lobbyHref} className="block group/lobby">
+      {cardContent}
+    </NextLink>
+  ) : (
+    <div className="block cursor-not-allowed">
+      {cardContent}
+    </div>
+  )
+}, (prev, next) => {
+  // Custom comparator: skip re-render if nothing visual changed
+  return prev.lobby.state === next.lobby.state &&
+    prev.lobby.players.length === next.lobby.players.length &&
+    prev.lobbyIndex === next.lobbyIndex &&
+    prev.exportMode === next.exportMode &&
+    prev.stripGroupPrefix === next.stripGroupPrefix
+})

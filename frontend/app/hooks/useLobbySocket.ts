@@ -102,12 +102,40 @@ export function useLobbySocket({
     };
   }, [lobbyId, userId, tournamentId]);
 
+  // Store previous state for optimistic rollback
+  const prevStateRef = useRef<ILobbyStateSnapshot | null>(null);
+
   const toggleReady = useCallback(() => {
     if (!socketRef.current || !userId) return;
     setIsReadyToggling(true);
     setError(null);
+
+    // ── Optimistic update ──
+    // Immediately flip the player's ready status in local state so the UI
+    // feels instant. If the server returns lobby:error, we revert.
+    if (state) {
+      prevStateRef.current = state;
+      const isCurrentlyReady = state.readyPlayerIds.includes(userId);
+      const optimisticReadyIds = isCurrentlyReady
+        ? state.readyPlayerIds.filter((id: string) => id !== userId)
+        : [...state.readyPlayerIds, userId];
+      setState({
+        ...state,
+        readyPlayerIds: optimisticReadyIds,
+        readyCount: optimisticReadyIds.length,
+      });
+    }
+
     socketRef.current.emit('lobby:ready_toggle', { lobbyId, userId });
-  }, [lobbyId, userId]);
+  }, [lobbyId, userId, state]);
+
+  // Revert optimistic state on error
+  useEffect(() => {
+    if (error && prevStateRef.current) {
+      setState(prevStateRef.current);
+      prevStateRef.current = null;
+    }
+  }, [error]);
 
   const requestDelay = useCallback(() => {
     if (!socketRef.current || !userId) return;

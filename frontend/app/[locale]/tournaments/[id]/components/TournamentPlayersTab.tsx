@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { IParticipant } from "@/app/types/tournament"
-import { Users, Loader2, Trophy, Target, Gamepad2, ArrowRight } from "lucide-react"
+import { Users, Loader2, Trophy, Target, Gamepad2, ArrowRight, Copy, Check } from "lucide-react"
 import Link from "next/link"
 import { useState, useEffect } from "react"
 import { useTranslations } from "next-intl"
@@ -33,13 +33,31 @@ function ParticipantRow({ participant, index, t }: { participant: IParticipant, 
   const regionConfig = getSubRegionConfig(regionCode);
   const regionName = regionConfig ? `${regionConfig.flag} ${regionConfig.id}` : regionCode.toUpperCase();
 
+  const [copiedId, setCopiedId] = useState(false)
+  const handleCopyId = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    navigator.clipboard.writeText(`Participant ID: ${participant.id}`)
+    setCopiedId(true)
+    setTimeout(() => setCopiedId(false), 2000)
+  }
+
   return (
-    <TableRow className="group hover:bg-muted/30 transition-colors">
+    <TableRow className="group/row hover:bg-muted/30 transition-colors">
       <TableCell className="font-medium">
         <div className="flex items-center gap-3">
           <div className="w-6 text-center text-muted-foreground font-semibold">#{index + 1}</div>
           <div className="flex flex-col">
-            <span className="font-bold text-base text-primary/90 group-hover:text-primary transition-colors">{name}</span>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-base text-primary/90 group-hover/row:text-primary transition-colors">{name}</span>
+              <button 
+                onClick={handleCopyId}
+                className="opacity-0 group-hover/row:opacity-100 transition-all duration-300 flex items-center justify-center p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-white"
+                title="Copy Participant ID for Support"
+              >
+                {copiedId ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+              </button>
+            </div>
             <span className="text-[10px] text-muted-foreground">#{tag} ({regionName})</span>
           </div>
         </div>
@@ -51,7 +69,7 @@ function ParticipantRow({ participant, index, t }: { participant: IParticipant, 
       </TableCell>
       <TableCell className="text-right">
         <Link href={`/players/${participant.userId || participant.user?.id || ''}`}>
-          <Button variant="ghost" size="sm" className="opacity-70 group-hover:opacity-100 group-hover:bg-primary/20 group-hover:text-primary transition-all">
+          <Button variant="ghost" size="sm" className="opacity-70 group-hover/row:opacity-100 group-hover/row:bg-primary/20 group-hover/row:text-primary transition-all">
             {t("profile")} <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
           </Button>
         </Link>

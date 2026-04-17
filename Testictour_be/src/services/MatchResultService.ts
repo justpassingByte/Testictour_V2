@@ -5,6 +5,7 @@ import logger from '../utils/logger';
 import { autoAdvanceRoundQueue, checkRoundCompletionQueue, fetchMatchDataQueue } from '../lib/queues';
 import { checkAndAdvanceRound } from '../jobs/roundCompletionWorker';
 import RoundService from './RoundService';
+import ConsistencyPipeline from './ConsistencyPipeline';
 import crypto from 'crypto';
 import { Socket } from 'socket.io-client';
 
@@ -19,16 +20,17 @@ interface NewJobData {
 export default class MatchResultService {
   static async processMatchResults(matchId: string, matchData: any, ioClient: Socket): Promise<{ message: string; newJob?: NewJobData }> {
     logger.info(`Starting to process match results for match ID: ${matchId}`);
-    
+
     let jobToQueue: NewJobData | undefined;
+    let lobbyUpdateMeta: any = null;
 
     try {
       const resultMessage = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         const match = await tx.match.findUnique({
           where: { id: matchId },
-          include: { 
-            lobby: { 
-              include: { 
+          include: {
+            lobby: {
+              include: {
                 round: {
                   include: {
                     phase: {
@@ -38,8 +40,8 @@ export default class MatchResultService {
                     }
                   }
                 }
-              } 
-            } 
+              }
+            }
           }
         });
 
@@ -51,9 +53,22 @@ export default class MatchResultService {
         const { round } = lobby;
         const { phase } = round;
         const tournamentId = phase.tournamentId;
-        
+
+        // ── IDEMPOTENCY GUARD ──────────────────────────────────────────────────
+        // If BullMQ retries this job (network timeout, worker restart), MatchResults
+        // may already exist from the first run. Skip to prevent double-counting
+        // scoreTotal and completedMatchesCount.
+        const existingResultCount = await tx.matchResult.count({ where: { matchId } });
+        if (existingResultCount > 0) {
+          logger.info(`[Idempotency] Match ${matchId} already has ${existingResultCount} results. Skipping duplicate processing.`);
+          return { message: `Match ${matchId} already processed (idempotent skip).`, newJob: undefined, _pipelineData: undefined };
+        }
+
         const phaseConfig = phase.advancementCondition as any;
         const pointsMapping: number[] | undefined = (phase as any).pointsMapping;
+
+        // Collect results for post-transaction pipeline (hoisted scope)
+        let pipelineResults: Array<{ userId: string; points: number; placement: number }> = [];
 
         if (matchData?.info?.participants) {
           // Get all participants for this lobby/match once, and order them to ensure consistent locking.
@@ -80,8 +95,8 @@ export default class MatchResultService {
               continue;
             }
 
-            const pointsFromPlacement = (pointsMapping && p_data.placement <= pointsMapping.length) 
-              ? pointsMapping[p_data.placement - 1] 
+            const pointsFromPlacement = (pointsMapping && p_data.placement <= pointsMapping.length)
+              ? pointsMapping[p_data.placement - 1]
               : 0;
 
             bulkMatchResultValues.push({
@@ -130,6 +145,12 @@ export default class MatchResultService {
             logger.debug(`Incremented scoreTotal for ${bulkScoreIncrements.length} participants`);
           }
 
+          // Populate pipeline results for post-transaction emission
+          pipelineResults = bulkMatchResultValues.map(v => ({
+            userId: v.userId,
+            points: v.points,
+            placement: v.placement,
+          }));
 
           // ── PER-PLAYER: Checkmate-specific logic (requires conditional evaluation) ──
           if (phase.type === 'checkmate') {
@@ -138,7 +159,7 @@ export default class MatchResultService {
             for (const participant of participantsInvolved) {
               const p_data = matchData.info.participants.find((d: any) => d.puuid === participant.userId);
               if (!p_data) continue;
-              
+
               // Calculate the player's total points in the current round
               const matchResultsInCurrentRound = await tx.matchResult.findMany({
                 where: {
@@ -153,9 +174,9 @@ export default class MatchResultService {
                   points: true
                 }
               });
-              
+
               const scoreInRound = matchResultsInCurrentRound.reduce((sum, result) => sum + (result.points || 0), 0);
-              
+
               // Store the scoreInRound in RoundOutcome
               await tx.roundOutcome.upsert({
                 where: {
@@ -174,7 +195,7 @@ export default class MatchResultService {
                   scoreInRound: scoreInRound
                 }
               });
-              
+
               // Re-fetch participant to get latest checkmateActive status
               const updatedParticipantForCheckmate = await tx.participant.findUnique({
                 where: { id: participant.id },
@@ -195,44 +216,44 @@ export default class MatchResultService {
         }
 
         // After processing all participants for the match, perform checkmate logic if applicable.
-          if (phase.type === 'checkmate') {
-            const lobbyParticipantPuids = matchData.info.participants.map((p: any) => p.puuid);
-            const lobbyParticipants = await tx.participant.findMany({
-              where: { userId: { in: lobbyParticipantPuids }, tournamentId: tournamentId }
+        if (phase.type === 'checkmate') {
+          const lobbyParticipantPuids = matchData.info.participants.map((p: any) => p.puuid);
+          const lobbyParticipants = await tx.participant.findMany({
+            where: { userId: { in: lobbyParticipantPuids }, tournamentId: tournamentId }
+          });
+
+          const winnerResult = matchData.info.participants.find((p: any) => p.placement === 1);
+          const winnerParticipant = lobbyParticipants.find(p => p.userId === winnerResult?.puuid);
+
+          if (winnerParticipant?.checkmateActive) {
+            // WINNER FOUND!
+            logger.info(`CHECKMATE WINNER! Participant ${winnerParticipant.userId} won the tournament!`);
+            await tx.tournament.update({
+              where: { id: tournamentId },
+              data: { status: 'completed', endTime: new Date() }
+            });
+            await RoundService.payoutPrizes(tx, tournamentId, [winnerParticipant]);
+          } else {
+            // NO WINNER YET. Queue the next match for the same lobby.
+            logger.info(`Checkmate phase: No winner yet. Preparing to create next match for lobby ${lobby.id}.`);
+            const newRiotMatchId = 'mock_riot_match_id_' + crypto.randomUUID();
+
+            const newMatch = await tx.match.create({
+              data: {
+                matchIdRiotApi: newRiotMatchId,
+                lobbyId: lobby.id,
+              },
             });
 
-            const winnerResult = matchData.info.participants.find((p: any) => p.placement === 1);
-            const winnerParticipant = lobbyParticipants.find(p => p.userId === winnerResult?.puuid);
-            
-            if (winnerParticipant?.checkmateActive) {
-              // WINNER FOUND!
-              logger.info(`CHECKMATE WINNER! Participant ${winnerParticipant.userId} won the tournament!`);
-              await tx.tournament.update({
-                where: { id: tournamentId },
-                data: { status: 'completed', endTime: new Date() }
-              });
-              await RoundService.payoutPrizes(tx, tournamentId, [winnerParticipant]);
-            } else {
-              // NO WINNER YET. Queue the next match for the same lobby.
-              logger.info(`Checkmate phase: No winner yet. Preparing to create next match for lobby ${lobby.id}.`);
-              const newRiotMatchId = 'mock_riot_match_id_' + crypto.randomUUID();
-
-              const newMatch = await tx.match.create({
-                data: {
-                  matchIdRiotApi: newRiotMatchId,
-                  lobbyId: lobby.id,
-                },
-              });
-
-              jobToQueue = {
-                name: 'fetchMatchData',
-                data: {
-                  matchId: newMatch.id,
-                  riotMatchId: newRiotMatchId,
-                  region: phase.tournament.region || 'default',
-                  lobbyId: lobby.id
-                }
-              };
+            jobToQueue = {
+              name: 'fetchMatchData',
+              data: {
+                matchId: newMatch.id,
+                riotMatchId: newRiotMatchId,
+                region: phase.tournament.region || 'default',
+                lobbyId: lobby.id
+              }
+            };
           }
         }
 
@@ -293,34 +314,31 @@ export default class MatchResultService {
             data: {
               completedMatchesCount: { increment: 1 },
               fetchedResult: true,
+              state: 'FINISHED',
             },
           });
 
           if (isLobbyFullyDone) {
             logger.info(`[LobbyCompletion] Lobby ${lobby.id}: match ${matchesAfterThis}/${matchesPerRound} done — final match completed.`);
-            if (ioClient) {
-              ioClient.emit('worker_lobby_update', {
-                tournamentId,
-                lobbyId: lobby.id,
-                roundId: round.id,
-                type: 'lobby_completed',
-                fetchedResult: true,
-                matchNumber: matchesAfterThis,
-                matchesPerRound,
-              });
-            }
+            lobbyUpdateMeta = {
+              tournamentId,
+              lobbyId: lobby.id,
+              roundId: round.id,
+              type: 'lobby_completed',
+              fetchedResult: true,
+              matchNumber: matchesAfterThis,
+              matchesPerRound,
+            };
           } else {
             logger.info(`[LobbyCompletion] Lobby ${lobby.id}: match ${matchesAfterThis}/${matchesPerRound} done — autoAdvance will reshuffle for next match.`);
-            if (ioClient) {
-              ioClient.emit('worker_lobby_update', {
-                tournamentId,
-                lobbyId: lobby.id,
-                roundId: round.id,
-                type: 'match_completed',
-                matchNumber: matchesAfterThis,
-                matchesPerRound,
-              });
-            }
+            lobbyUpdateMeta = {
+              tournamentId,
+              lobbyId: lobby.id,
+              roundId: round.id,
+              type: 'match_completed',
+              matchNumber: matchesAfterThis,
+              matchesPerRound,
+            };
           }
 
           // Always trigger round completion check after each match.
@@ -332,7 +350,13 @@ export default class MatchResultService {
             await checkRoundCompletionQueue.add(
               'checkRoundCompletion',
               { roundId: round.id },
-              { jobId: `check-round-completion-${round.id}`, removeOnComplete: true, removeOnFail: true }
+              {
+                jobId: `check-round-${round.id}-lobby-${lobby.id}-m${matchesAfterThis}`,
+                removeOnComplete: true,
+                removeOnFail: { count: 10 },
+                attempts: 5,
+                backoff: { type: 'exponential', delay: 1000 },
+              }
             );
           } else {
             const _roundIdCheck = round.id;
@@ -346,25 +370,29 @@ export default class MatchResultService {
             logger.info(`[LobbyCompletion] Checkmate lobby ${lobby.id}: setting fetchedResult=true after match.`);
             await tx.lobby.update({
               where: { id: lobby.id },
-              data: { fetchedResult: true },
+              data: { fetchedResult: true, state: 'FINISHED' },
             });
 
-            if (ioClient) {
-              ioClient.emit('worker_lobby_update', {
-                tournamentId,
-                lobbyId: lobby.id,
-                roundId: round.id,
-                type: 'lobby_completed',
-                fetchedResult: true,
-              });
-            }
+            lobbyUpdateMeta = {
+              tournamentId,
+              lobbyId: lobby.id,
+              roundId: round.id,
+              type: 'lobby_completed',
+              fetchedResult: true,
+            };
 
             logger.info(`[LobbyCompletion] Triggering completion check for checkmate round ${round.id}.`);
             if (checkRoundCompletionQueue) {
               await checkRoundCompletionQueue.add(
                 'checkRoundCompletion',
                 { roundId: round.id },
-                { jobId: `check-round-completion-${round.id}`, removeOnComplete: true, removeOnFail: true }
+                {
+                  jobId: `check-round-${round.id}-lobby-${lobby.id}-m${matchesAfterThis}`,
+                  removeOnComplete: true,
+                  removeOnFail: { count: 10 },
+                  attempts: 5,
+                  backoff: { type: 'exponential', delay: 1000 },
+                }
               );
             } else {
               const _roundIdCheck = round.id;
@@ -374,8 +402,35 @@ export default class MatchResultService {
         }
 
 
-        return { message: 'Match results processed', newJob: jobToQueue };
+        // Collect data for post-transaction pipeline
+        return {
+          message: 'Match results processed',
+          newJob: jobToQueue,
+          _lobbyUpdateMeta: lobbyUpdateMeta,
+          _pipelineData: {
+            roundId: round.id,
+            tournamentId,
+            matchId,
+            lobbyId: lobby.id,
+            results: pipelineResults,
+            matchNumber: matchesAfterThis,
+            totalMatches: matchesPerRound,
+            isLastMatch: isLobbyFullyDone,
+          },
+        };
       });
+
+      // ── POST-TRANSACTION: Emits and Pipeline ──
+      if (ioClient && (resultMessage as any)?._lobbyUpdateMeta) {
+        ioClient.emit('worker_lobby_update', (resultMessage as any)._lobbyUpdateMeta);
+      }
+
+      if ((resultMessage as any)?._pipelineData) {
+        const pd = (resultMessage as any)._pipelineData;
+        ConsistencyPipeline.onMatchProcessed(pd).catch(err => {
+          logger.warn(`[Pipeline] Post-transaction pipeline failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`);
+        });
+      }
 
       return resultMessage;
     } catch (error: unknown) {

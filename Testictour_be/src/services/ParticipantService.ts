@@ -145,16 +145,27 @@ export default class ParticipantService {
   }
 
 
-  static async list(tournamentId: string, page: number = 1, limit: number = 10) {
+  static async list(tournamentId: string, page: number = 1, limit: number = 10, search?: string) {
     const skip = (page - 1) * limit;
+
+    const whereClause: any = { tournamentId };
+
+    if (search) {
+      whereClause.OR = [
+        { inGameName: { contains: search, mode: 'insensitive' } },
+        { user: { riotGameName: { contains: search, mode: 'insensitive' } } },
+        { user: { username: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
+
     const [data, total] = await Promise.all([
       prisma.participant.findMany({
-        where: { tournamentId },
+        where: whereClause,
         include: { user: true },
         skip: skip,
         take: limit,
       }),
-      prisma.participant.count({ where: { tournamentId } })
+      prisma.participant.count({ where: whereClause })
     ]);
     return { data, total };
   }
@@ -286,7 +297,8 @@ export default class ParticipantService {
       return {
         ...p,
         rewards,
-        matchesPlayed: p.user?.id ? (playerStatsMap.get(p.user.id)?.matches || 0) : 0
+        matchesPlayed: p.user?.id ? (playerStatsMap.get(p.user.id)?.matches || 0) : 0,
+        placements: p.user?.id ? (playerStatsMap.get(p.user.id)?.placements || []) : []
       };
     });
   }

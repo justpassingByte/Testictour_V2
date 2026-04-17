@@ -1402,11 +1402,11 @@ router.post('/automation/simulate-match-mock', async (req: Request, res: Respons
         console.error('[simulate-match-mock] Failed to create match summaries:', err);
       }
 
-      if (isLobbyFullyDone) {
-        // Transition lobby state PLAYING → FINISHED only when all matches are done
-        const LobbyStateService = require('../services/LobbyStateService').default;
-        await LobbyStateService.transitionPhase(lobby.id, 'PLAYING', 'FINISHED');
-      } else {
+      // Transition lobby state PLAYING → FINISHED
+      const LobbyStateService = require('../services/LobbyStateService').default;
+      await LobbyStateService.transitionPhase(lobby.id, 'PLAYING', 'FINISHED');
+      
+      if (!isLobbyFullyDone) {
         console.log(`[DevTools Mock] Lobby ${lobby.id}: match ${matchesAfterThis}/${matchesPerRound} done. autoAdvance will handle reshuffle.`);
       }
 

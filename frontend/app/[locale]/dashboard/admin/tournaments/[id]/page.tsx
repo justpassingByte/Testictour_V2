@@ -6,7 +6,7 @@ import {
   ArrowLeft, Loader2, Save, Trophy, RefreshCw, Users, Play,
   Square, CheckCircle2, XCircle, Clock, AlertTriangle, Settings2,
   ChevronRight, MoreVertical, UserMinus, Crown, Skull, Image as ImageIcon,
-  ShieldAlert, ShieldCheck, Wrench, GitBranch, FastForward, SkipForward, Lock, Send, Trash2, Copy, Zap
+  ShieldAlert, ShieldCheck, Wrench, GitBranch, FastForward, SkipForward, Lock, Send, Trash2, Copy, Zap, Search
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -32,7 +32,8 @@ import { useTranslations } from "next-intl"
 import { useCurrencyRate } from "@/app/hooks/useCurrencyRate"
 import { EscrowManagementTab } from "@/app/[locale]/dashboard/partner/components/EscrowManagementTab"
 import { TournamentStatisticsTab } from "@/app/[locale]/tournaments/[id]/components/TournamentStatisticsTab"
-import { io, Socket } from "socket.io-client"
+import { useTournamentSocket } from '@/app/hooks/useTournamentSocket'
+import { useQueryClient } from '@tanstack/react-query'
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   pending: { label: "pending", color: "slate", icon: Clock },
@@ -54,6 +55,7 @@ export default function TournamentManagePage() {
   const [participants, setParticipants] = useState<IParticipant[]>([])
   const [totalParticipants, setTotalParticipants] = useState(0)
   const [listPage, setListPage] = useState(1)
+  const [searchParticipant, setSearchParticipant] = useState("")
   const LIMIT = 10
   // Full participant list for ranking calculations (used when tournament is completed)
   const [allParticipants, setAllParticipants] = useState<IParticipant[]>([])
@@ -140,26 +142,17 @@ export default function TournamentManagePage() {
       setLoading(false)
     }
     init()
-
-    // Real-time: subscribe to tournament socket events
-    const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:4000'
-    const socket: Socket = io(SOCKET_URL, { transports: ['websocket'] })
-    socket.emit('join_tournament', tournamentId)
-    const handleUpdate = () => { refresh() }
-    socket.on('tournament_update', handleUpdate)
-    socket.on('bracket_update', handleUpdate)
-    socket.on('leaderboard_update', handleUpdate)
-    return () => {
-      socket.off('tournament_update', handleUpdate)
-      socket.off('bracket_update', handleUpdate)
-      socket.off('leaderboard_update', handleUpdate)
-      socket.disconnect()
-    }
   }, [tournamentId])
 
-  const fetchParticipants = async (page: number) => {
+  // ── Single socket connection via centralized hook ──
+  // Replaces inline io() + full refresh() pattern.
+  // Socket events → queryClient.invalidateQueries + debounced refresh().
+  const queryClient = useQueryClient();
+  useTournamentSocket(tournamentId, { onUpdate: refresh });
+
+  const fetchParticipants = async (page: number, search: string = searchParticipant) => {
     try {
-      const res = await TournamentService.listParticipants(tournamentId, page, LIMIT)
+      const res = await TournamentService.listParticipants(tournamentId, page, LIMIT, search)
       setParticipants(res.participants || [])
       setTotalParticipants(res.total || 0)
     } catch {
@@ -168,8 +161,17 @@ export default function TournamentManagePage() {
   }
 
   useEffect(() => {
+    if (loading) return;
+    const timeout = setTimeout(() => {
+      setListPage(1);
+      fetchParticipants(1, searchParticipant);
+    }, 500);
+    return () => clearTimeout(timeout);
+  }, [searchParticipant, loading]);
+
+  useEffect(() => {
     if (!loading) {
-      fetchParticipants(listPage)
+      fetchParticipants(listPage, searchParticipant)
     }
   }, [listPage])
 
@@ -626,9 +628,20 @@ export default function TournamentManagePage() {
 
           <Card className="bg-card/60 border-white/10">
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">{t("players")}</CardTitle>
-                <span className="text-sm text-muted-foreground">{registeredCount} / {tournament.maxPlayers}</span>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-base">{t("players")}</CardTitle>
+                  <span className="text-sm text-muted-foreground">{registeredCount} / {tournament.maxPlayers}</span>
+                </div>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by name..."
+                    className="pl-8 bg-black/20 w-full sm:w-[250px]"
+                    value={searchParticipant}
+                    onChange={(e) => setSearchParticipant(e.target.value)}
+                  />
+                </div>
               </div>
             </CardHeader>
             <CardContent className="p-0">
@@ -1325,8 +1338,11 @@ export default function TournamentManagePage() {
                           const prizePercent = prizeStructure && prizeStructure[i] ? prizeStructure[i] : 0;
                           const prizeAmount = (prizePercent / 100) * totalPot;
                           const hasPrize = prizeAmount > 0;
+                          
+                          if (!hasPrize) return null;
+                          
                           return (
-                            <TableRow key={p.id} className={hasPrize ? 'bg-yellow-500/5' : ''}>
+                            <TableRow key={p.id} className="bg-yellow-500/5">
                               <TableCell>
                                 <span className={`font-bold ${rank === 1 ? 'text-yellow-400' : rank === 2 ? 'text-gray-300' : rank === 3 ? 'text-amber-600' : 'text-muted-foreground'}`}>
                                   {rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank}
@@ -1358,18 +1374,10 @@ export default function TournamentManagePage() {
                               </TableCell>
                               <TableCell className="text-center font-bold">{p.scoreTotal || 0}</TableCell>
                               <TableCell className="text-center">
-                                {hasPrize ? (
-                                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">{prizePercent}%</Badge>
-                                ) : (
-                                  <span className="text-muted-foreground text-xs">—</span>
-                                )}
+                                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">{prizePercent}%</Badge>
                               </TableCell>
                               <TableCell className="text-right">
-                                {hasPrize ? (
-                                  <span className="font-bold text-emerald-400">${prizeAmount.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
-                                ) : (
-                                  <span className="text-muted-foreground text-xs">—</span>
-                                )}
+                                <span className="font-bold text-emerald-400">${prizeAmount.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
                               </TableCell>
                             </TableRow>
                           );

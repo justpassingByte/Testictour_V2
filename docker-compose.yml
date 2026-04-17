@@ -13,7 +13,7 @@ services:
       - NODE_ENV=production
       - DATABASE_URL=${DATABASE_URL}
       - JWT_SECRET=${JWT_SECRET}
-      - FRONTEND_URL=http://16.176.11.53
+      - FRONTEND_URL=https://testictour.com
       - BACKEND_SERVICE_URL=http://testictour-backend:4000
       - GRIMOIRE_API_URL=http://grimoire-backend:3001
       # Gateway Variables
@@ -40,20 +40,20 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.frontend
       args:
-        - NEXT_PUBLIC_API_URL=http://16.176.11.53:4000
-        - NEXT_PUBLIC_BACKEND_URL=http://16.176.11.53:4000
+        - NEXT_PUBLIC_API_URL=https://api.testictour.com
+        - NEXT_PUBLIC_BACKEND_URL=https://api.testictour.com
     container_name: testictour-frontend
     restart: unless-stopped
-    # Đưa lại về port 80 để truy cập IP là vào web luôn
+    # Nginx sẽ trỏ vào port 3002
     ports:
-      - "80:3000" 
+      - "3002:3000" 
     environment:
       # SSR (server-side) fetch — must use internal Docker service name, NOT public IP
       - BACKEND_URL=http://testictour-backend:4000
       - INTERNAL_BACKEND_URL=http://testictour-backend:4000/api
-      # Client-side fetch — must use public IP accessible from browser
-      - NEXT_PUBLIC_API_URL=http://16.176.11.53:4000
-      - NEXT_PUBLIC_BACKEND_URL=http://16.176.11.53:4000
+      # Client-side fetch — must use public domain accessible from browser
+      - NEXT_PUBLIC_API_URL=https://api.testictour.com
+      - NEXT_PUBLIC_BACKEND_URL=https://api.testictour.com
     depends_on:
       - backend
     networks:
@@ -84,6 +84,10 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=redis://redis:6379
       - BACKEND_SERVICE_URL=http://testictour-backend:4000
+      # Email (Resend)
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - RESEND_WEBHOOK_SECRET=${RESEND_WEBHOOK_SECRET}
+      - EMAIL_FROM_ADDRESS=${EMAIL_FROM_ADDRESS:-noreply@testictour.com}
     depends_on:
       - backend
       - redis

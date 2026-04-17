@@ -84,9 +84,13 @@ export const TournamentService = {
     }
   },
 
-  async listParticipants(tournamentId: string, page: number = 1, limit: number = 10): Promise<{ participants: IParticipant[], total?: number }> {
+  async listParticipants(tournamentId: string, page: number = 1, limit: number = 10, search?: string): Promise<{ participants: IParticipant[], total?: number }> {
     try {
-      const response = await api.get(`/tournaments/${tournamentId}/participants?page=${page}&limit=${limit}`);
+      let query = `page=${page}&limit=${limit}`;
+      if (search) {
+        query += `&search=${encodeURIComponent(search)}`;
+      }
+      const response = await api.get(`/tournaments/${tournamentId}/participants?${query}`);
       return response.data; // This should contain { participants: IParticipant[], total: number }
     } catch  {
       console.error('Error fetching tournament participants:');

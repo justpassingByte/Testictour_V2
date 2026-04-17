@@ -2005,5 +2005,11 @@
   "prize_pool_locked": "Prize Pool Locked",
   "prize_pool_locked_desc": "The prize pool is currently locked and secured in escrow.",
   "view_scoreboard": "View Scoreboard",
-  "projected": "Projected"
+  "projected": "Projected",
+  "tiebreak_rules": "Tiebreak Rules",
+  "tiebreak_rules_desc": "Priority order: 1. Total Points > 2. Total Placements (lower is better) > 3. Top 1 Count > 4. Best Single Rank.",
+  "prize_eligibility": "Prize Eligibility",
+  "prize_eligibility_desc": "Prizes are distributed based on the tournament's prize pool structure and final rankings after tiebreakers.",
+  "top4_rate": "% Top 4",
+  "top1_rate": "% Top 1"
 }

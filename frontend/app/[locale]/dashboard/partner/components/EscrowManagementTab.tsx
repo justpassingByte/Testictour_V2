@@ -460,6 +460,7 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
       </div>
 
       {/* DANH SÁCH PHÁT THƯỞNG */}
+      {tournamentStatus === "COMPLETED" && (
       <Card className="border-white/10 bg-card/50">
         <CardHeader>
           <CardTitle className="text-lg">Danh Sách Nhận Thưởng (Payout List)</CardTitle>
@@ -564,6 +565,7 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
           </div>
         </CardContent>
       </Card>
+      )}
     </div>
   )
 }

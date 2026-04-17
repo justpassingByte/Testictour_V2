@@ -5,13 +5,18 @@ import logger from '../utils/logger';
 import { Prisma, Participant } from '@prisma/client';
 import EscrowService from './EscrowService';
 import { bracketCache } from './BracketCacheService';
+import { tournamentCache } from './TournamentCacheService';
+import LeaderboardService from './LeaderboardService';
+import ConsistencyPipeline from './ConsistencyPipeline';
+import TournamentEventBus from './TournamentEventBus';
 
 import { autoAdvanceRoundQueue } from '../lib/queues';
 import { fetchMatchDataQueue } from '../lib/queues';
 import SummaryManagerService from './SummaryManagerService';
 import PrizeCalculationService from './PrizeCalculationService';
 import { calculatePlayerPosition } from '../utils/matchUtils';
-import crypto from 'crypto'; // Import crypto for UUID generation
+import { fisherYatesShuffle } from '../utils/shuffle';
+import crypto from 'crypto';
 
 // Assume we have access to io (Socket.IO server) via global or injected
 const io = (global as any).io;
@@ -130,12 +135,14 @@ export default class RoundService {
       data: { numberOfRounds: requiredNumberOfGroups }
     });
 
-    const lobbyAssignment = (firstPhase.lobbyAssignment || 'random') as 'random' | 'seeded' | 'swiss' | 'snake';
+    // Use lobbyAssignment if explicitly set, otherwise infer from phase.type
+    // (Swiss phases often have lobbyAssignment=null when created via UI)
+    const lobbyAssignment = (firstPhase.lobbyAssignment || (['swiss', 'snake'].includes(firstPhase.type) ? firstPhase.type : 'random')) as 'random' | 'seeded' | 'swiss' | 'snake';
 
     // Shuffle participants first
     let shuffled = [...participants];
     if (lobbyAssignment === 'random') {
-      shuffled.sort(() => Math.random() - 0.5);
+      shuffled = fisherYatesShuffle(shuffled);
     } else {
       shuffled.sort((a, b) => (b.scoreTotal || 0) - (a.scoreTotal || 0));
     }
@@ -237,14 +244,15 @@ export default class RoundService {
               include: {
                 lobbies: {
                   // Only load lobby state + completedMatchesCount — no matches/matchResults
-                  select: {
-                    id: true,
-                    name: true,
-                    state: true,
-                    fetchedResult: true,
-                    completedMatchesCount: true,
-                    participants: true,
-                  }
+                    select: {
+                      id: true,
+                      name: true,
+                      state: true,
+                      fetchedResult: true,
+                      completedMatchesCount: true,
+                      participants: true,
+                      matchNumber: true,
+                    }
                 }
               }
             }
@@ -324,32 +332,73 @@ export default class RoundService {
       } else {
         (phase.rounds as any[]).forEach((round: any) => {
           if (isMultiMatch && phase.rounds.length === 1) {
+            const lobbyAssignment = (phase.lobbyAssignment || (['swiss', 'snake'].includes(phase.type) ? phase.type : 'random')) as string;
+            const isSwissStyle = lobbyAssignment === 'swiss' || lobbyAssignment === 'seeded' || lobbyAssignment === 'snake';
+            
             // Swiss/Points single-round multi-match: show "Trận 1, Trận 2..."
             for (let m = 0; m < matchesPerRound; m++) {
-              const firstCompleted = round.lobbies[0]?.completedMatchesCount || 0;
-              phaseGroups.push({
-                id: round.id,
-                name: `Trận ${m + 1}`,
-                groupLetter: `Trận ${m + 1}`,
-                groupNumber: m + 1,
-                status: firstCompleted > m ? 'completed' : firstCompleted === m ? 'in_progress' : 'pending',
-                startTime: round.startTime,
-                endTime: round.endTime,
-                lobbies: (round.lobbies as any[]).map((lobby: any) => {
-                  const completed = lobby.completedMatchesCount || 0;
-                  return {
-                    id: `${lobby.id}_m${m}`,
-                    name: lobby.name,
-                    state: completed > m ? 'FINISHED' : completed === m ? (lobby.fetchedResult ? 'WAITING' : lobby.state) : 'WAITING',
-                    fetchedResult: completed > m,
-                    completedMatchesCount: completed,
-                    // Hide players for future matches in Swiss/MultiMatch rounds
-                    players: m > completed
-                      ? []
-                      : (lobby.participants as string[]).map(userId => userMap.get(userId) || { id: userId, username: 'Unknown' }),
-                  };
-                }),
-              });
+              if (isSwissStyle) {
+                const matchLobbies = (round.lobbies as any[]).filter(l => l.matchNumber === m + 1);
+                const templateLobbies = (round.lobbies as any[]).filter(l => l.matchNumber === 1);
+                
+                const allFetched = matchLobbies.length > 0 && matchLobbies.every(l => l.fetchedResult);
+                const anyPlaying = matchLobbies.some(l => l.state === 'PLAYING' || l.state === 'FINISHED');
+                
+                phaseGroups.push({
+                  id: `${round.id}_m${m}`,
+                  name: `Trận ${m + 1}`,
+                  groupLetter: `Trận ${m + 1}`,
+                  groupNumber: m + 1,
+                  status: allFetched ? 'completed' : (anyPlaying ? 'in_progress' : 'pending'),
+                  startTime: round.startTime,
+                  endTime: round.endTime,
+                  lobbies: matchLobbies.length > 0 
+                    ? matchLobbies.map((lobby: any) => ({
+                        id: lobby.id,
+                        name: lobby.name,
+                        state: lobby.state,
+                        fetchedResult: lobby.fetchedResult,
+                        completedMatchesCount: m,
+                        roundId: round.id,
+                        players: (lobby.participants as string[]).map(userId => userMap.get(userId) || { id: userId, username: 'Unknown' })
+                      }))
+                    : templateLobbies.map((lobby: any) => ({
+                        id: `${lobby.id}_m${m}`,
+                        name: lobby.name,
+                        state: 'WAITING',
+                        fetchedResult: false,
+                        completedMatchesCount: m,
+                        roundId: round.id,
+                        players: [] // Future matches have no players until reshuffle
+                      }))
+                });
+              } else {
+                const firstCompleted = round.lobbies[0]?.completedMatchesCount || 0;
+                phaseGroups.push({
+                  id: round.id,
+                  name: `Trận ${m + 1}`,
+                  groupLetter: `Trận ${m + 1}`,
+                  groupNumber: m + 1,
+                  status: firstCompleted > m ? 'completed' : firstCompleted === m ? 'in_progress' : 'pending',
+                  startTime: round.startTime,
+                  endTime: round.endTime,
+                  lobbies: (round.lobbies as any[]).map((lobby: any) => {
+                    const completed = lobby.completedMatchesCount || 0;
+                    return {
+                      id: `${lobby.id}_m${m}`,
+                      name: lobby.name,
+                      state: completed > m ? 'FINISHED' : completed === m ? (lobby.fetchedResult ? 'WAITING' : lobby.state) : 'WAITING',
+                      fetchedResult: completed > m,
+                      completedMatchesCount: completed,
+                      roundId: round.id,
+                      // Hide players for future matches in Swiss/MultiMatch rounds
+                      players: m > completed
+                        ? []
+                        : (lobby.participants as string[]).map(userId => userMap.get(userId) || { id: userId, username: 'Unknown' }),
+                    };
+                  }),
+                });
+              }
             }
           } else {
             // Standard single-match: each round = one Group (A, B, C...)
@@ -482,6 +531,10 @@ export default class RoundService {
    * Frontend calls: GET /api/rounds/:roundId/scoreboard?limitMatch=N
    */
   static async getScoreboard(roundId: string, limitMatch?: number | null) {
+    // ── Cache check: return cached scoreboard if available ──
+    const cached = await tournamentCache.getScoreboard(roundId, limitMatch ?? null);
+    if (cached) return cached;
+
     // 1. Fetch the round with all data needed
     const round = await prisma.round.findUnique({
       where: { id: roundId },
@@ -568,7 +621,8 @@ export default class RoundService {
     // 'elimination': single-match placement ranking (last match score used for ranking)
     // 'points', 'swiss', 'checkmate', etc.: cumulative total across all matches
     const isElimination = phase.type === 'elimination';
-    const advancementN = (phase.advancementCondition as any)?.value ?? null;
+    const advancementCondition = (phase.advancementCondition as any) || {};
+    const advancementN = advancementCondition.type === 'placement' ? (advancementCondition.value ?? null) : null;
     const matchesPerRound = phase.matchesPerRound || 1;
 
     type RawPlayer = {
@@ -677,7 +731,7 @@ export default class RoundService {
       let status: 'advanced' | 'eliminated' | 'pending';
 
       const thisLobby = round.lobbies.find(l => l.id === player.lobbyId);
-      const isLobbyCompleted = thisLobby?.fetchedResult === true;
+      const isLobbyCompleted = thisLobby?.state === 'FINISHED' || (thisLobby?.fetchedResult === true && (thisLobby?.completedMatchesCount || 0) >= matchesPerRound);
 
       if (player.roundOutcomeStatus) {
         status = player.roundOutcomeStatus as 'advanced' | 'eliminated';
@@ -769,7 +823,7 @@ export default class RoundService {
       }))
     };
 
-    return {
+    const result = {
       success: true,
       tournament: tournament || { id: tournamentId, name: 'Unknown' },
       round: roundForFE,
@@ -792,6 +846,11 @@ export default class RoundService {
         maxCompletedLobbyMatches,
       }
     };
+
+    // ── Cache the scoreboard result ──
+    tournamentCache.setScoreboard(roundId, limitMatch ?? null, result).catch(() => {});
+
+    return result;
   }
 
   /**
@@ -866,7 +925,7 @@ export default class RoundService {
 
     // For each active round, collect existing players, add redistributed ones, re-create lobbies
     const playersPerGroup = Math.ceil(survivingParticipants.length / activeRounds.length);
-    let redistributed = [...survivingParticipants].sort(() => Math.random() - 0.5);
+    let redistributed = fisherYatesShuffle([...survivingParticipants]);
 
     for (const round of activeRounds) {
       // Get chunk of players to add to this group  
@@ -994,13 +1053,13 @@ export default class RoundService {
     logger.info(`[ForceAdvancePhase] Triggering autoAdvance on last round ${lastRoundId} to run recovery/phase-transition path.`);
     const result = await RoundService.autoAdvance(lastRoundId);
 
-    // Emit real-time updates
+    // Emit real-time updates via pipeline
     try {
-      if ((global as any).io) {
-        await bracketCache.invalidate(phase.tournamentId);
-        (global as any).io.to(`tournament:${phase.tournamentId}`).emit('bracket_update', { tournamentId: phase.tournamentId });
-        (global as any).io.to(`tournament:${phase.tournamentId}`).emit('tournament_update', { type: 'phase_force_advanced' });
-      }
+      await ConsistencyPipeline.onTournamentStateChanged({
+        tournamentId: phase.tournamentId,
+        type: 'phase_advanced',
+        detail: 'force_advanced',
+      });
     } catch (_) { /* non-fatal */ }
 
     return { message: `Phase "${phase.name}" force-advanced successfully.`, result };
@@ -1013,7 +1072,14 @@ export default class RoundService {
    */
   private static async _queueOrCallAutoAdvance(roundId: string): Promise<void> {
     if (autoAdvanceRoundQueue) {
-      await autoAdvanceRoundQueue.add('autoAdvanceRound', { roundId });
+      const uniqueSuffix = Date.now();
+      await autoAdvanceRoundQueue.add('autoAdvanceRound', { roundId }, {
+        jobId: `advance-${roundId}-${uniqueSuffix}`,
+        removeOnComplete: true,
+        removeOnFail: { count: 5 },
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 2000 },
+      });
     } else {
       // Redis not available — run directly in a deferred microtask so the caller's
       // transaction / response can finish first before we recurse.
@@ -1036,6 +1102,7 @@ export default class RoundService {
 
     let result: any;
     let jobsToQueue: any[] = [];
+    const emitter = TournamentEventBus.createTransactionalEmitter();
 
     try {
       // Use explicit timeouts to prevent P2028 on complex tournaments.
@@ -1096,7 +1163,7 @@ export default class RoundService {
             const participants = await tx.participant.findMany({
               where: { tournamentId: tournament.id, eliminated: false },
             });
-            const shuffled = participants.sort(() => Math.random() - 0.5);
+            const shuffled = fisherYatesShuffle(participants);
 
             const lobbySize = currentRound.phase.lobbySize || 8;
             const maxLobbiesPerGroup = 4;
@@ -1119,7 +1186,7 @@ export default class RoundService {
                 const groupParticipants = shuffled.slice(start, end);
 
                 if (groupParticipants.length > 0) {
-                  const lobbyAssignment = (currentRound.phase.lobbyAssignment || 'random') as 'random' | 'seeded' | 'swiss' | 'snake';
+                  const lobbyAssignment = (currentRound.phase.lobbyAssignment || (['swiss', 'snake'].includes(currentRound.phase.type) ? currentRound.phase.type : 'random')) as 'random' | 'seeded' | 'swiss' | 'snake';
                   const matchesPerRound = currentRound.phase.matchesPerRound || 1;
                   await LobbyService.autoAssignLobbies(round.id, groupParticipants, lobbySize, lobbyAssignment, matchesPerRound, tx);
                   logger.info(`[ParallelGroups] Auto-assigned ${groupParticipants.length} participants to Group ${this.groupNameFromNumber(round.roundNumber)}`);
@@ -1141,7 +1208,7 @@ export default class RoundService {
                 where: { tournamentId: currentRound.phase.tournamentId, eliminated: false },
               });
               const lobbySize = currentRound.phase.lobbySize || 8;
-              const lobbyAssignment = (currentRound.phase.lobbyAssignment || 'random') as 'random' | 'seeded' | 'swiss' | 'snake';
+              const lobbyAssignment = (currentRound.phase.lobbyAssignment || (['swiss', 'snake'].includes(currentRound.phase.type) ? currentRound.phase.type : 'random')) as 'random' | 'seeded' | 'swiss' | 'snake';
               const matchesPerRound = currentRound.phase.matchesPerRound || 1;
               // Return value intentionally not destructured here — timers are scheduled
               // post-transaction via the DB query below (see [PostTx] block after transaction).
@@ -1152,9 +1219,9 @@ export default class RoundService {
           jobsToQueue = [];
 
           if ((global as any).io) {
-            (global as any).io.to(`tournament:${currentRound.phase.tournamentId}`).emit('tournament_update', { type: 'round_started', round: { id: roundId } });
             await bracketCache.invalidate(currentRound.phase.tournamentId);
-            (global as any).io.to(`tournament:${currentRound.phase.tournamentId}`).emit('bracket_update', { tournamentId: currentRound.phase.tournamentId });
+            emitter.queue(`tournament:${currentRound.phase.tournamentId}`, 'tournament_update', { type: 'round_started', round: { id: roundId } });
+            emitter.queue(`tournament:${currentRound.phase.tournamentId}`, 'bracket_update', { tournamentId: currentRound.phase.tournamentId });
           }
           return { message: 'Round(s) started successfully', roundId };
         }
@@ -1177,35 +1244,56 @@ export default class RoundService {
           // ═══ MULTI-MATCH SUPPORT: matchesPerRound > 1 → play multiple matches, reshuffle between each ═══
           const matchesPerRound = currentRound.phase.matchesPerRound || 1;
           if (matchesPerRound > 1) {
-            // Fetch fresh lobby match counts to avoid stale data blocking multi-round advancement
-            const lobbiesFresh = await tx.lobby.findMany({
-              where: { roundId: currentRound.id },
-              select: { completedMatchesCount: true }
-            });
-            const minCompletedMatches = Math.min(...lobbiesFresh.map((l: any) => l.completedMatchesCount || 0));
-            logger.info(`[MultiMatch] Round ${currentRound.id}: Match (min) ${minCompletedMatches}/${matchesPerRound} completed.`);
+            // For Swiss phases with separate lobbies per match, determine completion
+            // by counting the distinct matchNumbers that have ALL their lobbies fetched.
+            const lobbyAssignment = (currentRound.phase.lobbyAssignment || (['swiss', 'snake'].includes(currentRound.phase.type) ? currentRound.phase.type : 'random')) as string;
+            const isSwissStyle = lobbyAssignment === 'swiss' || lobbyAssignment === 'seeded' || lobbyAssignment === 'snake';
 
-            if (minCompletedMatches < matchesPerRound) {
-              // Scores already updated by MatchResultService/simulate-match (scoreTotal incremented directly).
-              // Just reshuffle lobbies for the next match.
-              logger.info(`[MultiMatch] Reshuffling lobbies for match ${minCompletedMatches + 1}/${matchesPerRound}.`);
-
-              // Collect all unique participant IDs
-              const allParticipantIds: string[] = [];
-              for (const lobby of currentRound.lobbies) {
-                const pIds = lobby.participants as string[];
-                if (Array.isArray(pIds)) allParticipantIds.push(...pIds);
+            let completedMatchCount: number;
+            if (isSwissStyle) {
+              // Swiss: each match has its own set of lobbies (matchNumber=1,2,3...).
+              // A match is "completed" when ALL lobbies of that matchNumber have fetchedResult=true.
+              const allLobbies = await tx.lobby.findMany({
+                where: { roundId: currentRound.id },
+                select: { matchNumber: true, fetchedResult: true }
+              });
+              const matchNumbers = [...new Set(allLobbies.map(l => l.matchNumber))].sort((a, b) => a - b);
+              completedMatchCount = 0;
+              for (const mn of matchNumbers) {
+                const lobbiesForMatch = allLobbies.filter(l => l.matchNumber === mn);
+                const allFetched = lobbiesForMatch.every(l => l.fetchedResult);
+                if (allFetched) completedMatchCount = mn; // mn is 1-based
+                else break;
               }
-              const uniqueParticipantIds = [...new Set(allParticipantIds)];
-              let shuffled: string[] = [];
+            } else {
+              // Points/elimination: single set of lobbies, use completedMatchesCount
+              const lobbiesFresh = await tx.lobby.findMany({
+                where: { roundId: currentRound.id },
+                select: { completedMatchesCount: true }
+              });
+              completedMatchCount = Math.min(...lobbiesFresh.map((l: any) => l.completedMatchesCount || 0));
+            }
 
-              const lobbyAssignment = (currentRound.phase.lobbyAssignment || 'random') as string;
+            logger.info(`[MultiMatch] Round ${currentRound.id}: ${completedMatchCount}/${matchesPerRound} matches completed (isSwissStyle=${isSwissStyle}).`);
+
+            if (completedMatchCount < matchesPerRound) {
+              const nextMatchNumber = completedMatchCount + 1;
+              logger.info(`[MultiMatch] Preparing match ${nextMatchNumber}/${matchesPerRound}.`);
 
               if (currentRound.phase.type === 'elimination' || currentRound.phase.type === 'points' || lobbyAssignment === 'none') {
                 // ELIMINATION / POINTS BO2/BO3: Do NOT shuffle! Players play against the same opponents.
-                logger.info(`[MultiMatch] ${currentRound.phase.type} phase: Skipping reshuffle, recreating same lobbies for next match.`);
+                // Reset the SAME lobbies for the next match (in-place).
+                logger.info(`[MultiMatch] ${currentRound.phase.type} phase: Skipping reshuffle, resetting same lobbies for next match.`);
+                
+                const lobbyIdsToReset: string[] = [];
                 for (let i = 0; i < currentRound.lobbies.length; i++) {
                   const lobby = currentRound.lobbies[i];
+                  // ONLY reset lobbies that have exactly finished the current stage
+                  if ((lobby as any).completedMatchesCount !== completedMatchCount) {
+                    continue;
+                  }
+                  lobbyIdsToReset.push(lobby.id);
+                  
                   await tx.lobby.update({
                     where: { id: lobby.id },
                     data: {
@@ -1215,111 +1303,152 @@ export default class RoundService {
                       phaseStartedAt: new Date(),
                     }
                   });
-                  logger.debug(`[MultiMatch] Lobby ${lobby.id} recreated with same ${((lobby.participants as any[]) || []).length} players.`);
+                  logger.debug(`[MultiMatch] Lobby ${lobby.id} reset with same ${((lobby.participants as any[]) || []).length} players.`);
                 }
+                
+                if (lobbyIdsToReset.length === 0) {
+                     return { _action: 'none', message: `Match ${nextMatchNumber} already active across lobbies.` };
+                }
+
+                // Emit events & return sentinel
+                const tId = currentRound.phase.tournamentId;
+                await bracketCache.invalidate(tId);
+                emitter.queue(`tournament:${tId}`, 'bracket_update', { tournamentId: tId });
+                emitter.queue(`tournament:${tId}`, 'tournament_update', { type: 'lobbies_reshuffled', matchNumber: completedMatchCount, matchesPerRound });
+
+                return {
+                  _action: 'schedule_lobby_timers',
+                  lobbyIds: lobbyIdsToReset,
+                  delayMs: 300_000,
+                  message: `Match ${completedMatchCount}/${matchesPerRound} completed. Lobbies reset for next match.`,
+                  matchNumber: completedMatchCount,
+                  matchesPerRound,
+                  tournamentId: currentRound.phase.tournamentId
+                };
+
               } else {
-                if (lobbyAssignment === 'swiss' || lobbyAssignment === 'seeded' || lobbyAssignment === 'snake') {
-                  const parts = await tx.participant.findMany({
-                    where: { userId: { in: uniqueParticipantIds }, tournamentId: currentRound.phase.tournamentId },
-                    select: { userId: true, scoreTotal: true, user: { select: { username: true } } }
-                  });
+                // ═══ SWISS/SNAKE/SEEDED: CREATE NEW LOBBIES for the next match ═══
+                // Explicitly seal previous match's lobbies as FINISHED to prevent UI getting stuck in PLAYING
+                await tx.lobby.updateMany({
+                  where: { roundId: currentRound.id, matchNumber: completedMatchCount, state: 'PLAYING' },
+                  data: { state: 'FINISHED' }
+                });
 
-                  // Fetch MatchResults to get placements for tiebreaker
-                  const matchResultsForTiebreak = await tx.matchResult.findMany({
-                    where: {
-                      userId: { in: uniqueParticipantIds },
-                      match: { lobby: { roundId: currentRound.id } }
-                    },
-                    select: { userId: true, placement: true }
-                  });
+                // Collect all unique participant IDs from the LATEST match's lobbies
+                const latestMatchLobbies = await tx.lobby.findMany({
+                  where: { roundId: currentRound.id, matchNumber: completedMatchCount },
+                  select: { participants: true }
+                });
+                const allParticipantIds: string[] = [];
+                for (const lobby of latestMatchLobbies) {
+                  const pIds = lobby.participants as string[];
+                  if (Array.isArray(pIds)) allParticipantIds.push(...pIds);
+                }
+                const uniqueParticipantIds = [...new Set(allParticipantIds)];
 
-                  const placementsMap = new Map<string, number[]>();
-                  for (const result of matchResultsForTiebreak) {
-                    const existing = placementsMap.get(result.userId) || [];
-                    existing.push(result.placement);
-                    placementsMap.set(result.userId, existing);
-                  }
+                // Fetch participants with scores for sorting
+                const parts = await tx.participant.findMany({
+                  where: { userId: { in: uniqueParticipantIds }, tournamentId: currentRound.phase.tournamentId },
+                  select: { userId: true, scoreTotal: true, user: { select: { username: true } } }
+                });
 
-                  const partsWithPlacements = parts.map(p => ({
-                    userId: p.userId,
-                    score: p.scoreTotal || 0,
-                    placements: placementsMap.get(p.userId) || [],
-                    username: p.user?.username
-                  }));
+                // Fetch MatchResults for tiebreaker
+                const matchResultsForTiebreak = await tx.matchResult.findMany({
+                  where: {
+                    userId: { in: uniqueParticipantIds },
+                    match: { lobby: { roundId: currentRound.id } }
+                  },
+                  select: { userId: true, placement: true }
+                });
 
-                  // Use the standard tiebreak comparator
-                  partsWithPlacements.sort(RoundService.tiebreakComparator);
-
-                  logger.info(`[MultiMatch] Sorted logic (${lobbyAssignment}) for Round ${currentRound.id}:`);
-                  partsWithPlacements.forEach((p, idx) => {
-                    logger.info(`  ${idx + 1}. ${p.username || p.userId}: ${p.score} pts (placements: [${p.placements.join(', ')}])`);
-                  });
-
-                  if (lobbyAssignment === 'snake') {
-                    const numLobbies = Math.ceil(partsWithPlacements.length / (currentRound.phase.lobbySize || 8));
-                    const tempLobbies: any[][] = Array.from({ length: numLobbies }, () => []);
-                    for (let i = 0; i < partsWithPlacements.length; i++) {
-                      const lobbyIndex = i % numLobbies;
-                      const isReversed = Math.floor(i / numLobbies) % 2 !== 0;
-                      if (isReversed) tempLobbies[numLobbies - 1 - lobbyIndex].push(partsWithPlacements[i]);
-                      else tempLobbies[lobbyIndex].push(partsWithPlacements[i]);
-                    }
-                    shuffled = tempLobbies.flat().map(p => p.userId);
-                  } else {
-                    shuffled = partsWithPlacements.map(p => p.userId);
-                  }
-                } else {
-                  shuffled = uniqueParticipantIds.sort(() => Math.random() - 0.5);
+                const placementsMap = new Map<string, number[]>();
+                for (const result of matchResultsForTiebreak) {
+                  const existing = placementsMap.get(result.userId) || [];
+                  existing.push(result.placement);
+                  placementsMap.set(result.userId, existing);
                 }
 
-                const lobbySize = currentRound.phase.lobbySize || 8;
+                const partsWithPlacements = parts.map(p => ({
+                  userId: p.userId,
+                  score: p.scoreTotal || 0,
+                  placements: placementsMap.get(p.userId) || [],
+                  username: p.user?.username
+                }));
 
-                // Redistribute shuffled participants across existing lobbies, reset states
-                for (let i = 0; i < currentRound.lobbies.length; i++) {
-                  const lobby = currentRound.lobbies[i];
+                partsWithPlacements.sort(RoundService.tiebreakComparator);
+
+                logger.info(`[MultiMatch] Sorted logic (${lobbyAssignment}) for Round ${currentRound.id}:`);
+                partsWithPlacements.forEach((p, idx) => {
+                  logger.info(`  ${idx + 1}. ${p.username || p.userId}: ${p.score} pts (placements: [${p.placements.join(', ')}])`);
+                });
+
+                let shuffled: string[];
+                const lobbySize = currentRound.phase.lobbySize || 8;
+                const numLobbies = Math.ceil(partsWithPlacements.length / lobbySize);
+
+                if (lobbyAssignment === 'snake') {
+                  const tempLobbies: any[][] = Array.from({ length: numLobbies }, () => []);
+                  for (let i = 0; i < partsWithPlacements.length; i++) {
+                    const lobbyIndex = i % numLobbies;
+                    const isReversed = Math.floor(i / numLobbies) % 2 !== 0;
+                    if (isReversed) tempLobbies[numLobbies - 1 - lobbyIndex].push(partsWithPlacements[i]);
+                    else tempLobbies[lobbyIndex].push(partsWithPlacements[i]);
+                  }
+                  shuffled = tempLobbies.flat().map(p => p.userId);
+                } else {
+                  shuffled = partsWithPlacements.map(p => p.userId);
+                }
+
+                // CREATE NEW LOBBIES for Match N+1
+                const newLobbyIds: string[] = [];
+                for (let i = 0; i < numLobbies; i++) {
                   const start = i * lobbySize;
                   const end = Math.min(start + lobbySize, shuffled.length);
                   const newParticipants = shuffled.slice(start, end);
                   if (newParticipants.length === 0) continue;
 
-                  await tx.lobby.update({
-                    where: { id: lobby.id },
+                  const newLobby = await tx.lobby.create({
                     data: {
+                      roundId: currentRound.id,
+                      name: `Lobby ${i + 1}`,
                       participants: newParticipants,
-                      fetchedResult: false,
+                      matchNumber: nextMatchNumber,
                       state: 'WAITING',
-                      matchStartedAt: null,
+                      fetchedResult: false,
+                      completedMatchesCount: 0,
                       phaseStartedAt: new Date(),
                     }
                   });
-                  logger.debug(`[MultiMatch] Lobby ${lobby.id} reshuffled with ${newParticipants.length} players.`);
+                  newLobbyIds.push(newLobby.id);
+                  logger.info(`[MultiMatch] Created NEW lobby ${newLobby.id} (matchNumber=${nextMatchNumber}) with ${newParticipants.length} players.`);
                 }
 
-              }
-
-              // Emit events for frontend
-              if ((global as any).io) {
+                // Emit events for frontend
                 const tId = currentRound.phase.tournamentId;
                 await bracketCache.invalidate(tId);
-                (global as any).io.to(`tournament:${tId}`).emit('bracket_update', { tournamentId: tId });
-                (global as any).io.to(`tournament:${tId}`).emit('tournament_update', { type: 'lobbies_reshuffled', matchNumber: minCompletedMatches, matchesPerRound });
+                emitter.queue(`tournament:${tId}`, 'bracket_update', { tournamentId: tId });
+                emitter.queue(`tournament:${tId}`, 'tournament_update', { type: 'lobbies_reshuffled', matchNumber: completedMatchCount, matchesPerRound });
+
+                return {
+                  _action: 'schedule_lobby_timers',
+                  lobbyIds: newLobbyIds,
+                  delayMs: 300_000,
+                  message: `Match ${completedMatchCount}/${matchesPerRound} completed. New lobbies created for match ${nextMatchNumber}.`,
+                  matchNumber: completedMatchCount,
+                  matchesPerRound,
+                  tournamentId: currentRound.phase.tournamentId
+                };
               }
-
-
-              return {
-                _action: 'schedule_lobby_timers',
-                lobbyIds: (currentRound.lobbies as any[]).map((l: any) => l.id),
-                delayMs: 300_000, // 5 minutes preparation time
-                message: `Match ${minCompletedMatches}/${matchesPerRound} completed. Lobbies reshuffled for next match.`,
-                matchNumber: minCompletedMatches,
-                matchesPerRound,
-                tournamentId: currentRound.phase.tournamentId
-              };
             }
             logger.info(`[MultiMatch] All ${matchesPerRound} matches done for round ${currentRound.id}. Finalizing round.`);
           }
 
           logger.debug(`Attempting to update Round ${roundId} status to 'completed'.`);
+          // Ensure all lobbies are sealed as FINISHED
+          await tx.lobby.updateMany({
+            where: { roundId: roundId },
+            data: { state: 'FINISHED' }
+          });
           await tx.round.update({ where: { id: roundId }, data: { status: 'completed', endTime: new Date() } });
           logger.debug(`Round ${currentRound.id} status updated to 'completed'.`);
 
@@ -1547,6 +1676,9 @@ export default class RoundService {
         return { message: 'Round in unexpected state, no action taken.' };
       }, { maxWait: 10000, timeout: 30000 }); // 30s timeout to handle large tournaments
 
+      // Flush socket emissions after transaction commits successfully
+      emitter.flush();
+
       // After the transaction commits, queue the jobs (only if queue is available)
       if (jobsToQueue.length > 0 && fetchMatchDataQueue) {
         logger.info(`Queuing ${jobsToQueue.length} match data jobs after transaction commit.`);
@@ -1625,6 +1757,19 @@ export default class RoundService {
           const LobbyTimerSvc = (await import('./LobbyTimerService')).default;
           const { LOBBY_STATE: LB_STATE } = await import('../constants/lobbyStates');
           logger.info(`[PostTx] Scheduling WAITING→READY_CHECK timers for ${result.lobbyIds.length} lobbies (multi-match reshuffle, delay=${result.delayMs}ms).`);
+
+          // Clear stale Redis ready-sets from the previous match so new match starts fresh
+          try {
+            const { createClient } = await import('../lib/redis');
+            const redis = createClient();
+            for (const lobbyId of result.lobbyIds) {
+              await redis.del(`lobby:ready:${lobbyId}`);
+            }
+            logger.info(`[PostTx] Cleared Redis ready-sets for ${result.lobbyIds.length} lobbies after reshuffle.`);
+          } catch (redisErr) {
+            logger.warn(`[PostTx] Failed to clear Redis ready-sets (non-fatal): ${redisErr instanceof Error ? redisErr.message : String(redisErr)}`);
+          }
+
           for (const lobbyId of result.lobbyIds) {
             await LobbyTimerSvc.scheduleTransition(lobbyId, LB_STATE.READY_CHECK, result.delayMs || 300_000).catch(err => {
               logger.warn(`[PostTx] Failed to schedule lobby timer for ${lobbyId}: ${err instanceof Error ? err.message : String(err)}`);
@@ -2129,48 +2274,23 @@ export default class RoundService {
   }
 
   private static async _calculateScoresForRound(tx: Prisma.TransactionClient, roundId: string): Promise<Map<string, number>> {
-    const lobbiesInRound = await tx.lobby.findMany({
-      where: { roundId },
-      include: { matches: { include: { matchResults: true } } }
-    });
+    // Single SQL aggregate — replaces O(n×m) iteration over lobbies→matches→results
+    const scores = await tx.$queryRaw<{ userId: string; total: number }[]>`
+      SELECT mr."userId", COALESCE(SUM(mr."points"), 0)::int as total
+      FROM "MatchResult" mr
+      JOIN "Match" m ON m.id = mr."matchId"
+      JOIN "Lobby" l ON l.id = m."lobbyId"
+      WHERE l."roundId" = ${roundId}
+      GROUP BY mr."userId"
+    `;
 
-    const scores = new Map<string, number>();
-    let matchCount = 0;
-    let resultCount = 0;
-
-    logger.debug(`[Scoring] Processing ${lobbiesInRound.length} lobbies for round ${roundId}`);
-
-    for (const lobby of lobbiesInRound) {
-      logger.debug(`[Scoring] Processing lobby ${lobby.id} with ${lobby.matches?.length || 0} matches`);
-      for (const match of lobby.matches) {
-        matchCount++;
-        logger.debug(`[Scoring] Processing match ${match.id} with ${match.matchResults?.length || 0} results`);
-        for (const result of match.matchResults) {
-          resultCount++;
-          const currentScore = scores.get(result.userId) || 0;
-          scores.set(result.userId, currentScore + result.points);
-          logger.debug(`[Scoring] User ${result.userId} scored ${result.points}. Current total: ${scores.get(result.userId)}`);
-        }
-      }
+    const scoreMap = new Map<string, number>();
+    for (const row of scores) {
+      scoreMap.set(row.userId, Number(row.total) || 0);
     }
 
-    logger.debug(`[Scoring] Calculated scores for round ${roundId}: ${scores.size} players, ${matchCount} matches, ${resultCount} results`);
-
-    // Log the scores for debugging
-    if (scores.size > 0) {
-      const scoresLog = Array.from(scores.entries())
-        .sort((a, b) => b[1] - a[1])  // Sort by score descending
-        .map(([userId, score]) => {
-          if (score === 0) {
-            logger.debug(`[Scoring] User ${userId} has 0 score in round ${roundId}. This might indicate missing match results for this user.`);
-          }
-          return `${userId}: ${score}`;
-        })
-        .join(', ');
-      logger.debug(`[Scoring] Round ${roundId} scores: ${scoresLog}`);
-    }
-
-    return scores;
+    logger.debug(`[Scoring] Round ${roundId}: ${scoreMap.size} players scored via SQL aggregate`);
+    return scoreMap;
   }
 
   private static async _updateParticipantTotalScores(tx: Prisma.TransactionClient, tournamentId: string, currentRoundId: string) {
@@ -2566,9 +2686,25 @@ export default class RoundService {
       logger.info(`[Advancement Logic] Eliminated ${playerIdsToEliminate.length} participants.`);
     }
   }
+  static async payoutPrizes(tx: Prisma.TransactionClient, tournamentId: string, winners?: any[]) {
+    if (!winners || winners.length === 0) {
+      const participants = await tx.participant.findMany({ where: { tournamentId } });
+      const phaseMatchResults = await tx.matchResult.findMany({
+        where: { match: { lobby: { round: { phase: { tournamentId } } } } },
+        select: { userId: true, placement: true },
+      });
+      const phasePlacementsMap = new Map<string, number[]>();
+      for (const r of phaseMatchResults) {
+        const arr = phasePlacementsMap.get(r.userId) || [];
+        arr.push(r.placement);
+        phasePlacementsMap.set(r.userId, arr);
+      }
+      
+      winners = participants
+        .map(p => ({ ...p, score: p.scoreTotal || 0, placements: phasePlacementsMap.get(p.userId) || [] }))
+        .sort(RoundService.tiebreakComparator);
+    }
 
-
-  static async payoutPrizes(tx: Prisma.TransactionClient, tournamentId: string, winners: Participant[]) {
     const tournament = await tx.tournament.findUnique({
       where: { id: tournamentId },
       include: {
@@ -2615,6 +2751,22 @@ export default class RoundService {
 
     // Process each winner and create reward records
     for (const prize of prizeDistribution) {
+      // Guard against double payout
+      const participantRecord = winners.find(w => w.id === prize.participantId);
+      if (participantRecord?.rewarded) {
+        logger.info(`Participant ${prize.participantId} is already rewarded, skipping duplicate payout validation.`);
+        continue;
+      }
+
+      const existingRewardCount = await tx.reward.count({
+        where: { participantId: prize.participantId, tournamentId: tournamentId }
+      });
+
+      if (existingRewardCount > 0) {
+        logger.info(`Participant ${prize.participantId} already has a reward for tournament ${tournamentId}. Skipping.`);
+        continue;
+      }
+
       logger.debug(`Payout: Participant ${prize.participantId} (Rank ${prize.rank}) receives ${prize.amount} from the prize pool.`);
 
       // Create a Reward record in the database
@@ -2641,83 +2793,42 @@ export default class RoundService {
     logger.info(`Paid out prizes for tournament ${tournamentId} to ${prizeDistribution.length} winners`);
   }
 
-  // Phương thức mới để đảm bảo tất cả rounds, lobbies và roundOutcomes đều được đánh dấu completed
+  // Batch-optimized: ensures all rounds, lobbies and roundOutcomes are marked completed
   private static async _ensureAllResourcesCompleted(tx: Prisma.TransactionClient, tournamentId: string) {
     logger.info(`Ensuring all resources are marked as completed for tournament ${tournamentId}`);
 
-    // 1. Tìm tất cả rounds của tournament chưa completed
-    const phases = await tx.phase.findMany({
-      where: { tournamentId: tournamentId },
-      include: { rounds: true }
+    // Batch 1: Mark all phases as completed
+    const phasesUpdated = await tx.phase.updateMany({
+      where: { tournamentId, status: { not: 'completed' } },
+      data: { status: 'completed' },
     });
 
-    for (const phase of phases) {
-      // Cập nhật phase status nếu chưa completed
-      if (phase.status !== 'completed') {
-        await tx.phase.update({
-          where: { id: phase.id },
-          data: { status: 'completed' }
-        });
-      }
+    // Batch 2: Mark all rounds as completed
+    const roundsUpdated = await tx.round.updateMany({
+      where: { phase: { tournamentId }, status: { not: 'completed' } },
+      data: { status: 'completed', endTime: new Date() },
+    });
 
-      // Tìm các rounds chưa completed trong phase
-      const incompleteRounds = phase.rounds.filter(r => r.status !== 'completed');
+    // Batch 3: Mark all lobbies as fetched
+    const lobbiesUpdated = await tx.lobby.updateMany({
+      where: { round: { phase: { tournamentId } }, fetchedResult: false },
+      data: { fetchedResult: true },
+    });
 
-      if (incompleteRounds.length > 0) {
-        logger.info(`Updating ${incompleteRounds.length} incomplete rounds in phase ${phase.id} to completed`);
+    // Batch 4: Update pending roundOutcomes based on participant.eliminated status
+    await tx.$executeRaw`
+      UPDATE "RoundOutcome" ro
+      SET status = CASE
+        WHEN p.eliminated = true THEN 'eliminated'
+        ELSE 'advanced'
+      END
+      FROM "Participant" p
+      WHERE ro."participantId" = p.id
+        AND p."tournamentId" = ${tournamentId}
+        AND ro.status NOT IN ('advanced', 'eliminated')
+    `;
 
-        for (const round of incompleteRounds) {
-          // Cập nhật round status
-          await tx.round.update({
-            where: { id: round.id },
-            data: { status: 'completed', endTime: new Date() }
-          });
-
-          // 2. Cập nhật tất cả lobbies của round này
-          const lobbies = await tx.lobby.findMany({
-            where: { roundId: round.id }
-          });
-
-          if (lobbies.length > 0) {
-            for (const lobby of lobbies) {
-              // Cập nhật lobby fetchedResult nếu chưa
-              if (!lobby.fetchedResult) {
-                await tx.lobby.update({
-                  where: { id: lobby.id },
-                  data: { fetchedResult: true }
-                });
-              }
-            }
-            logger.info(`Updated ${lobbies.length} lobbies to fetchedResult=true for round ${round.id}`);
-          }
-
-          // 3. Cập nhật tất cả roundOutcomes của round này
-          const pendingOutcomes = await tx.roundOutcome.findMany({
-            where: {
-              roundId: round.id,
-              status: { notIn: ['advanced', 'eliminated'] }
-            }
-          });
-
-          if (pendingOutcomes.length > 0) {
-            for (const outcome of pendingOutcomes) {
-              // Kiểm tra xem participant có bị loại không để xác định trạng thái
-              const participant = await tx.participant.findUnique({
-                where: { id: outcome.participantId }
-              });
-
-              await tx.roundOutcome.update({
-                where: { id: outcome.id },
-                data: { status: participant && participant.eliminated ? 'eliminated' : 'advanced' }
-              });
-            }
-            logger.info(`Updated ${pendingOutcomes.length} pending round outcomes for round ${round.id}`);
-          }
-        }
-      }
-    }
-
-    logger.info(`All resources for tournament ${tournamentId} have been updated to completed status`);
+    logger.info(`All resources batch-updated: ${phasesUpdated.count} phases, ${roundsUpdated.count} rounds, ${lobbiesUpdated.count} lobbies`);
   }
 
   static async getResults(roundId: string) {

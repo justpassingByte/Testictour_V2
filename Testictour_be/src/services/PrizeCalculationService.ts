@@ -50,11 +50,10 @@ export default class PrizeCalculationService {
   ): Array<{ participantId: string; amount: number; rank: number }> {
     logger.info(`Calculating final prize distribution for ${participants.length} participants`);
     
-    // Sort participants by score (highest first), then by id for deterministic ordering
-    const sortedParticipants = [...participants].sort((a, b) => {
-      if (b.scoreTotal !== a.scoreTotal) return b.scoreTotal - a.scoreTotal;
-      return a.id.localeCompare(b.id); // deterministic tiebreak
-    });
+    // We assume `participants` are ALREADY sorted by the caller using the correct tiebreakers (e.g. RoundService.tiebreakComparator).
+    // Re-sorting here would destroy the complex tiebreaking logic (placements, etc.).
+    const sortedParticipants = [...participants];
+
     
     // Calculate prize for each eligible participant based on their position
     const distribution: Array<{ participantId: string; amount: number; rank: number }> = [];

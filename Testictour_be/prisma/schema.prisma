@@ -208,6 +208,7 @@ model Lobby {
   fetchedResult         Boolean   @default(false)
   matches               Match[]
   completedMatchesCount Int       @default(0)
+  matchNumber           Int       @default(1) // Which match in a multi-match round (1=first, 2=second, etc.)
 
   // State Machine
   state                    String    @default("WAITING")

@@ -23,7 +23,8 @@ export const ParticipantController = {
       try {
         const page = parseInt(req.query.page as string) || 1;
         const limit = parseInt(req.query.limit as string) || 10;
-        const result = await ParticipantService.list(req.params.tournamentId, page, limit);
+        const search = req.query.search as string | undefined;
+        const result = await ParticipantService.list(req.params.tournamentId, page, limit, search);
         res.json({ participants: result.data, total: result.total });
       } catch (err) {
         next(err);

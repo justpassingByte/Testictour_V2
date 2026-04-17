@@ -97,13 +97,21 @@ const autoAdvanceRoundWorker = new Worker(
       if (result._action === 'payout_prizes' && result.tournamentId) {
         logger.info(`AutoAdvanceRoundWorker: Handling deferred payout_prizes for tournament: ${result.tournamentId}`);
         try {
-          // DO NOT distribute prizes automatically!
-          // We have an Escrow system. The host must trigger the payout manually via the EscrowService.
-          logger.info(`AutoAdvanceRoundWorker: Skipped automatic payout for tournament ${result.tournamentId} (Delegating to Escrow System).`);
+          const { prisma } = await import('./services/prisma');
           
-          if ((global as any).io) {
-            (global as any).io.to(`tournament:${result.tournamentId}`).emit('leaderboard_update', { tournamentId: result.tournamentId });
-            (global as any).io.to(`tournament:${result.tournamentId}`).emit('tournament_update', { type: 'tournament_completed' });
+          await prisma.$transaction(async (tx) => {
+            // First ensure all lobbies and rounds and roundOutcomes are closed properly
+            await (RoundService as any)._ensureAllResourcesCompleted(tx, result.tournamentId);
+            // Then execute the automated payout process
+            await RoundService.payoutPrizes(tx, result.tournamentId);
+          });
+          logger.info(`AutoAdvanceRoundWorker: Successfully paid out prizes and finalized tournament ${result.tournamentId}.`);
+          
+          if (ioClient) {
+            ioClient.emit('worker_tournament_update', {
+              tournamentId: result.tournamentId,
+              type: 'tournament_completed'
+            });
           }
         } catch (err) {
           logger.error(`Failed to distribute prizes for completed tournament ${result.tournamentId}: ${err instanceof Error ? err.message : String(err)}`);
@@ -129,11 +137,13 @@ const autoAdvanceRoundWorker = new Worker(
           }
           logger.info(`Successfully created ${newRounds.length} rounds for phase ${result.nextPhaseId}`);
           
-          if ((global as any).io && result.tournamentId) {
+          if (ioClient && result.tournamentId) {
             const { bracketCache } = await import('./services/BracketCacheService');
             await bracketCache.invalidate(result.tournamentId);
-            (global as any).io.to(`tournament:${result.tournamentId}`).emit('bracket_update', { tournamentId: result.tournamentId });
-            (global as any).io.to(`tournament:${result.tournamentId}`).emit('tournament_update', { type: 'phase_started' });
+            ioClient.emit('worker_tournament_update', {
+              tournamentId: result.tournamentId,
+              type: 'phase_started'
+            });
           }
         } catch (err) {
           logger.error(`Failed to create rounds for phase ${result.nextPhaseId}: ${err instanceof Error ? err.message : String(err)}`);

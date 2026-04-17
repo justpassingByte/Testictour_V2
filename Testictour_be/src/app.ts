@@ -22,6 +22,7 @@ const app = express();
 const server = http.createServer(app);
 const allowedOrigins = [
   process.env.FRONTEND_URL || 'http://localhost:3000',
+  'https://www.testictour.com',
   'http://localhost:3000',
 ].filter(Boolean);
 
@@ -130,11 +131,19 @@ io.on('connection', (socket) => {
 
     // Tournament room: lightweight signal only — clients refetch bracket via HTTP/SWR
     io.to(`tournament:${tournamentId}`).emit('tournament_update', {
+      tournamentId,
       type: type || 'lobby_updated',
       lobbyId,
       roundId: rest.roundId,
       fetchedResult: rest.fetchedResult,
     });
+
+    // Also emit leaderboard_update since match results affect the leaderboard
+    if (type === 'lobby_completed' || type === 'lobby_updated' || type === 'match_completed') {
+      io.to(`tournament:${tournamentId}`).emit('leaderboard_update', {
+        tournamentId,
+      });
+    }
 
     // Lobby room: lean match results (placement/points only, no matchData)
     if (lobbyId && matchResults) {
@@ -145,19 +154,34 @@ io.on('connection', (socket) => {
       });
     }
 
-    // Notify player profile pages
-    io.emit('player_profile_update', {});
+    // Targeted player profile updates (NOT broadcast io.emit)
+    if (matchResults && Array.isArray(matchResults)) {
+      for (const result of matchResults) {
+        const userId = result.userId || result.id;
+        if (userId) {
+          io.to(`user:${userId}`).emit('user:profile_updated', {
+            userId,
+            reason: 'match_completed',
+          });
+        }
+      }
+    }
   });
 
   socket.on('worker_mini_tour_lobby_update', (data) => {
     const { miniTourLobbyId, ...lobbyData } = data;
     logger.info(`Received worker_mini_tour_lobby_update for MiniTour ${miniTourLobbyId}. Re-emitting to clients.`);
     io.to(`minitour:${miniTourLobbyId}`).emit('minitour_lobby_update', lobbyData);
-    // Also notify player profile pages for affected participants
+    // Targeted player profile updates (NOT broadcast)
     if (lobbyData.participants && Array.isArray(lobbyData.participants)) {
       for (const p of lobbyData.participants) {
         const userId = p.userId || p.id;
-        if (userId) io.emit('player_profile_update', { userId });
+        if (userId) {
+          io.to(`user:${userId}`).emit('user:profile_updated', {
+            userId,
+            reason: 'minitour_completed',
+          });
+        }
       }
     }
   });
@@ -166,6 +190,21 @@ io.on('connection', (socket) => {
     const { userId, payload } = data;
     if (userId && payload) {
       io.to(`user:${userId}`).emit('admin_notification', payload);
+    }
+  });
+
+  socket.on('worker_tournament_update', (data) => {
+    const { tournamentId, type } = data;
+    if (tournamentId) {
+      if (type === 'tournament_completed') {
+        io.to(`tournament:${tournamentId}`).emit('leaderboard_update', { tournamentId });
+        io.to(`tournament:${tournamentId}`).emit('tournament_update', { type });
+      } else if (type === 'phase_started') {
+        io.to(`tournament:${tournamentId}`).emit('bracket_update', { tournamentId });
+        io.to(`tournament:${tournamentId}`).emit('tournament_update', { type });
+      } else {
+        io.to(`tournament:${tournamentId}`).emit('tournament_update', { type });
+      }
     }
   });
 });
@@ -186,7 +225,7 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
 
 app.use(cookieParser());
 app.use(cors({
-  origin: [process.env.FRONTEND_URL || 'http://localhost:3000', 'http://localhost:3000'],
+  origin: [process.env.FRONTEND_URL || 'http://localhost:3000', 'https://www.testictour.com', 'http://localhost:3000'],
   credentials: true,
 }));
 app.use('/api/webhooks/payments/stripe', express.raw({ type: 'application/json' }));
@@ -206,6 +245,30 @@ const PORT = process.env.PORT || 4000;
 server.listen(PORT, async () => {
   console.log(`🚀 Server listening on port ${PORT}`);
   console.log(`📊 Summary workers initialized and ready to process data`);
+
+  // ── Warm leaderboard ZSETs for in-progress rounds on startup ──────────────
+  // After a restart, Redis ZSETs are empty. Without this, ZINCRBY starts from 0
+  // instead of the actual DB total, causing permanent score drift.
+  try {
+    const LeaderboardService = (await import('./services/LeaderboardService')).default;
+    const inProgressRounds = await prisma.round.findMany({
+      where: { status: 'in_progress' },
+      select: { id: true, phase: { select: { tournamentId: true } } },
+    });
+    if (inProgressRounds.length > 0) {
+      console.log(`📈 Warming leaderboard ZSETs for ${inProgressRounds.length} in-progress round(s)...`);
+      await Promise.all(
+        inProgressRounds.map((round: { id: string; phase: { tournamentId: string } }) => 
+          LeaderboardService.warmFromDB(round.id, round.phase.tournamentId).catch((err: unknown) => {
+            console.error(`  ⚠ Failed to warm ZSET for round ${round.id}: ${err instanceof Error ? err.message : String(err)}`);
+          })
+        )
+      );
+      console.log(`📈 Leaderboard warm-up complete.`);
+    }
+  } catch (warmErr) {
+    console.error(`Failed to warm leaderboard on startup: ${warmErr instanceof Error ? warmErr.message : String(warmErr)}`);
+  }
 
   // Check for completed tournaments that might not have summaries
   try {

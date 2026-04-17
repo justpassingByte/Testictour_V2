@@ -25,13 +25,25 @@ if (REDIS_ENABLED) {
 // Export the check function so it can be called directly when Redis is unavailable
 export async function checkAndAdvanceRound(roundId: string) {
   try {
+    // Quick non-transactional pre-check to avoid unnecessary lock contention
+    const preCheck = await prisma.round.findUnique({
+      where: { id: roundId },
+      select: { status: true },
+    });
+    if (!preCheck || preCheck.status === 'completed') {
+      logger.debug(`[CheckRound] Round ${roundId} already completed or not found. Skipping.`);
+      return;
+    }
+
     await prisma.$transaction(async (tx) => {
-      // 1. Acquire an exclusive lock on the Round to prevent parallel completion checks
+      // 1. Acquire a PostgreSQL advisory lock keyed on the round ID hash
+      //    This prevents parallel completion checks from deadlocking with autoAdvance
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${roundId}))`;
+
+      // 2. Re-check inside the lock (state may have changed between pre-check and lock acquisition)
       const round = await tx.round.findUnique({
         where: { id: roundId },
-        include: {
-          phase: true,
-        }
+        include: { phase: true },
       });
 
       if (!round) {
@@ -47,7 +59,7 @@ export async function checkAndAdvanceRound(roundId: string) {
         }
       }
 
-      // 2. Count incomplete lobbies INSIDE the transaction with the lock
+      // 3. Count incomplete lobbies INSIDE the transaction with the lock
       const incompleteLobbiesCount = await tx.lobby.count({
         where: { roundId: roundId, fetchedResult: false },
       });
@@ -56,15 +68,21 @@ export async function checkAndAdvanceRound(roundId: string) {
       logger.info(`[LockingCheck] Round ${roundId}: Incomplete lobbies count = ${incompleteLobbiesCount}. All complete? ${allLobbiesComplete}`);
 
       if (allLobbiesComplete) {
-        // 3. Trigger auto-advance (it will start its own transaction, which is fine since we return here)
+        // 4. Trigger auto-advance
+        // IMPORTANT: Use a unique jobId per invocation context (include timestamp).
+        // BullMQ retains completed jobIds for deduplication even after removeOnComplete,
+        // so reusing `advance-${round.id}` causes the 2nd/3rd multi-match advance to be silently dropped.
         if (autoAdvanceRoundQueue) {
+          const uniqueSuffix = Date.now();
           await autoAdvanceRoundQueue.add('autoAdvanceRound', { roundId: round.id }, {
+            jobId: `advance-${round.id}-${uniqueSuffix}`,
             removeOnComplete: true,
-            removeOnFail: true,
-            jobId: `advance-${round.id}`
+            removeOnFail: { count: 5 },
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 2000 },
           });
         } else {
-          // No Redis
+          // No Redis — run directly in deferred microtask
           setTimeout(async () => {
             try {
               const result = await RoundService.autoAdvance(round.id);
@@ -87,10 +105,9 @@ export async function checkAndAdvanceRound(roundId: string) {
           }, 0);
         }
       }
-    }, { timeout: 10000 }); // 10s timeout for the lock
+    }, { timeout: 10000 });
   } catch (error) {
     logger.error(`Error in checkAndAdvanceRound for round ${roundId}: ${error instanceof Error ? error.message : String(error)}`);
     throw error;
   }
 }
-

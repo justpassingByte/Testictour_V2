@@ -3,8 +3,9 @@
 import { ITournament } from '@/app/types/tournament'
 import { useTournamentStore } from '@/app/stores/tournamentStore'
 import { Badge } from "@/components/ui/badge"
-import { AlertTriangle, ShieldCheck, Lock } from "lucide-react"
+import { AlertTriangle, ShieldCheck, Lock, Copy, Check } from "lucide-react"
 import { useTranslations } from "next-intl"
+import { useState } from "react"
 
 interface TournamentInfoClientProps {
   initialTournament: ITournament;
@@ -25,10 +26,26 @@ export default function TournamentInfoClient({ initialTournament }: TournamentIn
   }
   const currentStatus = statusMapping[tournament.status] || { text: tournament.status, color: "" }
 
+  const [copiedId, setCopiedId] = useState(false)
+  const handleCopyId = () => {
+    navigator.clipboard.writeText(`Tournament ID: ${tournament.id}`)
+    setCopiedId(true)
+    setTimeout(() => setCopiedId(false), 2000)
+  }
+
   return (
     <div className="flex flex-col space-y-2">
       <div className="flex items-center space-x-2">
-        <h1 className="text-3xl font-bold">{tournament.name}</h1>
+        <h1 className="text-3xl font-bold flex items-center gap-2 group">
+          {tournament.name}
+          <button 
+            onClick={handleCopyId}
+            className="opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center p-1.5 rounded-md hover:bg-white/10 text-muted-foreground hover:text-white"
+            title="Copy Tournament ID for Support"
+          >
+            {copiedId ? <Check className="h-5 w-5 text-emerald-400" /> : <Copy className="h-5 w-5" />}
+          </button>
+        </h1>
         <Badge variant="outline" className={`${currentStatus.color} capitalize`}>
           {currentStatus.text}
         </Badge>
