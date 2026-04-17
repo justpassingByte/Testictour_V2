@@ -68,6 +68,7 @@ export interface LobbyStateSnapshot {
   totalDelaysUsed: number;
   pausedAt?: string;
   remainingDurationOnPause?: number; // seconds
+  fetchedResult?: boolean;
 }
 
 export interface IncomingMatch {
@@ -106,6 +107,7 @@ export default class LobbyStateService {
       totalDelaysUsed: lobby.totalDelaysUsed,
       pausedAt: lobby.state === LOBBY_STATE.PAUSED ? lobby.phaseStartedAt?.toISOString() : undefined,
       remainingDurationOnPause: lobby.remainingDurationOnPause ?? undefined,
+      fetchedResult: lobby.fetchedResult,
     };
   }
 

@@ -91,6 +91,19 @@ if (REDIS_ENABLED && lobbyTimerQueue) {
               logger.error(`Failed to schedule timer for lobby ${lobbyId}: ${err}`);
             }
           }
+
+          // Emit socket events so frontend updates after reshuffle
+          if (result.tournamentId) {
+            try {
+              const { bracketCache } = require('./services/BracketCacheService');
+              await bracketCache.invalidate(result.tournamentId);
+              io.to(`tournament:${result.tournamentId}`).emit('bracket_update', { tournamentId: result.tournamentId });
+              io.to(`tournament:${result.tournamentId}`).emit('tournament_update', { type: 'lobbies_reshuffled', matchNumber: result.matchNumber, matchesPerRound: result.matchesPerRound });
+              logger.info(`AutoAdvanceRoundWorker(inline): Emitted bracket/tournament update for reshuffle (tournament ${result.tournamentId})`);
+            } catch (emitErr) {
+              logger.warn(`AutoAdvanceRoundWorker(inline): Failed to emit socket events (non-fatal): ${emitErr}`);
+            }
+          }
         }
       }
       return result;
@@ -199,9 +212,10 @@ io.on('connection', (socket) => {
       if (type === 'tournament_completed') {
         io.to(`tournament:${tournamentId}`).emit('leaderboard_update', { tournamentId });
         io.to(`tournament:${tournamentId}`).emit('tournament_update', { type });
-      } else if (type === 'phase_started') {
+      } else if (type === 'phase_started' || type === 'lobbies_reshuffled') {
         io.to(`tournament:${tournamentId}`).emit('bracket_update', { tournamentId });
         io.to(`tournament:${tournamentId}`).emit('tournament_update', { type });
+        io.to(`tournament:${tournamentId}`).emit('leaderboard_update', { tournamentId });
       } else {
         io.to(`tournament:${tournamentId}`).emit('tournament_update', { type });
       }

@@ -98,6 +98,22 @@ export async function checkAndAdvanceRound(roundId: string) {
                     logger.error(`[NoRedis] Failed to schedule timer for lobby ${lobbyId}: ${err}`);
                   }
                 }
+
+                // Emit socket events so frontend updates after reshuffle
+                if (result.tournamentId) {
+                  try {
+                    const { bracketCache } = await import('../services/BracketCacheService');
+                    await bracketCache.invalidate(result.tournamentId);
+                    const io = (global as any).__io || (global as any).io;
+                    if (io) {
+                      io.to(`tournament:${result.tournamentId}`).emit('bracket_update', { tournamentId: result.tournamentId });
+                      io.to(`tournament:${result.tournamentId}`).emit('tournament_update', { type: 'lobbies_reshuffled', matchNumber: result.matchNumber, matchesPerRound: result.matchesPerRound });
+                      logger.info(`[NoRedis] Emitted bracket/tournament update for reshuffle (tournament ${result.tournamentId})`);
+                    }
+                  } catch (emitErr) {
+                    logger.warn(`[NoRedis] Failed to emit socket events (non-fatal): ${emitErr}`);
+                  }
+                }
               }
             } catch (e) {
               logger.error(`[NoRedis] autoAdvance failed: ${e}`);

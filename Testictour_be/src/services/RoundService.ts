@@ -1196,23 +1196,80 @@ export default class RoundService {
               }
             }
           } else {
-            // Non-first-phase round — just start this single round
-            await tx.round.update({
-              where: { id: roundId },
-              data: { status: 'in_progress' },
+            // ═══ Non-first-phase round — apply PARALLEL GROUPS logic (same as Phase 1) ═══
+            // Start ALL rounds in this phase simultaneously and distribute participants across groups
+            const allRoundsInPhase = await tx.round.findMany({
+              where: { phaseId: currentRound.phaseId },
+              orderBy: { roundNumber: 'asc' },
+              include: { lobbies: true }
             });
 
-            // If no lobbies, assign them
-            if (currentRound.lobbies.length === 0) {
-              const participants = await tx.participant.findMany({
-                where: { tournamentId: currentRound.phase.tournamentId, eliminated: false },
+            const participants = await tx.participant.findMany({
+              where: { tournamentId: currentRound.phase.tournamentId, eliminated: false },
+            });
+
+            const lobbySize = currentRound.phase.lobbySize || 8;
+            const maxLobbiesPerGroup = 4;
+            const maxPlayersPerGroup = lobbySize * maxLobbiesPerGroup;
+            const lobbyAssignment = (currentRound.phase.lobbyAssignment || (['swiss', 'snake'].includes(currentRound.phase.type) ? currentRound.phase.type : 'random')) as 'random' | 'seeded' | 'swiss' | 'snake';
+            const matchesPerRound = currentRound.phase.matchesPerRound || 1;
+
+            // Check if we need MORE groups than currently exist
+            const requiredGroups = Math.max(1, Math.ceil(participants.length / maxPlayersPerGroup));
+            if (allRoundsInPhase.length < requiredGroups) {
+              // Create additional rounds/groups dynamically
+              for (let i = allRoundsInPhase.length + 1; i <= requiredGroups; i++) {
+                const newRound = await tx.round.create({
+                  data: {
+                    phaseId: currentRound.phaseId,
+                    roundNumber: i,
+                    startTime: new Date(Date.now() + 5 * 60 * 1000),
+                    status: 'pending'
+                  },
+                  include: { lobbies: true }
+                });
+                allRoundsInPhase.push(newRound as any);
+              }
+              // Update phase numberOfRounds to reflect actual count
+              await tx.phase.update({
+                where: { id: currentRound.phaseId },
+                data: { numberOfRounds: requiredGroups }
               });
-              const lobbySize = currentRound.phase.lobbySize || 8;
-              const lobbyAssignment = (currentRound.phase.lobbyAssignment || (['swiss', 'snake'].includes(currentRound.phase.type) ? currentRound.phase.type : 'random')) as 'random' | 'seeded' | 'swiss' | 'snake';
-              const matchesPerRound = currentRound.phase.matchesPerRound || 1;
-              // Return value intentionally not destructured here — timers are scheduled
-              // post-transaction via the DB query below (see [PostTx] block after transaction).
-              await LobbyService.autoAssignLobbies(roundId, participants, lobbySize, lobbyAssignment, matchesPerRound, tx);
+              logger.info(`[ParallelGroups/Phase${currentRound.phase.phaseNumber}] Expanded to ${requiredGroups} groups to hold ${participants.length} players (max ${maxPlayersPerGroup}/group).`);
+            }
+
+            // Shuffle/sort participants for distribution
+            let shuffled = [...participants];
+            if (lobbyAssignment === 'random') {
+              shuffled = fisherYatesShuffle(shuffled);
+            } else {
+              shuffled.sort((a, b) => (b.scoreTotal || 0) - (a.scoreTotal || 0));
+            }
+
+            // Start ALL rounds and distribute participants
+            for (let i = 0; i < allRoundsInPhase.length; i++) {
+              const round = allRoundsInPhase[i];
+              if (round.status === 'pending') {
+                await tx.round.update({
+                  where: { id: round.id },
+                  data: { status: 'in_progress' },
+                });
+                logger.info(`[ParallelGroups/Phase${currentRound.phase.phaseNumber}] Started Group ${this.groupNameFromNumber(round.roundNumber)} (Round ${round.id})`);
+              }
+
+              // If this round has no lobbies yet, assign them
+              if (round.lobbies.length === 0) {
+                const start = i * maxPlayersPerGroup;
+                const end = Math.min(start + maxPlayersPerGroup, shuffled.length);
+                const groupParticipants = shuffled.slice(start, end);
+
+                if (groupParticipants.length > 0) {
+                  await LobbyService.autoAssignLobbies(round.id, groupParticipants, lobbySize, lobbyAssignment, matchesPerRound, tx);
+                  logger.info(`[ParallelGroups/Phase${currentRound.phase.phaseNumber}] Auto-assigned ${groupParticipants.length} participants to Group ${this.groupNameFromNumber(round.roundNumber)}`);
+                } else {
+                  logger.warn(`[ParallelGroups/Phase${currentRound.phase.phaseNumber}] No participants available for Group ${this.groupNameFromNumber(round.roundNumber)}`);
+                }
+              }
             }
           }
 
@@ -1796,8 +1853,26 @@ export default class RoundService {
 
       // ── Handle deferred round creation for next phase (post-transaction, no timeout risk) ──
       if (result && result._action === 'create_next_phase_rounds') {
-        const { nextPhaseId, numberOfRounds, completedPhaseId, tournamentId: tId } = result;
-        logger.info(`[PostTx] Creating ${numberOfRounds} rounds for new phase ${nextPhaseId} outside transaction.`);
+        const { nextPhaseId, completedPhaseId, tournamentId: tId } = result;
+
+        // ── Dynamically calculate required groups based on surviving participants ──
+        const nextPhaseData = await prisma.phase.findUnique({ where: { id: nextPhaseId } });
+        const survivingCount = await prisma.participant.count({
+          where: { tournamentId: tId, eliminated: false }
+        });
+        const lobbySize = nextPhaseData?.lobbySize || 8;
+        const maxLobbiesPerGroup = 4;
+        const maxPlayersPerGroup = lobbySize * maxLobbiesPerGroup;
+        const dynamicNumberOfRounds = Math.max(1, Math.ceil(survivingCount / maxPlayersPerGroup));
+        const numberOfRounds = dynamicNumberOfRounds;
+
+        logger.info(`[PostTx] Creating ${numberOfRounds} rounds for new phase ${nextPhaseId} (${survivingCount} surviving players, max ${maxPlayersPerGroup}/group).`);
+
+        // Update phase to reflect actual number of rounds
+        await prisma.phase.update({
+          where: { id: nextPhaseId },
+          data: { numberOfRounds }
+        });
 
         let lastRoundStartTime = new Date(Date.now() + 1000 * 60 * 5); // 5 min from now
         let firstRoundOfNextPhaseId: string | null = null;
@@ -1835,7 +1910,7 @@ export default class RoundService {
 
         // Queue (or directly call) first round of next phase
         await RoundService._queueOrCallAutoAdvance(firstRoundOfNextPhaseId!);
-        logger.info(`[PostTx] Phase ${completedPhaseId} completed. Next phase ${nextPhaseId} first round (${firstRoundOfNextPhaseId}) queued.`);
+        logger.info(`[PostTx] Phase ${completedPhaseId} completed. Next phase ${nextPhaseId} first round (${firstRoundOfNextPhaseId}) queued with ${numberOfRounds} groups.`);
 
         return result; // return original sentinel message
       }

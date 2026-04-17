@@ -118,9 +118,25 @@ const autoAdvanceRoundWorker = new Worker(
         }
       } else if (result._action === 'create_next_phase_rounds' && result.completedPhaseId && result.nextPhaseId) {
         logger.info(`AutoAdvanceRoundWorker: Handling deferred round creation for phase: ${result.nextPhaseId}`);
-        // Create rounds for next phase
         const { prisma } = await import('./services/prisma');
-        const numberOfRounds = result.numberOfRounds || 1;
+
+        // ── Dynamically calculate required groups based on surviving participants ──
+        const nextPhaseData = await prisma.phase.findUnique({ where: { id: result.nextPhaseId } });
+        const survivingCount = await prisma.participant.count({
+          where: { tournamentId: result.tournamentId, eliminated: false }
+        });
+        const lobbySize = nextPhaseData?.lobbySize || 8;
+        const maxLobbiesPerGroup = 4;
+        const maxPlayersPerGroup = lobbySize * maxLobbiesPerGroup;
+        const numberOfRounds = Math.max(1, Math.ceil(survivingCount / maxPlayersPerGroup));
+
+        logger.info(`AutoAdvanceRoundWorker: ${survivingCount} survivors → ${numberOfRounds} groups (max ${maxPlayersPerGroup}/group)`);
+
+        // Update phase to reflect actual number of rounds
+        await prisma.phase.update({
+          where: { id: result.nextPhaseId },
+          data: { numberOfRounds }
+        });
         
         try {
           const newRounds = [];
@@ -129,7 +145,7 @@ const autoAdvanceRoundWorker = new Worker(
               data: {
                 phaseId: result.nextPhaseId,
                 roundNumber: i,
-                startTime: new Date(Date.now() + 5 * 60 * 1000), // Start in 5 minutes
+                startTime: new Date(Date.now() + 5 * 60 * 1000),
                 status: 'pending'
               }
             });
@@ -158,6 +174,23 @@ const autoAdvanceRoundWorker = new Worker(
             await LobbyTimerService.scheduleTransition(lobbyId, LOBBY_STATE.READY_CHECK, result.delayMs || 300_000);
           } catch (err) {
             logger.error(`Failed to schedule timer for lobby ${lobbyId}: ${err}`);
+          }
+        }
+
+        // ═══ Bug #2/#3 Fix: Emit socket events so frontend updates after reshuffle ═══
+        if (ioClient && result.tournamentId) {
+          try {
+            const { bracketCache } = await import('./services/BracketCacheService');
+            await bracketCache.invalidate(result.tournamentId);
+            ioClient.emit('worker_tournament_update', {
+              tournamentId: result.tournamentId,
+              type: 'lobbies_reshuffled',
+              matchNumber: result.matchNumber,
+              matchesPerRound: result.matchesPerRound,
+            });
+            logger.info(`AutoAdvanceRoundWorker: Emitted bracket/tournament update for reshuffle (tournament ${result.tournamentId})`);
+          } catch (emitErr) {
+            logger.warn(`AutoAdvanceRoundWorker: Failed to emit socket events (non-fatal): ${emitErr}`);
           }
         }
       }

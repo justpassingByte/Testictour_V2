@@ -231,6 +231,16 @@ export default function LobbyPageClient({ lobbyId, tournamentId, initialState, l
     fetchLobbyData();
   }, [fetchLobbyData]);
 
+  // Auto-refetch lobby data when state transitions to FINISHED or fetchedResult changes
+  // This ensures match results appear without needing manual F5
+  useEffect(() => {
+    if (state?.state === 'FINISHED' || state?.fetchedResult) {
+      // Small delay to allow DB to settle after the state transition
+      const timer = setTimeout(() => { fetchLobbyData(); }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [state?.state, state?.fetchedResult, fetchLobbyData]);
+
   // Auto navigate to new lobby if advanced
   useEffect(() => {
     if (userId && state?.state === 'FINISHED') {
@@ -414,13 +424,23 @@ export default function LobbyPageClient({ lobbyId, tournamentId, initialState, l
                                     </p>
                                   </div>
                                 </div>
-                              ) : !isSynced && idx === (liveLobbyData?.completedMatchesCount || 0) && ['PLAYING', 'FINISHED'].includes(state.state) ? (
+                              ) : !isSynced && idx === (liveLobbyData?.completedMatchesCount || 0) && state.state === 'PLAYING' && !(state.fetchedResult ?? false) ? (
                                 <div className="flex flex-col items-center justify-center gap-3 py-8 bg-blue-500/5 rounded-xl border border-blue-500/20 text-center">
                                   <Loader2 className="h-10 w-10 animate-spin text-blue-500 opacity-80" />
                                   <div>
                                     <p className="text-sm font-semibold text-blue-400">Waiting for Riot APIs...</p>
                                     <p className="text-xs text-muted-foreground mt-1 text-blue-400/80 max-w-[250px]">
                                       Match {idx + 1} is in progress. Actively polling Riot for completion.
+                                    </p>
+                                  </div>
+                                </div>
+                              ) : !isSynced && (state.state === 'FINISHED' || (state.fetchedResult ?? false)) ? (
+                                <div className="flex flex-col items-center justify-center gap-3 py-8 bg-green-500/5 rounded-xl border border-green-500/20 text-center">
+                                  <Loader2 className="h-10 w-10 animate-spin text-green-500 opacity-60" />
+                                  <div>
+                                    <p className="text-sm font-semibold text-green-400">Loading results...</p>
+                                    <p className="text-xs text-muted-foreground mt-1 text-green-400/80 max-w-[250px]">
+                                      Match completed. Fetching detailed results...
                                     </p>
                                   </div>
                                 </div>
