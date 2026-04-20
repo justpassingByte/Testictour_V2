@@ -212,7 +212,7 @@ export default class ParticipantService {
   static async list(tournamentId: string, page: number = 1, limit: number = 10, search?: string) {
     const skip = (page - 1) * limit;
 
-    const whereClause: any = { tournamentId };
+    const whereClause: any = { tournamentId, paid: true };
 
     if (search) {
       whereClause.OR = [
@@ -236,7 +236,7 @@ export default class ParticipantService {
 
   static async leaderboard(tournamentId: string) {
     const participants = await prisma.participant.findMany({
-      where: { tournamentId, eliminated: false },
+      where: { tournamentId, eliminated: false, paid: true },
       include: { 
         user: { select: { id: true, username: true, riotGameName: true, riotGameTag: true, rank: true, topFourRate: true, firstPlaceRate: true, region: true } },
         rewards: true 
@@ -469,7 +469,7 @@ export default class ParticipantService {
    */
   static async listReserves(tournamentId: string) {
     return prisma.participant.findMany({
-      where: { tournamentId, isReserve: true },
+      where: { tournamentId, isReserve: true, paid: true },
       include: {
         user: { select: { id: true, username: true, riotGameName: true, riotGameTag: true, email: true, puuid: true, rank: true } }
       },
