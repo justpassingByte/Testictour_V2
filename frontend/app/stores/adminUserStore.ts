@@ -12,6 +12,10 @@ export interface AdminUser {
   isActive?: boolean;
   subscriptionPlan?: string | null;
   subscriptionStatus?: string | null;
+  topFourRate?: number;
+  firstPlaceRate?: number;
+  tournamentsPlayed?: number;
+  tournamentsWon?: number;
 }
 
 export interface ITransaction {

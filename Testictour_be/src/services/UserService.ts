@@ -249,8 +249,8 @@ export default class UserService {
       select: { id: true, username: true, email: true, role: true },
     });
 
-    // Silently return if user not found or is an admin (admins use separate flow)
-    if (!user || user.role === 'admin') {
+    // Silently return if user not found
+    if (!user) {
       return;
     }
 

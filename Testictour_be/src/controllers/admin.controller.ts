@@ -83,6 +83,10 @@ export const getAllUsers = asyncHandler(async (req: Request, res: Response) => {
         username: true,
         email: true,
         role: true,
+        topFourRate: true,
+        firstPlaceRate: true,
+        tournamentsPlayed: true,
+        tournamentsWon: true,
         balance: {
           select: {
             amount: true,

@@ -116,6 +116,14 @@ export default class EmailService {
    */
   static async sendPasswordReset(params: PasswordResetEmailParams): Promise<boolean> {
     const locale = params.locale === 'vi' ? 'vi' : 'en';
+    const resetUrl = `${FRONTEND_URL}/${locale}/reset-password?token=${params.token}`;
+
+    if (process.env.NODE_ENV !== 'production' || process.env.RESEND_API_KEY === 're_123') {
+      console.log('----------------------------------------------------');
+      console.log(`[EmailService] (DEV MODE) Password Reset Link for ${params.to}:`);
+      console.log(resetUrl);
+      console.log('----------------------------------------------------');
+    }
 
     try {
       const { data, error } = await resend.emails.send({

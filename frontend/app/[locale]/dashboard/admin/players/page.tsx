@@ -43,7 +43,6 @@ export default function AdminPlayersPage() {
   const banUser = useAdminUserStore((s) => s.banUser)
 
   const [searchQuery, setSearchQuery] = useState("")
-  const [roleFilter, setLocalRoleFilter] = useState("all")
   const [sortBy, setSortBy] = useState("username")
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
 
@@ -75,13 +74,32 @@ export default function AdminPlayersPage() {
       const matchesSearch =
         u.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
         u.email.toLowerCase().includes(searchQuery.toLowerCase())
-      const matchesRole = roleFilter === "all" || u.role === roleFilter
-      return matchesSearch && matchesRole
+      return matchesSearch
     })
     .sort((a, b) => {
-      const cmp = sortBy === "username"
-        ? a.username.localeCompare(b.username)
-        : (a.balance || 0) - (b.balance || 0)
+      let cmp = 0;
+      switch (sortBy) {
+        case "username":
+          cmp = a.username.localeCompare(b.username);
+          break;
+        case "balance":
+          cmp = (a.balance || 0) - (b.balance || 0);
+          break;
+        case "tournamentsPlayed":
+          cmp = (a.tournamentsPlayed || 0) - (b.tournamentsPlayed || 0);
+          break;
+        case "tournamentsWon":
+          cmp = (a.tournamentsWon || 0) - (b.tournamentsWon || 0);
+          break;
+        case "performance":
+          cmp = (a.topFourRate || 0) - (b.topFourRate || 0);
+          if (cmp === 0) {
+            cmp = (a.firstPlaceRate || 0) - (b.firstPlaceRate || 0);
+          }
+          break;
+        default:
+          cmp = 0;
+      }
       return sortOrder === "asc" ? cmp : -cmp
     })
 
@@ -104,23 +122,22 @@ export default function AdminPlayersPage() {
           <Input placeholder={t("search_users", { defaultValue: "Search users..." })} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
         </div>
-        <Select value={roleFilter} onValueChange={setLocalRoleFilter}>
-          <SelectTrigger className="w-[140px]"><SelectValue placeholder={t("role", { defaultValue: "Role" })} /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t("all_roles", { defaultValue: "All Roles" })}</SelectItem>
-            <SelectItem value="admin">Admin</SelectItem>
-            <SelectItem value="partner">Partner</SelectItem>
-            <SelectItem value="user">{t("player", { defaultValue: "Player" })}</SelectItem>
-          </SelectContent>
-        </Select>
         <div className="flex items-center border rounded-md">
-          <Select value={sortBy} onValueChange={setSortBy}>
-            <SelectTrigger className="w-[130px] border-none shadow-none focus:ring-0">
-              <ArrowUpDown className="mr-2 h-4 w-4" /><SelectValue />
+          <Select value={sortBy} onValueChange={(val) => {
+            setSortBy(val)
+            if (val !== "username" && val !== "balance") {
+              setSortOrder("desc")
+            }
+          }}>
+            <SelectTrigger className="w-[200px] border-none shadow-none focus:ring-0">
+              <ArrowUpDown className="mr-2 h-4 w-4 shrink-0" /><SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="username">{t("username", { defaultValue: "Username" })}</SelectItem>
               <SelectItem value="balance">{t("balance", { defaultValue: "Balance" })}</SelectItem>
+              <SelectItem value="tournamentsPlayed">Số giải tham gia</SelectItem>
+              <SelectItem value="tournamentsWon">Số giải thắng</SelectItem>
+              <SelectItem value="performance">Performance</SelectItem>
             </SelectContent>
           </Select>
           <Button variant="ghost" size="sm" className="px-2" onClick={() => setSortOrder(s => s === "asc" ? "desc" : "asc")}>
@@ -147,6 +164,7 @@ export default function AdminPlayersPage() {
                   <TableHead>{t("user", { defaultValue: "User" })}</TableHead>
                   <TableHead>{t("email", { defaultValue: "Email" })}</TableHead>
                   <TableHead>{t("role", { defaultValue: "Role" })}</TableHead>
+                  <TableHead>Hiệu suất</TableHead>
                   <TableHead className="text-right">{t("balance", { defaultValue: "Balance" })}</TableHead>
                   <TableHead className="text-right">{t("action", { defaultValue: "Actions" })}</TableHead>
                 </TableRow>
@@ -178,6 +196,16 @@ export default function AdminPlayersPage() {
                       }>
                         {user.role}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col text-xs gap-1">
+                        <span className="text-muted-foreground whitespace-nowrap">
+                          Giải: <span className="text-foreground font-medium">{user.tournamentsPlayed || 0}</span> (Thắng <span className="text-emerald-400 font-medium">{user.tournamentsWon || 0}</span>)
+                        </span>
+                        <span className="text-muted-foreground whitespace-nowrap">
+                          Top 4: <span className="text-violet-400 font-medium">{user.topFourRate || 0}%</span> | Top 1: <span className="text-amber-400 font-medium">{user.firstPlaceRate || 0}%</span>
+                        </span>
+                      </div>
                     </TableCell>
                     <TableCell className="text-right font-medium text-green-500">
                       {(user.balance || 0).toLocaleString()} đ
