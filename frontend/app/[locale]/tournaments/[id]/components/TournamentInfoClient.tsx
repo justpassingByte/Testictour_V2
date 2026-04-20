@@ -5,7 +5,10 @@ import { useTournamentStore } from '@/app/stores/tournamentStore'
 import { Badge } from "@/components/ui/badge"
 import { AlertTriangle, ShieldCheck, Lock, Copy, Check } from "lucide-react"
 import { useTranslations } from "next-intl"
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
+import { toast } from "sonner"
+import api from "@/app/lib/apiConfig"
 
 interface TournamentInfoClientProps {
   initialTournament: ITournament;
@@ -27,6 +30,29 @@ export default function TournamentInfoClient({ initialTournament }: TournamentIn
   const currentStatus = statusMapping[tournament.status] || { text: tournament.status, color: "" }
 
   const [copiedId, setCopiedId] = useState(false)
+  const searchParams = useSearchParams()
+
+  // Confirm Sepay PG payment when redirected back with ?paymentSuccess=true
+  useEffect(() => {
+    const paymentSuccess = searchParams.get('paymentSuccess')
+    if (paymentSuccess === 'true') {
+      api.post(`/payments/confirm-pending/${tournament.id}`, {})
+        .then(() => {
+          toast.success('Payment confirmed! Your registration is complete.')
+        })
+        .catch(() => {
+          // Payment might already be confirmed, still show success to user
+          toast.success('Registration complete!')
+        })
+        .finally(() => {
+          // Clean URL params
+          const url = new URL(window.location.href)
+          url.searchParams.delete('paymentSuccess')
+          window.history.replaceState({}, '', url.toString())
+        })
+    }
+  }, [])
+
   const handleCopyId = () => {
     navigator.clipboard.writeText(`Tournament ID: ${tournament.id}`)
     setCopiedId(true)
@@ -54,6 +80,11 @@ export default function TournamentInfoClient({ initialTournament }: TournamentIn
             <AlertTriangle className="mr-1 h-3 w-3 inline mb-0.5" />
             {t("community_mode") || "Community Mode"}
           </Badge>
+        ) : tournament.organizer?.partnerSubscription?.plan === 'PRO' || tournament.organizer?.partnerSubscription?.plan === 'ENTERPRISE' ? (
+          <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30">
+            <ShieldCheck className="mr-1 h-3 w-3 inline mb-0.5" />
+            Trusted Partner
+          </Badge>
         ) : (
           <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30">
             <ShieldCheck className="mr-1 h-3 w-3 inline mb-0.5" />
@@ -73,7 +104,7 @@ export default function TournamentInfoClient({ initialTournament }: TournamentIn
             </div>
           </div>
         </div>
-      ) : (
+      ) : tournament.organizer?.partnerSubscription?.plan === 'PRO' || tournament.organizer?.partnerSubscription?.plan === 'ENTERPRISE' ? null : (
         <div className={`border rounded-xl p-4 mt-2 mb-6 flex items-start shadow-sm transition-colors ${
           tournament.escrowStatus === 'locked' || tournament.escrowStatus === 'payout_released' 
             ? 'bg-emerald-500/10 border-emerald-500/30 shadow-emerald-500/10'

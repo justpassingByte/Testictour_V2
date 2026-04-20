@@ -138,6 +138,8 @@ export interface IParticipant {
   scoreTotal?: number;
   rewarded?: boolean;
   referralSource?: string;
+  isReserve?: boolean;
+  isAbsent?: boolean;
 }
 
 export interface PlayerRoundStats {
@@ -204,6 +206,7 @@ export interface ITournamentTemplate {
   type: 'SINGLE_ELIMINATION' | 'DOUBLE_ELIMINATION' | 'ROUND_ROBIN' | 'SWISS';
   hostFeePercent?: number;
   checkInTime?: number;
+  registrationDeadline?: string;
   phases: IPhase[];
 }
 
@@ -225,4 +228,7 @@ export interface ITournament extends ITournamentTemplate {
   adjustedPrizeStructure?: any;
   discordUrl?: string;
   sponsors?: Array<{ name: string; url: string }>;
-} 
+  reservePlayersLimit?: number;
+  absentFeePolicy?: string;
+  reserveCount?: number;
+}

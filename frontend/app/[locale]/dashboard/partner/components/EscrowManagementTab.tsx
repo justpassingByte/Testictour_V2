@@ -34,16 +34,17 @@ interface EscrowManagementTabProps {
   participants: IParticipant[]
   isAdmin?: boolean
   prizeStructure?: string | any[] | Record<string, number> | null
+  subscriptionPlan?: string
 }
 
-export function EscrowManagementTab({ tournamentId, tournamentName, tournamentStatus, isCommunityMode, participants, isAdmin, prizeStructure }: EscrowManagementTabProps) {
+export function EscrowManagementTab({ tournamentId, tournamentName, tournamentStatus, isCommunityMode, participants, isAdmin, prizeStructure, subscriptionPlan = 'STARTER' }: EscrowManagementTabProps) {
   const t = useTranslations("Common")
   const { toast } = useToast()
   const { formatVndText } = useCurrencyRate()
   
   const [loading, setLoading] = useState(true)
   const [escrow, setEscrow] = useState<EscrowState | null>(null)
-  const [tournamentData, setTournamentData] = useState<{ hostFeePercent: number; platformFeePercent: number } | null>(null)
+  const [tournamentData, setTournamentData] = useState<{ hostFeePercent: number; platformFeePercent: number; absentFeePolicy?: string; entryFee?: number } | null>(null)
   // Self-managed participant list for accurate payout calculations
   const [payoutParticipants, setPayoutParticipants] = useState<IParticipant[]>([])
   
@@ -64,7 +65,9 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
       if (res.data.tournament) {
          setTournamentData({
             hostFeePercent: res.data.tournament.hostFeePercent || 0,
-            platformFeePercent: res.data.platformFeePercent || 0
+            platformFeePercent: res.data.platformFeePercent || 0,
+            absentFeePolicy: res.data.tournament.absentFeePolicy || 'prizepool',
+            entryFee: res.data.tournament.entryFee || 0
          })
       }
       if (res.data.escrow) {
@@ -114,11 +117,21 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
     }
 
     const totalPool = escrow ? Math.max(escrow.requiredAmount, escrow.fundedAmount) : 0
+    
+    let absentKeepAmount = 0
+    if (tournamentData?.absentFeePolicy === 'keep') {
+      const absentCount = participants.filter(p => p.isAbsent).length
+      absentKeepAmount = absentCount * (tournamentData?.entryFee || 0)
+      absentKeepAmount = Math.min(absentKeepAmount, totalPool) // safety limit
+    }
+    
+    const standardPool = totalPool - absentKeepAmount
+
     const hostFeePercent = tournamentData?.hostFeePercent || 0
     const platformFeePercent = tournamentData?.platformFeePercent || 0
     const totalFeePercent = hostFeePercent + platformFeePercent
     
-    const prizePool = totalPool * (1 - totalFeePercent); 
+    const prizePool = standardPool * (1 - totalFeePercent); 
     
     const results = []
     let currentRank = 1
@@ -185,11 +198,21 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
 
       // Fees
       const totalPool = escrow ? Math.max(escrow.requiredAmount, escrow.fundedAmount) : 0
+      
+      let absentKeepAmount = 0
+      if (tournamentData?.absentFeePolicy === 'keep') {
+        const absentCount = participants.filter(p => p.isAbsent).length
+        absentKeepAmount = absentCount * (tournamentData?.entryFee || 0)
+        absentKeepAmount = Math.min(absentKeepAmount, totalPool)
+      }
+      
+      const standardPool = totalPool - absentKeepAmount
+
       const hostFeePercent = tournamentData?.hostFeePercent || 0
       const platformFeePercent = tournamentData?.platformFeePercent || 0
       
-      const hostFeeAmount = totalPool * hostFeePercent
-      const platformFeeAmount = totalPool * platformFeePercent
+      const hostFeeAmount = standardPool * hostFeePercent + absentKeepAmount
+      const platformFeeAmount = standardPool * platformFeePercent
 
       // Add Host Fee payout for Organizer
       if (hostFeeAmount > 0) {
@@ -207,6 +230,34 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
            amount: platformFeeAmount,
            isPlatformFee: true
         } as any)
+      }
+
+      // ── Reserve Player Refunds ──────────────────────────────────────────
+      // Fetch all paid reserve players who were NOT assigned (still isReserve=true)
+      // and include their entry fee as refund transactions in the payout request.
+      try {
+        const reserveRes = await api.get(`/tournaments/${tournamentId}/reserves`)
+        const reserves = reserveRes.data?.reserves || []
+        const paidReserves = reserves.filter((r: any) => r.paid && r.isReserve)
+        
+        if (paidReserves.length > 0) {
+          // Fetch tournament entry fee for the refund amount
+          const tournamentRes = await TournamentService.detail(tournamentId)
+          const entryFee = tournamentRes?.entryFee || 0
+
+          for (const reserve of paidReserves) {
+            if (entryFee > 0 && reserve.userId) {
+              winners.push({
+                userId: reserve.userId,
+                amount: entryFee,
+                isReserveRefund: true,
+              } as any)
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[Payout] Could not fetch reserves for refund:", err)
+        // Non-blocking: proceed without reserve refunds if API fails
       }
       
       const res = await api.post(`/tournaments/${tournamentId}/payouts/request-release`, {
@@ -281,61 +332,97 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
     <div className="space-y-6">
       {/* TRẠNG THÁI TỔNG QUAN */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className={`border ${isFullyFunded ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-blue-500/30 bg-blue-500/5'}`}>
+        <Card className={`border ${isFullyFunded || ['PRO', 'ENTERPRISE'].includes(subscriptionPlan) ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-blue-500/30 bg-blue-500/5'}`}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-muted-foreground flex items-center justify-between">
-              Trạng thái Escrow
-              <ShieldCheck className={`h-4 w-4 ${isFullyFunded ? 'text-emerald-500' : 'text-blue-500'}`} />
+              {['PRO', 'ENTERPRISE'].includes(subscriptionPlan) ? 'Trạng thái Nhận Thưởng' : 'Trạng thái Escrow'}
+              <ShieldCheck className={`h-4 w-4 ${isFullyFunded || ['PRO', 'ENTERPRISE'].includes(subscriptionPlan) ? 'text-emerald-500' : 'text-blue-500'}`} />
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold capitalize">
-              {escrow.status === 'init' && "Đang chờ nạp"}
-              {escrow.status === 'funded' && "Đã nạp đủ"}
-              {escrow.status === 'locked' && "Đang khóa (Thi đấu)"}
-              {escrow.status === 'released' && "Đã phát thưởng"}
-              {escrow.status === 'disputed' && "Đang tranh chấp"}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Trạng thái đối soát: {escrow.reconciliationStatus}</p>
+            {['PRO', 'ENTERPRISE'].includes(subscriptionPlan) ? (
+              <>
+                <div className="text-2xl font-bold capitalize">
+                  {escrow.status === 'released' ? 'Đã Phát Thưởng' : (tournamentStatus === 'COMPLETED' ? 'Chờ Rút Quỹ' : 'Đang Thi Đấu')}
+                </div>
+                <p className="text-xs text-emerald-400 mt-1">Đặc quyền Trusted Partner (Bỏ qua nạp quỹ)</p>
+              </>
+            ) : (
+              <>
+                <div className="text-2xl font-bold capitalize">
+                  {escrow.status === 'init' && "Đang chờ nạp"}
+                  {escrow.status === 'funded' && "Đã nạp đủ"}
+                  {escrow.status === 'locked' && "Đang khóa (Thi đấu)"}
+                  {escrow.status === 'released' && "Đã phát thưởng"}
+                  {escrow.status === 'disputed' && "Đang tranh chấp"}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">Trạng thái đối soát: {escrow.reconciliationStatus}</p>
+              </>
+            )}
           </CardContent>
         </Card>
 
         <Card className="border-white/10 bg-card/50">
            <CardHeader className="pb-2">
             <CardTitle className="text-sm text-muted-foreground flex items-center justify-between">
-              Đã nạp (Gross Pool)
+              {['PRO', 'ENTERPRISE'].includes(subscriptionPlan) ? 'Tổng Giải Thưởng (Gross Pool)' : 'Đã nạp (Gross Pool)'}
               <Banknote className="h-4 w-4 text-emerald-400" />
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col">
               <div className="text-2xl font-bold text-emerald-400">
-                ${escrow.fundedAmount.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">/ ${escrow.requiredAmount.toLocaleString()} USD</span>
+                {['PRO', 'ENTERPRISE'].includes(subscriptionPlan) ? (
+                  <>${escrow.requiredAmount.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">USD</span></>
+                ) : (
+                  <>${escrow.fundedAmount.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">/ ${escrow.requiredAmount.toLocaleString()} USD</span></>
+                )}
               </div>
               <div className="text-[11px] text-emerald-400/70 mt-0.5 mb-2">
-                {formatVndText(escrow.fundedAmount)} <span className="opacity-70">/ {formatVndText(escrow.requiredAmount)}</span>
+                {['PRO', 'ENTERPRISE'].includes(subscriptionPlan) ? (
+                  <>{formatVndText(escrow.requiredAmount)}</>
+                ) : (
+                  <>{formatVndText(escrow.fundedAmount)} <span className="opacity-70">/ {formatVndText(escrow.requiredAmount)}</span></>
+                )}
               </div>
               {(() => {
-                 const displayPool = Math.max(escrow.requiredAmount, escrow.fundedAmount);
-                 return displayPool > 0 ? (
+                 const displayPool = ['PRO', 'ENTERPRISE'].includes(subscriptionPlan) ? escrow.requiredAmount : Math.max(escrow.requiredAmount, escrow.fundedAmount);
+                 
+                 let absentKeepAmount = 0
+                 if (tournamentData?.absentFeePolicy === 'keep') {
+                   const absentCount = participants.filter(p => p.isAbsent).length
+                   absentKeepAmount = absentCount * (tournamentData?.entryFee || 0)
+                   absentKeepAmount = Math.min(absentKeepAmount, displayPool)
+                 }
+                 const standardPool = Math.max(0, displayPool - absentKeepAmount)
+
+                 return (
                  <div className="space-y-1 border-t border-white/10 pt-2 text-xs">
+                    {absentKeepAmount > 0 && (
+                      <div className="flex justify-between items-center text-muted-foreground">
+                         <span>Absent Fees Kept (Host):</span>
+                         <span className="font-medium text-orange-400">${absentKeepAmount.toLocaleString()}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between items-center text-muted-foreground">
-                       <span>Host Fee ({(tournamentData?.hostFeePercent || 0) * 100}%):</span>
-                       <span className="font-medium text-orange-400">${(displayPool * (tournamentData?.hostFeePercent || 0)).toLocaleString()}</span>
+                       <span>Host Fee ({(tournamentData?.hostFeePercent || 0) * 100}% of Standard Pool):</span>
+                       <span className="font-medium text-orange-400">${(standardPool * (tournamentData?.hostFeePercent || 0)).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between items-center text-muted-foreground">
-                       <span>Platform Fee ({(tournamentData?.platformFeePercent || 0) * 100}%):</span>
-                       <span className="font-medium text-blue-400">${(displayPool * (tournamentData?.platformFeePercent || 0)).toLocaleString()}</span>
+                       <span>Platform Fee ({(tournamentData?.platformFeePercent || 0) * 100}% of Standard Pool):</span>
+                       <span className="font-medium text-blue-400">${(standardPool * (tournamentData?.platformFeePercent || 0)).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between items-center text-zinc-300 font-medium pt-1">
                        <span>Net Prize Pool:</span>
-                       <span className="text-emerald-400">${(displayPool * (1 - (tournamentData?.hostFeePercent || 0) - (tournamentData?.platformFeePercent || 0))).toLocaleString()}</span>
+                       <span className="text-emerald-400">${(standardPool * (1 - (tournamentData?.hostFeePercent || 0) - (tournamentData?.platformFeePercent || 0))).toLocaleString()}</span>
                     </div>
                  </div>
-                 ) : null;
+                 );
               })()}
             </div>
-            <Progress value={fillPercent} className={`h-1.5 mt-3 ${isFullyFunded ? '[&>div]:bg-emerald-500' : '[&>div]:bg-blue-500'}`} />
+            {!['PRO', 'ENTERPRISE'].includes(subscriptionPlan) && (
+              <Progress value={fillPercent} className={`h-1.5 mt-3 ${isFullyFunded ? '[&>div]:bg-emerald-500' : '[&>div]:bg-blue-500'}`} />
+            )}
           </CardContent>
         </Card>
 
@@ -356,68 +443,74 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
         </Card>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className={`grid gap-6 ${['PRO', 'ENTERPRISE'].includes(subscriptionPlan) ? 'md:grid-cols-1' : 'md:grid-cols-2'}`}>
         {/* NẠP QUỸ (HÀNH ĐỘNG TRƯỚC HẠN) */}
-        <Card className="border-blue-500/20 bg-card/50 backdrop-blur">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Banknote className="w-5 h-5 text-blue-400" /> 1. Nạp Quỹ Bảo Lãnh
-            </CardTitle>
-            <CardDescription>
-              Bạn cần nạp đủ <strong>${escrow.requiredAmount.toLocaleString()} USD ({formatVndText(escrow.requiredAmount)})</strong> vào quỹ Escrow trước khi giải đấu bắt đầu. Nếu quỹ trống, giải sẽ không thể <code>Bắt đầu (Start)</code>.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {!isFullyFunded ? (
-              <>
-                <div className="space-y-2">
-                   <Alert className="bg-orange-500/10 border-orange-500/30 text-orange-400">
-                    <Clock className="h-4 w-4" />
-                    <AlertTitle className="text-sm font-bold">Chưa nạp đủ quỹ</AlertTitle>
-                    <AlertDescription className="text-xs">
-                      Thiếu ${Math.max(0, escrow.requiredAmount - escrow.fundedAmount).toLocaleString()} USD ({formatVndText(Math.max(0, escrow.requiredAmount - escrow.fundedAmount))}). Hãy chọn phương thức thanh toán.
-                    </AlertDescription>
-                  </Alert>
+        {!['PRO', 'ENTERPRISE'].includes(subscriptionPlan) && (
+          <Card className="border-blue-500/20 bg-card/50 backdrop-blur">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Banknote className="w-5 h-5 text-blue-400" /> 1. Nạp Quỹ Bảo Lãnh
+              </CardTitle>
+              <CardDescription>
+                Bạn cần nạp đủ <strong>${escrow.requiredAmount.toLocaleString()} USD ({formatVndText(escrow.requiredAmount)})</strong> vào quỹ Escrow trước khi giải đấu bắt đầu. Nếu quỹ trống, giải sẽ không thể <code>Bắt đầu (Start)</code>.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!isFullyFunded ? (
+                <>
+                  <div className="space-y-2">
+                     <Alert className="bg-orange-500/10 border-orange-500/30 text-orange-400">
+                      <Clock className="h-4 w-4" />
+                      <AlertTitle className="text-sm font-bold">Chưa nạp đủ quỹ</AlertTitle>
+                      <AlertDescription className="text-xs">
+                        Thiếu ${Math.max(0, escrow.requiredAmount - escrow.fundedAmount).toLocaleString()} USD ({formatVndText(Math.max(0, escrow.requiredAmount - escrow.fundedAmount))}). Hãy chọn phương thức thanh toán.
+                      </AlertDescription>
+                    </Alert>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium">Hệ thống thanh toán</label>
+                    <Select value={selectedProvider} onValueChange={setSelectedProvider}>
+                      <SelectTrigger className="bg-black/20 border-white/10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="stripe">Stripe (Quốc tế)</SelectItem>
+                        <SelectItem value="sepay">Sepay (Việt Nam)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button 
+                    className="w-full bg-blue-600 hover:bg-blue-700" 
+                    onClick={handleFund} 
+                    disabled={fundingLoading}
+                  >
+                    {fundingLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ShieldCheck className="w-4 h-4 mr-2" />}
+                    Thanh toán ngay (${fundingAmount.toLocaleString()} USD)
+                  </Button>
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center p-6 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-emerald-400">
+                  <CheckCircle2 className="w-10 h-10 mb-2 opacity-80" />
+                  <h4 className="font-semibold">Đã Nạp Đủ Quỹ</h4>
+                  <p className="text-xs text-center mt-1 text-emerald-400/80">Quỹ đã an toàn. Bạn có thể Bắt đầu giải đấu khi đến giờ.</p>
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium">Hệ thống thanh toán</label>
-                  <Select value={selectedProvider} onValueChange={setSelectedProvider}>
-                    <SelectTrigger className="bg-black/20 border-white/10">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="stripe">Stripe (Quốc tế)</SelectItem>
-                      <SelectItem value="momo">MoMo (Việt Nam)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button 
-                  className="w-full bg-blue-600 hover:bg-blue-700" 
-                  onClick={handleFund} 
-                  disabled={fundingLoading}
-                >
-                  {fundingLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ShieldCheck className="w-4 h-4 mr-2" />}
-                  Thanh toán ngay (${fundingAmount.toLocaleString()} USD)
-                </Button>
-              </>
-            ) : (
-              <div className="flex flex-col items-center justify-center p-6 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-emerald-400">
-                <CheckCircle2 className="w-10 h-10 mb-2 opacity-80" />
-                <h4 className="font-semibold">Đã Nạp Đủ Quỹ</h4>
-                <p className="text-xs text-center mt-1 text-emerald-400/80">Quỹ đã an toàn. Bạn có thể Bắt đầu giải đấu khi đến giờ.</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* YÊU CẦU PHÁT THƯỞNG (HÀNH ĐỘNG SAU KHI KẾT THÚC) */}
-        <Card className="border-violet-500/20 bg-card/50 backdrop-blur">
+        <Card className={`border-violet-500/20 bg-card/50 backdrop-blur ${['PRO', 'ENTERPRISE'].includes(subscriptionPlan) ? 'border-indigo-500/30' : ''}`}>
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
-              <DollarSign className="w-5 h-5 text-violet-400" /> 2. Rút Quỹ Phân Bổ (Payout)
+              <DollarSign className="w-5 h-5 text-violet-400" /> {['PRO', 'ENTERPRISE'].includes(subscriptionPlan) ? 'Phát Thưởng & Hoàn Lệ Phí (Payouts & Refunds)' : '2. Rút Quỹ Phân Bổ (Payout)'}
             </CardTitle>
             <CardDescription>
-              Sau khi giải kết thúc và có kết quả chung cuộc, Organizer có quyền trình dữ liệu nhận thưởng.
+              {['PRO', 'ENTERPRISE'].includes(subscriptionPlan) ? (
+                <span className="text-indigo-400/80">Tài khoản <strong>{subscriptionPlan}</strong> không bắt buộc đóng Quỹ Escrow. Tính năng này được dùng để hệ thống tự động phân bổ bảng trả thưởng, trao thưởng hoặc hoàn lệ phí đăng ký cho người chơi đánh hộ (Reserve Player).</span>
+              ) : (
+                "Sau khi giải kết thúc và có kết quả chung cuộc, Organizer có quyền trình dữ liệu nhận thưởng."
+              )}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -433,7 +526,7 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
                <div className="flex flex-col items-center justify-center p-6 bg-violet-500/10 rounded-xl border border-violet-500/20 text-violet-400">
                 <CheckCircle2 className="w-10 h-10 mb-2 opacity-80" />
                 <h4 className="font-semibold">Đã Phát Thưởng</h4>
-                <p className="text-xs text-center mt-1 text-violet-400/80">Quỹ Escrow đã được chuyển tới người chơi hoặc được đánh dấu là giải ngân. Xem Settlement Report để kiểm tra chi tiết.</p>
+                <p className="text-xs text-center mt-1 text-violet-400/80">Quỹ Payout đã được chuyển tới người chơi hoặc được đánh dấu là giải ngân. Xem Settlement Report để kiểm tra chi tiết.</p>
               </div>
             ) : (
               <>
@@ -442,7 +535,7 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
                   <AlertTitle className="text-sm font-bold">Lập lệnh Rút Quỹ</AlertTitle>
                   <AlertDescription className="text-xs">
                     Kiểm tra thật kỹ thứ hạng của người chơi trước khi xuất quỹ.
-                    {isAdmin ? " Bạn là Admin, có thể Duyệt trực tiếp." : " Hành động này sẽ yêu cầu Admin kiểm duyệt xác nhận."}
+                    {isAdmin ? " Bạn là Admin, có thể Duyệt trực tiếp." : " Hành động này sẽ yêu cầu hệ thống thiết lập lệnh trả thưởng."}
                   </AlertDescription>
                 </Alert>
                 

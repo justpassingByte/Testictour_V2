@@ -11,16 +11,16 @@ import api from "@/app/lib/apiConfig";
 
 interface PlanConfig {
     id: string; plan: string;
-    monthlyPrice: number; annualPrice: number;
+    monthlyPrice: number; annualPrice: number; earlyAccessPrice: number | null;
     maxLobbies: number; maxTournamentSize: number; maxTournamentsPerMonth: number;
     platformFeePercent: number;
     features: Record<string, boolean>;
 }
 
 const PLAN_STYLES: Record<string, { badge: string; header: string }> = {
-    FREE: { badge: "bg-slate-500/10 text-slate-400 border-slate-500/20", header: "border-slate-500/20" },
+    STARTER: { badge: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20", header: "border-emerald-500/20" },
     PRO: { badge: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20", header: "border-yellow-500/20" },
-    ENTERPRISE: { badge: "bg-purple-500/10 text-purple-500 border-purple-500/20", header: "border-purple-500/20" },
+    ENTERPRISE: { badge: "bg-blue-500/10 text-blue-500 border-blue-500/20", header: "border-blue-500/20" },
 };
 
 
@@ -82,6 +82,7 @@ export default function SubscriptionPlanConfigSection() {
             await api.put(`/admin/settings/plans/${planKey}`, {
                 monthlyPrice: d.monthlyPrice,
                 annualPrice: d.annualPrice,
+                earlyAccessPrice: d.earlyAccessPrice === undefined || isNaN(d.earlyAccessPrice as any) ? null : d.earlyAccessPrice,
                 maxLobbies: d.maxLobbies,
                 maxTournamentSize: d.maxTournamentSize,
                 maxTournamentsPerMonth: d.maxTournamentsPerMonth,
@@ -103,7 +104,7 @@ export default function SubscriptionPlanConfigSection() {
             {plans.map(p => {
                 const d = drafts[p.plan];
                 if (!d) return null;
-                const style = PLAN_STYLES[p.plan] ?? PLAN_STYLES.FREE;
+                const style = PLAN_STYLES[p.plan] ?? PLAN_STYLES.STARTER;
 
                 return (
                     <Card key={p.plan} className={`bg-black/20 border ${style.header}`}>
@@ -128,6 +129,10 @@ export default function SubscriptionPlanConfigSection() {
                                 <div className="space-y-1.5">
                                     <label className="text-xs text-muted-foreground">Annual ($)</label>
                                     <Input type="number" min={0} value={d.annualPrice} onChange={e => updateDraft(p.plan, 'annualPrice', parseFloat(e.target.value))} className="bg-black/20 border-white/10 h-8 text-sm" />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs text-muted-foreground">Early Access ($) - Optional</label>
+                                    <Input type="number" min={0} value={d.earlyAccessPrice ?? ''} onChange={e => updateDraft(p.plan, 'earlyAccessPrice', e.target.value ? parseFloat(e.target.value) : null)} placeholder="Leave blank to disable" className="bg-black/20 border-white/10 h-8 text-sm" />
                                 </div>
                             </div>
 

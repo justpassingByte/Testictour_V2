@@ -94,7 +94,8 @@ export default function CreateOrEditLobbyPage() {
               description: "Could not find lobby details for editing.",
               variant: "destructive",
             })
-            router.push("/dashboard/partner")
+            const locale = params.locale || 'en';
+            router.push(`/${locale}/dashboard/partner`)
           }
         } catch (error) {
           toast({
@@ -102,12 +103,13 @@ export default function CreateOrEditLobbyPage() {
             description: "Failed to fetch lobby details. You may not have permission or the lobby does not exist.",
             variant: "destructive",
           })
-          router.push("/dashboard/partner")
+          const locale = params.locale || 'en';
+          router.push(`/${locale}/dashboard/partner`)
         }
       }
       fetchLobbyData()
     }
-  }, [isEditMode, lobbyId, router, toast])
+  }, [isEditMode, lobbyId, router, toast, params.locale])
 
   const availableTags = [
     "competitive",

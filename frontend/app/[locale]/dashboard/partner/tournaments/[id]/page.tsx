@@ -8,7 +8,7 @@ import {
   ArrowLeft, Loader2, Save, Trophy, RefreshCw, Users, Play,
   Square, CheckCircle2, XCircle, Clock, AlertTriangle, Settings2,
   ChevronRight, MoreVertical, UserMinus, Crown, Skull, Image as ImageIcon,
-  ShieldAlert, ShieldCheck, Wrench, GitBranch, FastForward, SkipForward, Trash2, Copy, Lock, Zap, Search
+  ShieldAlert, ShieldCheck, Wrench, GitBranch, FastForward, SkipForward, Trash2, Copy, Lock, Zap, Search, UserPlus
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -36,6 +36,9 @@ import { EscrowManagementTab } from "@/app/[locale]/dashboard/partner/components
 import { TournamentStatisticsTab } from "@/app/[locale]/tournaments/[id]/components/TournamentStatisticsTab"
 import { useTournamentSocket } from '@/app/hooks/useTournamentSocket'
 import { useQueryClient } from '@tanstack/react-query'
+import ReserveManagementTab from '@/components/ReserveManagementTab'
+import LobbyInterventionModal from '@/components/LobbyInterventionModal'
+import { ReservePlayerAPI } from '@/app/services/ParticipantService'
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   pending:      { label: "pending",      color: "slate",  icon: Clock },
@@ -47,7 +50,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.
 }
 
 export default function TournamentManagePage() {
-  const t = useTranslations("Common");
+  const t = useTranslations("common");
   const { formatVndText } = useCurrencyRate()
   const params = useParams()
   const router = useRouter()
@@ -68,6 +71,10 @@ export default function TournamentManagePage() {
   const [removeDialog, setRemoveDialog] = useState<{ open: boolean; participant: IParticipant | null }>({ open: false, participant: null })
   const [roundControlLoading, setRoundControlLoading] = useState<Record<string, boolean>>({})
 
+  // Lobby Intervention Modal state
+  const [interventionModal, setInterventionModal] = useState<{ open: boolean; lobby: any | null }>({ open: false, lobby: null })
+  const [reserves, setReserves] = useState<any[]>([])
+
   const [editForm, setEditForm] = useState({
     name: "",
     description: "",
@@ -81,13 +88,18 @@ export default function TournamentManagePage() {
   const [deletedPhaseIds, setDeletedPhaseIds] = useState<string[]>([])
   const [selectedImage, setSelectedImage] = useState<File | null>(null)
 
+  const [subscriptionPlan, setSubscriptionPlan] = useState('STARTER')
+
   const refresh = async () => {
     try {
-      const [t, p] = await Promise.all([
+      const [t, p, sub] = await Promise.all([
         TournamentService.detail(tournamentId),
         TournamentService.listParticipants(tournamentId, listPage, LIMIT).catch(() => ({ participants: [], total: 0 })),
+        api.get('/partner/wallet/config').catch(() => ({ data: { plan: 'STARTER' } }))
       ])
       
+      setSubscriptionPlan(sub.data?.plan || 'STARTER')
+
       // Lightweight: only fetch top 3 for winner banner/podium instead of ALL participants
       if (t.status === 'COMPLETED') {
         const topRes = await TournamentService.topParticipants(tournamentId, 3).catch(() => ({ participants: [] }));
@@ -97,12 +109,14 @@ export default function TournamentManagePage() {
       setTournament(t)
       setParticipants(p.participants || [])
       setTotalParticipants(p.total || 0)
+      // Fetch reserves for intervention modal
+      ReservePlayerAPI.listReserves(tournamentId).then(setReserves).catch(() => setReserves([]))
       setEditForm({
         name: t.name,
         description: t.description || "",
         maxPlayers: t.maxPlayers,
         entryFee: t.entryFee,
-        budget: t.budget || 0,
+        budget: (t as any).escrowRequiredAmount > 0 ? (t as any).escrowRequiredAmount : t.budget || 0,
         hostFeePercent: t.hostFeePercent || 0.1,
         status: t.status,
       })
@@ -178,6 +192,13 @@ export default function TournamentManagePage() {
             return data;
           }]
         })
+      }
+      
+      const minPrizePool = editForm.maxPlayers * editForm.entryFee;
+      if (editForm.budget > 0 && editForm.budget < minPrizePool) {
+        toast({ title: "Validation Error", description: `Prize pool cannot be less than $${minPrizePool}`, variant: "destructive" });
+        setSaving(false);
+        return;
       }
       
       const { budget, ...restForm } = editForm
@@ -359,7 +380,7 @@ export default function TournamentManagePage() {
   const StatusIcon = statusCfg.icon
   const registeredCount = tournament.registered || totalParticipants
   const fillPercent = tournament.maxPlayers > 0 ? (registeredCount / tournament.maxPlayers) * 100 : 0
-  const prizePool = tournament.entryFee * registeredCount * (1 - (tournament.hostFeePercent || 0.1))
+  const prizePool = Math.max(tournament.budget || 0, tournament.entryFee * registeredCount * (1 - (tournament.hostFeePercent || 0.1)))
 
   return (
     <div className="p-6 lg:p-8 space-y-6">
@@ -380,6 +401,11 @@ export default function TournamentManagePage() {
                 <Badge variant="outline" className="bg-orange-500/10 text-orange-500 border-orange-500/30">
                   <AlertTriangle className="mr-1 h-3 w-3 inline" />
                   Community Mode
+                </Badge>
+              ) : tournament.organizer?.partnerSubscription?.plan === 'PRO' || tournament.organizer?.partnerSubscription?.plan === 'ENTERPRISE' ? (
+                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30">
+                  <ShieldCheck className="mr-1 h-3 w-3 inline" />
+                  Trusted Partner
                 </Badge>
               ) : (
                 <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30">
@@ -478,7 +504,7 @@ export default function TournamentManagePage() {
       {tournament.status === 'COMPLETED' && (() => {
         const winner = topPlayers[0];
         const prizeStructure = tournament.prizeStructure as number[] | null;
-        const totalPot = tournament.budget || (totalParticipants * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)));
+        const totalPot = Math.max(tournament.budget || 0, totalParticipants * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)));
         const winnerPrize = prizeStructure && prizeStructure.length > 0 ? ((prizeStructure[0] / 100) * totalPot) : null;
         return winner ? (
           <div className="relative overflow-hidden rounded-xl border border-yellow-500/30 bg-gradient-to-r from-yellow-500/10 via-amber-500/5 to-yellow-500/10 p-5">
@@ -520,7 +546,7 @@ export default function TournamentManagePage() {
           </TabsTrigger>
           <TabsTrigger value="phases">
             <Trophy className="mr-1.5 h-4 w-4" />
-            Format & Control
+            {t("format_control")}
             {tournament.status === 'in_progress' && (
               <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
             )}
@@ -531,16 +557,17 @@ export default function TournamentManagePage() {
           </TabsTrigger>
           <TabsTrigger value="escrow">
             <ShieldAlert className="mr-1.5 h-4 w-4" />
-            Quỹ Escrow
+            {['PRO', 'ENTERPRISE'].includes(subscriptionPlan) ? "Payouts & Refunds" : t("escrow_fund", { defaultValue: "Escrow Fund" })}
           </TabsTrigger>
           <TabsTrigger value="settings">
             <Settings2 className="mr-1.5 h-4 w-4" />
             {t("settings")}
           </TabsTrigger>
+
           {tournament.status === 'COMPLETED' && (
             <TabsTrigger value="results" className="relative">
               <Trophy className="mr-1.5 h-4 w-4 text-yellow-400" />
-              <span className="text-yellow-400">Kết quả &amp; Thưởng</span>
+              <span className="text-yellow-400">{t("results_rewards")}</span>
               <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-yellow-400" />
             </TabsTrigger>
           )}
@@ -560,14 +587,14 @@ export default function TournamentManagePage() {
             const referralData = [
               { name: 'Facebook', value: stats.facebook, color: '#1877F2' },
               { name: 'Discord', value: stats.discord, color: '#5865F2' },
-              { name: 'Bạn bè giới thiệu', value: stats.friend, color: '#10b981' },
-              { name: 'Khác', value: stats.other, color: '#f59e0b' },
-              { name: 'Tự tìm kiếm / Không rõ', value: stats.unknown, color: '#64748b' }
+              { name: t("friend_invite"), value: stats.friend, color: '#10b981' },
+              { name: t("other"), value: stats.other, color: '#f59e0b' },
+              { name: t("unknown_source"), value: stats.unknown, color: '#64748b' }
             ].filter(s => s.value > 0).sort((a, b) => b.value - a.value);
 
             return (
               <div className="mb-4">
-                <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2"><TrendingUp className="h-4 w-4" /> Nguồn truy cập (Referral Sources)</h3>
+                <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2"><TrendingUp className="h-4 w-4" /> {t("referral_sources")}</h3>
                 <div className="grid gap-3 grid-cols-2 lg:grid-cols-5">
                   {referralData.map(stat => (
                     <Card key={stat.name} className="bg-card/40 border-white/5 py-3 px-4 flex flex-col justify-center">
@@ -612,7 +639,7 @@ export default function TournamentManagePage() {
                       <TableHead>{t("player")}</TableHead>
                       <TableHead>PUUID</TableHead>
                       <TableHead>{t("region")}</TableHead>
-                      <TableHead>Nguồn</TableHead>
+                      <TableHead>{t("source")}</TableHead>
                       <TableHead>{t("total_score")}</TableHead>
                       <TableHead>{t("status")}</TableHead>
                       <TableHead className="text-right">{t("action")}</TableHead>
@@ -731,11 +758,11 @@ export default function TournamentManagePage() {
                           disabled={roundControlLoading['phase-advance-' + phase.id]}
                           onClick={() => handleForceAdvancePhase(phase.id)}
                           className="border-rose-500/30 text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 hover:text-rose-300 gap-1.5 h-7 px-3 font-semibold shadow-sm transition-colors text-[11px]"
-                          title="Ép chuyển Phase — Đánh dấu tất cả Group xong và chuyển sang Phase kế tiếp"
+                          title={t("mark_all_groups_completed")}
                         >
                           {roundControlLoading['phase-advance-' + phase.id]
                             ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            : <><Zap className="h-3.5 w-3.5" /> Ép Chuyển Phase</>
+                            : <><Zap className="h-3.5 w-3.5" /> {t("force_advance_phase")}</>
                           }
                         </Button>
                       )}
@@ -903,8 +930,18 @@ export default function TournamentManagePage() {
             )}
             <p className="text-[11px] text-muted-foreground text-center pt-2 opacity-60">{t("round_controls_securely_dispatch_to_back_desc")}<code className="bg-white/5 px-1 rounded">{t("auto_advance")}</code>).
             </p>
+
+            {/* ── Integrated Reserves & Intervention ── */}
+            <Separator className="bg-white/10 my-4" />
+            <ReserveManagementTab
+              tournamentId={tournament.id}
+              lobbies={tournament.phases?.flatMap(p => p.rounds?.flatMap(r => r.lobbies || []) || []) || []}
+              onRefresh={refresh}
+            />
           </div>
         </TabsContent>
+
+
 
 
         {/* ─── STATISTICS TAB ─── */}
@@ -918,8 +955,10 @@ export default function TournamentManagePage() {
             tournamentId={tournament.id}
             tournamentName={tournament.name}
             tournamentStatus={tournament.status}
-            isCommunityMode={tournament.isCommunityMode!}
+            isCommunityMode={!!tournament.isCommunityMode}
             participants={participants}
+            prizeStructure={tournament.prizeStructure}
+            subscriptionPlan={subscriptionPlan}
           />
         </TabsContent>
 
@@ -1123,7 +1162,7 @@ export default function TournamentManagePage() {
               {(() => {
                 const sorted = topPlayers; // Already sorted by scoreTotal desc from API
                 const prizeStructure = tournament.prizeStructure as number[] | null;
-                const totalPot = tournament.budget || (totalParticipants * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)));
+                const totalPot = Math.max(tournament.budget || 0, totalParticipants * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)));
                 const getPrize = (rank: number) => prizeStructure && prizeStructure[rank] ? ((prizeStructure[rank] / 100) * totalPot) : 0;
                 const podium = [sorted[1], sorted[0], sorted[2]];
                 const podiumHeights = ['h-20', 'h-28', 'h-16'];
@@ -1194,7 +1233,7 @@ export default function TournamentManagePage() {
                         .map((p, i) => {
                           const rank = i + 1;
                           const prizeStructure = tournament.prizeStructure as number[] | null;
-                          const totalPot = tournament.budget || (totalParticipants * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)));
+                          const totalPot = Math.max(tournament.budget || 0, totalParticipants * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)));
                           const prizePercent = prizeStructure && prizeStructure[i] ? prizeStructure[i] : 0;
                           const prizeAmount = (prizePercent / 100) * totalPot;
                           const hasPrize = prizeAmount > 0;
@@ -1264,6 +1303,17 @@ export default function TournamentManagePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Lobby Intervention Modal */}
+      <LobbyInterventionModal
+        open={interventionModal.open}
+        onOpenChange={(o) => setInterventionModal({ open: o, lobby: o ? interventionModal.lobby : null })}
+        tournamentId={tournamentId}
+        lobby={interventionModal.lobby}
+        reserves={reserves}
+        allParticipants={participants}
+        onRefresh={refresh}
+      />
     </div>
   )
 }

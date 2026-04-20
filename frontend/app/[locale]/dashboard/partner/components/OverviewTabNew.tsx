@@ -19,12 +19,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress"
 import { useEffect } from "react"
 
-export function OverviewTabNew({ partnerData, lobbies }: { partnerData: PartnerData | null; lobbies: MiniTourLobby[] }) {
+export function OverviewTabNew({ 
+  partnerData, 
+  lobbies, 
+  tournaments = [], 
+  ledger = null 
+}: { 
+  partnerData: PartnerData | null; 
+  lobbies: MiniTourLobby[];
+  tournaments?: any[];
+  ledger?: any;
+}) {
   if (!partnerData) return <p>Could not load overview.</p>
 
-  useEffect(() => {
-    // existing code here
-  }, [partnerData]) // added partnerData to dependency array
+  const useLedger = !!ledger;
+  const totalTournaments = tournaments.length;
 
   return (
     <div className="space-y-6">
@@ -34,37 +43,37 @@ export function OverviewTabNew({ partnerData, lobbies }: { partnerData: PartnerD
           <CardHeader>
             <CardTitle className="flex items-center">
               <Star className="mr-2 h-5 w-5 text-primary" />
-              Host Fee Earnings
+              Net Balance
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
               <div className="flex items-baseline justify-between">
-                <span className="text-3xl font-bold">${partnerData?.totalRevenue?.toLocaleString() || 0}</span>
-                <span className="text-sm text-muted-foreground">all-time</span>
+                <span className="text-3xl font-bold">
+                  {useLedger ? `$${ledger.totals.netPartnerBalance.toLocaleString()}` : `$${partnerData?.totalRevenue?.toLocaleString() || 0}`}
+                </span>
               </div>
-              <Progress value={Math.min((partnerData?.totalRevenue || 0) / 100, 100)} className="h-2" />
-              <p className="text-sm text-muted-foreground">Based on {partnerData?.revenueShare || 10}% host fee</p>
+              <p className="text-sm text-green-500 font-medium tracking-tight">Available to withdraw</p>
             </div>
           </CardContent>
         </Card>
-
         <Card className="border-violet-500/50 bg-violet-500/5">
           <CardHeader>
             <CardTitle className="flex items-center">
               <TrendingUp className="mr-2 h-5 w-5 text-violet-500" />
-              Monthly Earnings
+              Platform Fee
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
               <div className="flex items-baseline justify-between">
-                <span className="text-3xl font-bold">${partnerData?.monthlyRevenue?.toLocaleString() || 0}</span>
-                <span className="text-sm text-muted-foreground">this month</span>
+                <span className="text-3xl font-bold">
+                  {useLedger ? `$${ledger.totals.totalPlatformFee.toLocaleString()}` : `$${partnerData?.monthlyRevenue?.toLocaleString() || 0}`}
+                </span>
+                <span className="text-sm text-muted-foreground">all-time</span>
               </div>
-              <div className="flex items-center text-sm text-violet-500">
-                <History className="mr-1 h-4 w-4" />
-                <span>Recent tournament fees</span>
+              <div className={`flex items-center text-sm gap-1.5 ${(partnerData?.subscriptionPlan || 'STARTER') === 'STARTER' ? 'text-green-500' : 'text-red-500'}`}>
+                <span>{(partnerData?.subscriptionPlan || 'STARTER') === 'STARTER' ? 'Secured in Escrow' : 'Pending settlement'}</span>
               </div>
             </div>
           </CardContent>
@@ -74,38 +83,26 @@ export function OverviewTabNew({ partnerData, lobbies }: { partnerData: PartnerD
           <CardHeader>
             <CardTitle className="flex items-center">
               <Trophy className="mr-2 h-5 w-5 text-yellow-500" />
-              Total Lobbies
+              Tournaments
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
               <div className="flex items-baseline justify-between">
-                <span className="text-3xl font-bold">{partnerData?.totalLobbies || 0}</span>
+                <span className="text-3xl font-bold">{totalTournaments}</span>
+                <span className="text-sm text-muted-foreground tracking-tight">/ {partnerData.totalLobbies} Lobbies</span>
               </div>
-              {partnerData?.lobbyStatuses ? (
-                <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-yellow-500/10 text-yellow-500 border-yellow-500/20">
-                    {partnerData.lobbyStatuses.WAITING} Waiting
-                  </Badge>
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-green-500/10 text-green-500 border-green-500/20">
-                    {partnerData.lobbyStatuses.IN_PROGRESS} Active
-                  </Badge>
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-slate-500/10 text-slate-400 border-slate-500/20">
-                    {partnerData.lobbyStatuses.COMPLETED} Done
-                  </Badge>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="flex items-center">
-                    <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
-                    {partnerData?.activeLobbies || 0} active
-                  </div>
-                  <div className="flex items-center">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
-                    {(partnerData?.totalLobbies || 0) - (partnerData?.activeLobbies || 0)} completed
-                  </div>
-                </div>
-              )}
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-yellow-500/10 text-yellow-500 border-yellow-500/20">
+                  {tournaments.filter((t:any) => t.status === 'upcoming').length} Upcoming
+                </Badge>
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-green-500/10 text-green-500 border-green-500/20">
+                  {tournaments.filter((t:any) => t.status === 'in_progress').length} Active
+                </Badge>
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-slate-500/10 text-slate-400 border-slate-500/20">
+                  {tournaments.filter((t:any) => t.status === 'completed').length} Done
+                </Badge>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -114,18 +111,19 @@ export function OverviewTabNew({ partnerData, lobbies }: { partnerData: PartnerD
           <CardHeader>
             <CardTitle className="flex items-center">
               <Users className="mr-2 h-5 w-5 text-green-600" />
-              Referred Players
+              Players Engaged
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
               <div className="flex items-baseline justify-between">
-                <span className="text-3xl font-bold">{partnerData?.totalPlayers || 0}</span>
-                <span className="text-sm text-muted-foreground">players</span>
+                 <span className="text-3xl font-bold">
+                   {tournaments.reduce((sum: number, t: any) => sum + (t._count?.participants || 0), 0) + (partnerData?.totalPlayers || 0)}
+                 </span>
               </div>
               <div className="flex items-center text-sm text-green-600">
                 <TrendingUp className="mr-1 h-4 w-4" />
-                <span>Active this month</span>
+                <span>Across all events</span>
               </div>
             </div>
           </CardContent>
@@ -134,15 +132,15 @@ export function OverviewTabNew({ partnerData, lobbies }: { partnerData: PartnerD
 
       {/* Recent Activity Section */}
       <div className="grid gap-6 md:grid-cols-2">
-        {/* Recent Lobbies */}
+        {/* Recent Tournaments */}
         <Card className="bg-slate-800/50 border-slate-700">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-white">Recent Lobbies</CardTitle>
-                <CardDescription className="text-slate-400">Your latest tournament lobbies</CardDescription>
+                <CardTitle className="text-white">Recent Tournaments</CardTitle>
+                <CardDescription className="text-slate-400">Your latest competitive events</CardDescription>
               </div>
-              <Link href="/dashboard/partner?tab=lobbies">
+              <Link href="/dashboard/partner?tab=tournaments">
                 <Button size="sm" variant="outline" className="text-slate-200 border-slate-700 hover:bg-slate-700">
                   View All
                 </Button>
@@ -151,39 +149,39 @@ export function OverviewTabNew({ partnerData, lobbies }: { partnerData: PartnerD
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {lobbies.length > 0 ? (
-                [...lobbies]
+              {tournaments.length > 0 ? (
+                [...tournaments]
                   .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
                   .slice(0, 5)
-                  .map((lobby) => (
-                    <div key={lobby.id} className="flex items-center justify-between rounded-lg border border-slate-700 p-4 hover:bg-slate-700/30 transition-colors">
+                  .map((t) => (
+                    <div key={t.id} className="flex items-center justify-between rounded-lg border border-slate-700 p-4 hover:bg-slate-700/30 transition-colors">
                       <div className="flex-1">
                         <div className="flex items-center space-x-3">
-                          <h4 className="font-semibold text-white">{lobby.name}</h4>
+                          <h4 className="font-semibold text-white truncate max-w-[200px]">{t.name}</h4>
                           <Badge
-                            variant={lobby.status === 'WAITING' ? 'default' : 'secondary'}
-                            className={`text-[10px] ${lobby.status === 'WAITING'
+                            variant={t.status === 'upcoming' ? 'default' : 'secondary'}
+                            className={`text-[10px] ${t.status === 'upcoming'
                               ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
                               : 'bg-slate-500/10 text-slate-400 border-slate-500/20'
                               }`}
                           >
-                            {lobby.status}
+                            {t.status}
                           </Badge>
                         </div>
                         <div className="flex items-center space-x-4 text-xs text-slate-400 mt-2">
                           <span className="flex items-center">
                             <Users className="mr-1 h-3 w-3" />
-                            {lobby.currentPlayers}/{lobby.maxPlayers}
+                            {t._count?.participants || 0}/{t.maxParticipants}
                           </span>
                           <span className="flex items-center">
                             <DollarSign className="mr-1 h-3 w-3" />
-                            {lobby.prizePool.toLocaleString()}
+                            {t.prizePool?.toLocaleString() || 0}
                           </span>
                         </div>
                       </div>
                       <div className="flex items-center space-x-2">
                         <div className="text-right">
-                          <p className="text-xs text-slate-500">{new Date(lobby.createdAt).toLocaleDateString()}</p>
+                          <p className="text-xs text-slate-500">{new Date(t.createdAt).toLocaleDateString()}</p>
                         </div>
                       </div>
                     </div>
@@ -191,7 +189,7 @@ export function OverviewTabNew({ partnerData, lobbies }: { partnerData: PartnerD
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
                   <Trophy className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg font-medium">No lobbies yet</p>
+                  <p className="text-lg font-medium">No tournaments yet</p>
                 </div>
               )}
             </div>

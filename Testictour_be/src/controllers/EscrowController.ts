@@ -43,7 +43,7 @@ const EscrowController = {
     if (!tournament) throw new ApiError(404, 'Tournament not found');
 
     const sub = await prisma.partnerSubscription.findUnique({ where: { userId: tournament.organizerId } });
-    const planConfig = await prisma.subscriptionPlanConfig.findUnique({ where: { plan: sub?.plan || 'FREE' } });
+    const planConfig = await prisma.subscriptionPlanConfig.findUnique({ where: { plan: sub?.plan || 'STARTER' } });
     
     // Send response
     res.json({

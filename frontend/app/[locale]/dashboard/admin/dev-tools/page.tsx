@@ -1047,6 +1047,29 @@ export default function DevToolsPage() {
                     >
                       🎲 6b. Simulate Match (Mock — No Riot API)
                     </Button>
+
+                    {/* ── Reserve Player Testing ── */}
+                    <div className="border-t border-white/5 pt-3 mt-1 space-y-2">
+                      <p className="text-[10px] text-amber-300 font-semibold uppercase tracking-wider flex items-center gap-1.5">
+                        <Users className="w-3 h-3" /> Reserve Player Testing
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full justify-start border-amber-500/30 text-amber-400 bg-amber-500/10 hover:bg-amber-500/20"
+                        onClick={() => handleAutomation('seed-reserves', { tournamentId: seededTournamentId, count: 3 })}
+                      >
+                        🎫 7. Seed Reserve Players (3 dummy)
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full justify-start border-red-500/30 text-red-400 bg-red-500/10 hover:bg-red-500/20"
+                        onClick={() => handleAutomation('set-lobby-state', { lobbyId: lobbyId || undefined, state: 'ADMIN_INTERVENTION' })}
+                      >
+                        🚨 8. Force Lobby → ADMIN_INTERVENTION
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               )}

@@ -1750,5 +1750,124 @@ router.post('/seed-128-ready', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * POST /dev/automation/seed-reserves
+ * Creates dummy reserve players for a tournament so the reserve assignment flow can be tested.
+ * Body: { tournamentId: string, count?: number }
+ */
+router.post('/automation/seed-reserves', async (req: Request, res: Response) => {
+  try {
+    const { tournamentId, count = 3 } = req.body;
+
+    if (!tournamentId) {
+      return res.status(400).json({ success: false, error: 'tournamentId is required' });
+    }
+
+    const tournament = await prisma.tournament.findUnique({ where: { id: tournamentId } });
+    if (!tournament) {
+      return res.status(404).json({ success: false, error: 'Tournament not found' });
+    }
+
+    // Enable reserve slots on the tournament if not already set
+    if ((tournament.reservePlayersLimit || 0) < count) {
+      await prisma.tournament.update({
+        where: { id: tournamentId },
+        data: { reservePlayersLimit: count }
+      });
+    }
+
+    const createdReserves = [];
+    for (let i = 0; i < count; i++) {
+      const ts = Date.now().toString(36);
+      const dummyPuuid = `reserve_puuid_${ts}_${i}`;
+      const user = await prisma.user.create({
+        data: {
+          username: `Reserve_${ts}_${i}`,
+          email: `${dummyPuuid}@test.com`,
+          puuid: dummyPuuid,
+          riotGameName: `ReservePlayer_${i + 1}`,
+          riotGameTag: 'VN1',
+          password: 'dummy_dev_password',
+          region: tournament.region || 'sea',
+        }
+      });
+
+      const participant = await prisma.participant.create({
+        data: {
+          userId: user.id,
+          tournamentId,
+          isReserve: true,
+          paid: true,
+        }
+      });
+
+      createdReserves.push({
+        participantId: participant.id,
+        userId: user.id,
+        username: user.username,
+        riotGameName: user.riotGameName,
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: `Created ${count} reserve players for tournament ${tournamentId}`,
+      reserves: createdReserves,
+      tournamentId,
+    });
+  } catch (err: any) {
+    console.error('[DevTools] seed-reserves error:', err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /dev/automation/set-lobby-state
+ * Forces a lobby into a specific state for testing (e.g. ADMIN_INTERVENTION).
+ * Body: { lobbyId: string, state: string }
+ */
+router.post('/automation/set-lobby-state', async (req: Request, res: Response) => {
+  try {
+    const { lobbyId, state } = req.body;
+
+    if (!lobbyId || !state) {
+      return res.status(400).json({ success: false, error: 'lobbyId and state are required' });
+    }
+
+    const validStates = ['WAITING', 'READY_CHECK', 'GRACE_PERIOD', 'STARTING', 'PLAYING', 'ADMIN_INTERVENTION', 'FINISHED', 'COMPLETED', 'PAUSED'];
+    if (!validStates.includes(state)) {
+      return res.status(400).json({ success: false, error: `Invalid state. Must be one of: ${validStates.join(', ')}` });
+    }
+
+    const lobby = await prisma.lobby.findUnique({ where: { id: lobbyId } });
+    if (!lobby) {
+      return res.status(404).json({ success: false, error: 'Lobby not found' });
+    }
+
+    const previousState = lobby.state;
+    await prisma.lobby.update({
+      where: { id: lobbyId },
+      data: { state }
+    });
+
+    // Emit socket event if available
+    try {
+      const io = (global as any).__io || (global as any).io;
+      if (io) io.emit('tournaments_refresh');
+    } catch (_) { }
+
+    return res.json({
+      success: true,
+      message: `Lobby ${lobbyId} state changed: ${previousState} → ${state}`,
+      lobbyId,
+      previousState,
+      newState: state,
+    });
+  } catch (err: any) {
+    console.error('[DevTools] set-lobby-state error:', err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;
 

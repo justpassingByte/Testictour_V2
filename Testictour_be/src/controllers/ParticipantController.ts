@@ -12,9 +12,17 @@ export const ParticipantController = {
     getHistory,
     async join(req: Request, res: Response, next: NextFunction) {
       try {
-        const { discordId, referralSource } = req.body || {};
-        const participant = await ParticipantService.join(req.params.tournamentId, (req as any).user.id, discordId, referralSource);
-        res.json({ participant });
+        const { discordId, referralSource, joinAsReserve } = req.body || {};
+        const result = await ParticipantService.join(req.params.tournamentId, (req as any).user.id, discordId, referralSource, joinAsReserve);
+        res.json(result);
+      } catch (err) {
+        next(err);
+      }
+    },
+    async listReserves(req: Request, res: Response, next: NextFunction) {
+      try {
+        const reserves = await ParticipantService.listReserves(req.params.tournamentId);
+        res.json({ reserves });
       } catch (err) {
         next(err);
       }
@@ -72,5 +80,24 @@ export const ParticipantController = {
       } catch (err) {
         next(err);
       }
-    }
+    },
+    paymentStatus: asyncHandler(async (req: Request, res: Response) => {
+      const { ref } = req.query;
+      if (!ref || typeof ref !== 'string') {
+        return res.status(400).json({ error: 'Missing ref' });
+      }
+
+      // Check transaction status
+      const { prisma } = await import('../services/prisma');
+      const transaction = await prisma.transaction.findUnique({
+        where: { externalRefId: ref },
+        select: { status: true }
+      });
+
+      if (!transaction) {
+        return res.status(404).json({ error: 'Transaction not found' });
+      }
+
+      return res.status(200).json({ status: transaction.status });
+    })
 }; 

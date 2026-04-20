@@ -8,6 +8,7 @@ import {
     updateFeatureFlag,
     getSubscriptionPlans,
     updateSubscriptionPlan,
+    getAdminTransactions,
 } from '../controllers/adminSettings.controller';
 
 const router = Router();
@@ -23,5 +24,8 @@ router.put('/flags/:key', auth('admin'), auditLog('TOGGLE_FEATURE_FLAG'), update
 // Subscription plan config
 router.get('/plans', auth('admin'), getSubscriptionPlans);
 router.put('/plans/:plan', auth('admin'), auditLog('UPDATE_SUBSCRIPTION_PLAN'), updateSubscriptionPlan);
+
+// Admin transactions (global view)
+router.get('/transactions', auth('admin'), getAdminTransactions);
 
 export default router;

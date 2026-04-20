@@ -30,7 +30,8 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - DIRECT_URL=${DATABASE_URL}
       - JWT_SECRET=${JWT_SECRET}
-      - FRONTEND_URL=https://testictour.com
+      - FRONTEND_URL=https://www.testictour.com
+      - API_URL=https://api.testictour.com/api
       - BACKEND_SERVICE_URL=http://testictour-backend:4000
       - GRIMOIRE_API_URL=http://grimoire-backend:3001
       # Gateway Variables

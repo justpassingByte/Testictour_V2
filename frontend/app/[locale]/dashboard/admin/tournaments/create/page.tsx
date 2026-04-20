@@ -39,6 +39,8 @@ export default function CreateTournamentPage() {
     description: "",
     region: "APAC",
     maxPlayers: 32,
+    reservePlayersLimit: 0,
+    absentFeePolicy: "prizepool",
     entryFee: 0,
     customPrizePool: 0,
     hostFeePercent: 0.1,
@@ -141,6 +143,8 @@ export default function CreateTournamentPage() {
         expectedParticipants: form.maxPlayers,
         config: { phases: phaseConfigs as any },
         isCommunityMode: form.isCommunityMode,
+        reservePlayersLimit: form.reservePlayersLimit,
+        absentFeePolicy: form.absentFeePolicy,
       })
 
       toast({ title: "Tournament Created", description: `${form.name} has been created successfully.` })
@@ -251,7 +255,7 @@ export default function CreateTournamentPage() {
             <CardTitle>{t("players")} & {t("registration_fee")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-4">
               <div className="space-y-2">
                 <Label htmlFor="maxPlayers">{t("max_players")}</Label>
                 <Select value={form.maxPlayers.toString()} onValueChange={(v) => updateForm("maxPlayers", parseInt(v))}>
@@ -263,6 +267,22 @@ export default function CreateTournamentPage() {
                     <SelectItem value="64">64 Players</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="reservePlayersLimit">{t("reserve_slots")}</Label>
+                <Input id="reservePlayersLimit" type="number" min={0} max={16} value={form.reservePlayersLimit} onChange={(e) => updateForm("reservePlayersLimit", parseInt(e.target.value) || 0)} />
+                <p className="text-[10px] text-muted-foreground mt-1">{t("reserve_slots_desc")}</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="absentFeePolicy">{t("absent_fee_policy")}</Label>
+                <Select value={form.absentFeePolicy} onValueChange={(v) => updateForm("absentFeePolicy", v)}>
+                  <SelectTrigger id="absentFeePolicy"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="prizepool">{t("absent_policy_prizepool")}</SelectItem>
+                    <SelectItem value="keep">{t("absent_policy_keep")}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground mt-1">{t("absent_fee_policy_desc")}</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="entryFee">{t("registration_fee")} (USD)</Label>

@@ -89,7 +89,7 @@ const TournamentManagementTab = observer(() => {
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {tournaments.map((tournament) => {
         const roundInfo = getCurrentRoundInfo(tournament);
-        const prizePool = tournament.budget || calculatePrizePool(tournament.registered || 0, tournament.entryFee, tournament.hostFeePercent);
+        const prizePool = Math.max(tournament.budget || 0, calculatePrizePool(tournament.registered || 0, tournament.entryFee, tournament.hostFeePercent));
         
         return (
           <Card key={tournament.id} className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1 animate-fade-in-up">
@@ -118,7 +118,10 @@ const TournamentManagementTab = observer(() => {
                 <div>
                   <div className="flex justify-between items-center text-sm mb-1">
                     <span>Registration</span>
-                    <span>{tournament.registered || 0} / {tournament.maxPlayers}</span>
+                    <span>
+                      {tournament.registered || 0} / {tournament.maxPlayers}
+                      {(tournament as any).reserveCount ? <span className="text-xs text-amber-500 font-semibold ml-1">+{ (tournament as any).reserveCount } dự bị</span> : null}
+                    </span>
                   </div>
                   <Progress value={((tournament.registered || 0) / tournament.maxPlayers) * 100} />
                 </div>
@@ -147,7 +150,9 @@ const TournamentManagementTab = observer(() => {
             </CardContent>
             <CardFooter className="flex justify-between items-center">
                 <div className="flex items-center text-sm text-muted-foreground">
-                    <Users className="mr-2 h-4 w-4" /> {tournament.registered || 0} participants
+                    <Users className="mr-2 h-4 w-4" /> 
+                    <span>{tournament.registered || 0} participants</span>
+                    {(tournament as any).reserveCount ? <span className="text-xs text-amber-500 font-semibold ml-1"> (+{ (tournament as any).reserveCount } dự bị)</span> : null}
                 </div>
                 <div className="flex items-center space-x-2">
                   {tournament.status === 'in_progress' && (

@@ -70,7 +70,18 @@ export default {
     const { prisma } = require('../services/prisma');
     const dbUser = await prisma.user.findUnique({
       where: { id: jwtUser.id },
-      select: { id: true, username: true, email: true, role: true, isActive: true }
+      select: { 
+        id: true, 
+        username: true, 
+        email: true, 
+        role: true, 
+        isActive: true,
+        riotGameName: true,
+        riotGameTag: true,
+        puuid: true,
+        region: true,
+        discordId: true
+      }
     });
 
     if (!dbUser || !dbUser.isActive) {
@@ -78,7 +89,7 @@ export default {
       return res.status(401).json({ user: null });
     }
 
-    res.json({ user: jwtUser });
+    res.json({ user: dbUser });
   },
 
   async logout(req: Request, res: Response) {

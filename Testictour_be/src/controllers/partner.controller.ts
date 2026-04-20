@@ -32,65 +32,119 @@ export default {
                 where: { referrer: user?.username || '' },
             });
 
-            // Calculate metrics
-            const totalLobbies = lobbies.length;
-            const activeLobbies = lobbies.filter(l => l.status === 'WAITING' || l.status === 'IN_PROGRESS').length;
+            // Calculate mini tour metrics
+            let totalLobbies = lobbies.length;
+            let activeLobbies = lobbies.filter(l => l.status === 'WAITING' || l.status === 'IN_PROGRESS').length;
             const completedLobbies = lobbies.filter(l => l.status === 'COMPLETED').length;
 
             const totalMatches = lobbies.reduce((sum, l) => sum + l.matches.length, 0);
-            const totalPlayers = new Set(
+            let totalPlayersSet = new Set(
                 lobbies.flatMap(l => l.participants.map(p => p.userId))
-            ).size;
+            );
 
-            // Calculate revenue (sum of creator fees from entry fees)
-            const totalRevenue = lobbies.reduce((sum, lobby) => {
+            // Calculate mini tour revenue
+            const legacyTotalRevenue = lobbies.reduce((sum, lobby) => {
                 const legacyShare = lobby.partnerRevenueShare || 0.10;
                 return sum + (lobby.entryFee * lobby.currentPlayers * legacyShare);
             }, 0);
 
-            // Monthly revenue (lobbies created this month)
             const now = new Date();
             const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-            const monthlyRevenue = lobbies
+            const legacyMonthlyRevenue = lobbies
                 .filter(l => new Date(l.createdAt) >= monthStart)
                 .reduce((sum, lobby) => {
                     const legacyShare = lobby.partnerRevenueShare || 0.10;
                     return sum + (lobby.entryFee * lobby.currentPlayers * legacyShare);
                 }, 0);
 
-            // Lobby status breakdown
+            // Get newer Tournaments
+            const tournaments = await prisma.tournament.findMany({
+                where: { organizerId: userId },
+                include: {
+                    _count: { select: { participants: true } }
+                },
+                orderBy: { createdAt: 'desc' }
+            });
+            
+            // Add tournaments to counts
+            totalLobbies += tournaments.length;
+            activeLobbies += tournaments.filter(t => t.status === 'UPCOMING' || t.status === 'ONGOING' || t.status === 'REGISTRATION_OPEN' || t.status === 'REGISTRATION_CLOSED').length;
+            const tournamentPlayersTotal = tournaments.reduce((sum, t) => sum + t._count.participants, 0);
+
             const lobbyStatuses = {
-                WAITING: lobbies.filter(l => l.status === 'WAITING').length,
-                IN_PROGRESS: lobbies.filter(l => l.status === 'IN_PROGRESS').length,
-                COMPLETED: completedLobbies,
+                WAITING: lobbies.filter(l => l.status === 'WAITING').length, // Or UPCOMING
+                IN_PROGRESS: lobbies.filter(l => l.status === 'IN_PROGRESS').length, // Or ONGOING
+                COMPLETED: completedLobbies + tournaments.filter(t => t.status === 'COMPLETED').length,
             };
 
-            // Get Partner Subscription for Default Host Fee Config
             const sub = await prisma.partnerSubscription.findUnique({
                 where: { userId }
             });
             const features = sub?.features as any || {};
             const currentHostFeePercent = typeof features?.hostFeePercent === 'number' ? Math.round(features.hostFeePercent * 100) : 10;
 
+            const WalletLedgerService = (await import('../services/WalletLedgerService')).default;
+            const ledger = await WalletLedgerService.getPartnerLedger(userId);
+            
+            // Re-calculate monthly revenue from tournaments accurately
+            // For tournaments, Revenue = HostFee
+            // Wait, we can estimate tournament monthly revenue based on creation date:
+            let tournamentMonthlyRevenue = 0;
+            tournaments.filter(t => new Date(t.createdAt) >= monthStart).forEach(t => {
+                 const isPaid = t.entryFee > 0;
+                 if (isPaid) {
+                     const share = t.hostFeePercent || (currentHostFeePercent / 100);
+                     tournamentMonthlyRevenue += (t.entryFee * t._count.participants * share);
+                 }
+            });
+
+            const trueTotalRevenue = ledger.totals.totalHostFee + legacyTotalRevenue;
+            const trueMonthlyRevenue = tournamentMonthlyRevenue + legacyMonthlyRevenue;
+
+            // Fetch Referral Sources
+            const participantSources = await prisma.participant.groupBy({
+                by: ['referralSource'],
+                where: {
+                    tournament: { organizerId: userId },
+                    referralSource: { not: null, notIn: [''] }
+                },
+                _count: { _all: true }
+            });
+
+            const sourceLabels: Record<string, string> = {
+                'facebook': 'Facebook Group / Page',
+                'discord': 'Discord Server',
+                'friend': 'Friends / Word of Mouth',
+                'other': 'Other'
+            };
+
+            const referralStats = participantSources.map(s => ({
+                source: sourceLabels[s.referralSource || ''] || s.referralSource || 'Unknown',
+                count: s._count._all
+            }));
+
             const summary = {
                 id: userId,
                 username: user?.username || '',
                 email: user?.email || '',
-                totalPlayers: Math.max(referredPlayers, totalPlayers),
-                totalRevenue: Math.round(totalRevenue * 100) / 100,
+                totalPlayers: Math.max(referredPlayers, totalPlayersSet.size + tournamentPlayersTotal),
+                totalRevenue: Math.round(trueTotalRevenue * 100) / 100,
                 activeLobbies,
                 totalLobbies,
-                monthlyRevenue: Math.round(monthlyRevenue * 100) / 100,
+                monthlyRevenue: Math.round(trueMonthlyRevenue * 100) / 100,
                 balance: balance?.amount || 0,
                 totalMatches,
-                revenueShare: currentHostFeePercent, // Default or Custom
+                revenueShare: currentHostFeePercent,
                 lobbyStatuses,
+                ledger, 
+                tournaments, 
+                referralStats,
                 metrics: {
-                    totalPlayers: Math.max(referredPlayers, totalPlayers),
-                    totalRevenue: Math.round(totalRevenue * 100) / 100,
+                    totalPlayers: Math.max(referredPlayers, totalPlayersSet.size + tournamentPlayersTotal),
+                    totalRevenue: Math.round(trueTotalRevenue * 100) / 100,
                     activeLobbies,
                     totalLobbies,
-                    monthlyRevenue: Math.round(monthlyRevenue * 100) / 100,
+                    monthlyRevenue: Math.round(trueMonthlyRevenue * 100) / 100,
                     balance: balance?.amount || 0,
                     totalMatches,
                     revenueShare: currentHostFeePercent,
@@ -604,7 +658,7 @@ export default {
             });
 
             // Fetch live config so we can inject the latest maxLobbies etc.
-            const freeConfig = await prisma.subscriptionPlanConfig.findUnique({ where: { plan: 'FREE' } });
+            const freeConfig = await prisma.subscriptionPlanConfig.findUnique({ where: { plan: 'STARTER' } });
 
             // If no subscription exists, create a FREE one
             if (!subscription) {
@@ -617,7 +671,7 @@ export default {
                 subscription = await prisma.partnerSubscription.create({
                     data: {
                         userId: lookupUserId,
-                        plan: 'FREE',
+                        plan: 'STARTER',
                         status: 'ACTIVE',
                         features: defaultFeatures,
                     },

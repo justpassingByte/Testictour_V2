@@ -6,6 +6,8 @@ import Image from "next/image"
 import { format } from "date-fns"
 import { ITournament } from '@/app/types/tournament'
 import { useTournamentStore } from '@/app/stores/tournamentStore'
+import { useUserStore } from '@/app/stores/userStore'
+import { ParticipantService } from '@/app/services/ParticipantService'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -17,7 +19,7 @@ import api from "@/app/lib/apiConfig"
 import {
   Globe, Users, Calendar,
   DollarSign, Clock, Download,
-  AlertTriangle, ShieldCheck, Lock
+  AlertTriangle, ShieldCheck, Lock, CheckCircle2
 } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { useCurrencyRate } from "@/app/hooks/useCurrencyRate"
@@ -52,6 +54,18 @@ export default function TournamentSidebarClient({ initialTournament }: Tournamen
   const [loadingExportBracket, setLoadingExportBracket] = useState(false)
   const [loadingExportScoreboard, setLoadingExportScoreboard] = useState(false)
   const [loadingExportPlayers, setLoadingExportPlayers] = useState(false)
+  const { currentUser } = useUserStore()
+  const [isUserRegistered, setIsUserRegistered] = useState(false)
+
+  useEffect(() => {
+    if (!currentUser?.id || !tournament?.id) return
+    ParticipantService.list(tournament.id)
+      .then((participants) => {
+        const found = participants.some((p: any) => p.userId === currentUser.id)
+        setIsUserRegistered(found)
+      })
+      .catch(() => { /* ignore */ })
+  }, [currentUser?.id, tournament?.id])
 
   const downloadCSV = (content: string, filename: string) => {
     const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), content], { type: 'text/csv;charset=utf-8;' })
@@ -180,7 +194,14 @@ export default function TournamentSidebarClient({ initialTournament }: Tournamen
           <ul className="space-y-3">
             <li className="flex items-center justify-between">
               <span className="text-muted-foreground flex items-center"><Users className="mr-2 h-4 w-4" /> {t("participants") || "Participants"}:</span>
-              <span className="font-medium">{tournament.registered || 0} / {tournament.maxPlayers}</span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-medium">{tournament.registered || 0} / {tournament.maxPlayers}</span>
+                {(tournament.reserveCount ?? 0) > 0 && (
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 border-amber-500/30 text-amber-400 bg-amber-500/10 font-mono">
+                    +{tournament.reserveCount} {t("reserve_badge")}
+                  </Badge>
+                )}
+              </div>
             </li>
             <li className="flex items-center justify-between">
               <span className="text-muted-foreground flex items-center"><Globe className="mr-2 h-4 w-4" /> {t("region")}:</span>
@@ -207,8 +228,8 @@ export default function TournamentSidebarClient({ initialTournament }: Tournamen
             <li className="flex items-center justify-between">
               <span className="text-muted-foreground flex items-center"><Calendar className="mr-2 h-4 w-4" /> {t("registration_deadline")}:</span>
               <span className="font-medium">
-                {tournament.endTime && !isNaN(new Date(tournament.endTime).getTime())
-                  ? format(new Date(tournament.endTime), "yyyy-MM-dd")
+                {tournament.registrationDeadline && !isNaN(new Date(tournament.registrationDeadline).getTime())
+                  ? format(new Date(tournament.registrationDeadline), "yyyy-MM-dd HH:mm")
                   : t("n_a")}
               </span>
             </li>
@@ -225,6 +246,8 @@ export default function TournamentSidebarClient({ initialTournament }: Tournamen
               <span className="text-muted-foreground flex items-center"><ShieldCheck className="mr-2 h-4 w-4" /> {t("funding_status") || "Funding"}:</span>
               {tournament.isCommunityMode ? (
                 <Badge variant="outline" className="bg-orange-500/10 text-orange-500 border-none font-mono tracking-wider px-1.5 uppercase">UNSECURED</Badge>
+              ) : tournament.organizer?.partnerSubscription?.plan === 'PRO' || tournament.organizer?.partnerSubscription?.plan === 'ENTERPRISE' ? (
+                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-none font-mono tracking-wider px-1.5 uppercase">TRUSTED</Badge>
               ) : tournament.escrowStatus === 'locked' || tournament.escrowStatus === 'payout_released' ? (
                 <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-none font-mono tracking-wider px-1.5 uppercase">100% FUNDED</Badge>
               ) : (
@@ -248,7 +271,12 @@ export default function TournamentSidebarClient({ initialTournament }: Tournamen
               </>
             )}
             {(tournament.status === "UPCOMING" || tournament.status === "pending") && (
-              (tournament.registered || 0) >= tournament.maxPlayers ? (
+              isUserRegistered ? (
+                <Button disabled className="w-full bg-green-600/20 text-green-500 border-green-500/30 hover:bg-green-600/20">
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  {t("already_registered") || "Already Registered"}
+                </Button>
+              ) : (tournament.registered || 0) >= tournament.maxPlayers ? (
                 <Button disabled className="w-full">
                   {t("tournament_full") || "Tournament Full"}
                 </Button>

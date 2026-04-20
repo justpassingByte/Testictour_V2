@@ -70,7 +70,7 @@ export function RegionSelector({
           <Popover.Content
             sideOffset={4}
             align="start"
-            className="z-[9999] rounded-xl border border-zinc-700 overflow-hidden w-[var(--radix-popover-trigger-width)]"
+            className="z-[9999] rounded-xl border border-zinc-700 overflow-y-auto max-h-[60vh] w-[var(--radix-popover-trigger-width)]"
             style={{ 
               boxShadow: "0 8px 48px rgba(0,0,0,0.85), 0 2px 12px rgba(0,0,0,0.5)",
               background: "rgb(9, 9, 11)"

@@ -77,7 +77,17 @@ export default class UserService {
     const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, process.env.JWT_SECRET as string, {
       expiresIn: '7d'
     });
-    return { user: { id: user.id, username: user.username, email: user.email, role: user.role }, token };
+    return { user: { 
+      id: user.id, 
+      username: user.username, 
+      email: user.email, 
+      role: user.role,
+      riotGameName: user.riotGameName,
+      riotGameTag: user.riotGameTag,
+      puuid: user.puuid,
+      discordId: user.discordId,
+      region: user.region
+    }, token };
   }
 
   static async importUsers(users: { username: string; tagName: string; balance: number; region?: string }[], referrer?: string) {

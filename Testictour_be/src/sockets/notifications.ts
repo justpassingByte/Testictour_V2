@@ -18,7 +18,7 @@ export default function registerNotificationSocket(io: Server) {
 
         // Partner clients also join their tier room for targeted notifications
         socket.on('join_tier_room', (tier: string) => {
-            if (['FREE', 'PRO', 'ENTERPRISE'].includes(tier)) {
+            if (['STARTER', 'PRO', 'ENTERPRISE'].includes(tier)) {
                 socket.join(`tier:${tier}`);
             }
         });

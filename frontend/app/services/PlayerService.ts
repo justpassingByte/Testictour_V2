@@ -20,6 +20,7 @@ export interface PlayerStats {
     eliminated: boolean;
     scoreTotal: number;
   }>;
+  totalPrizeWon: number;
 }
 
 // Updated PlayerDetails interface
@@ -89,6 +90,7 @@ export interface LeaderboardPlayer {
   tournamentsWon: number;
   totalPoints: number;
   lobbiesPlayed: number;
+  totalPrizeWon: number;
   createdAt: string;
 }
 
@@ -105,9 +107,9 @@ export class PlayerService {
   }
 
   // Public leaderboard endpoint (no auth required)
-  static async getLeaderboard(search?: string, limit: number = 50, offset: number = 0): Promise<PaginatedResponse<LeaderboardPlayer>> {
+  static async getLeaderboard(search?: string, limit: number = 50, offset: number = 0, region: string = 'All', sortBy: string = 'totalPoints'): Promise<PaginatedResponse<LeaderboardPlayer>> {
     try {
-      const params: Record<string, string | number> = { limit, offset };
+      const params: Record<string, string | number> = { limit, offset, region, sortBy };
       if (search) params.search = search;
       const response = await api.get('/players/leaderboard', { params });
       return response.data;

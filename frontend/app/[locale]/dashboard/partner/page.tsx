@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { Plus, Settings, DollarSign, Users, Trophy, BarChart3, Coins, Crown, Menu, PanelLeftClose, HandCoins, ShieldCheck } from "lucide-react"
+import { Plus, Settings, DollarSign, Users, Trophy, BarChart3, Coins, Crown, Menu, PanelLeftClose, HandCoins, ShieldCheck, Gift, Star } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 
 import { Button } from "@/components/ui/button"
@@ -14,6 +14,9 @@ import { SyncStatus } from "@/components/sync-status"
 
 import SubscriptionTab from "./components/SubscriptionTab"
 import PartnerTournamentTab from "./components/PartnerTournamentTab"
+import PartnerRewardTab from "./components/PartnerRewardTab"
+import PartnerAchievementTab from "./components/PartnerAchievementTab"
+import WalletTab from "./components/WalletTab"
 
 import api from "@/app/lib/apiConfig"
 import { MiniTourLobby, MiniTourMatch, MiniTourMatchResult, PartnerData, AnalyticsData, Player } from "@/app/stores/miniTourLobbyStore";
@@ -56,6 +59,8 @@ export default function PartnerDashboardPage() {
   const [partnerData, setPartnerData] = useState<PartnerData | null>(null);
   const [lobbies, setLobbies] = useState<MiniTourLobby[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
+  const [ledger, setLedger] = useState<any>(null);
+  const [tournaments, setTournaments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
@@ -74,19 +79,23 @@ export default function PartnerDashboardPage() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [partnerResponse, lobbiesResponse, playersResponse, subResponse] = await Promise.all([
+        const [partnerResponse, lobbiesResponse, playersResponse, subResponse, ledgerRes, tourRes] = await Promise.all([
           api.get('/partner/summary'),
           api.get('/minitour-lobbies'),
           api.get('/partner/players'),
-          api.get('/partner/subscription').catch(() => ({ data: { data: { plan: 'FREE' } } }))
+          api.get('/partner/subscription').catch(() => ({ data: { data: { plan: 'STARTER' } } })),
+          api.get('/partner/wallet/ledger').catch(() => ({ data: null })),
+          api.get('/tournaments/my').catch(() => ({ data: { tournaments: [] } }))
         ]);
 
-        const plan = subResponse.data?.data?.plan || 'FREE';
+        const plan = subResponse.data?.data?.plan || 'STARTER';
         const partnerDataWithPlan = { ...partnerResponse.data.data, subscriptionPlan: plan };
 
         setPartnerData(partnerDataWithPlan);
         setLobbies(lobbiesResponse.data.data);
         setPlayers(playersResponse.data.data);
+        setLedger(ledgerRes.data);
+        setTournaments(tourRes.data.tournaments || []);
       } catch (error) {
         console.error('Failed to fetch partner data:', error);
       } finally {
@@ -108,16 +117,20 @@ export default function PartnerDashboardPage() {
 
   const refreshDashboard = async () => {
     try {
-      const [partnerResponse, lobbiesResponse, playersResponse, subResponse] = await Promise.all([
+      const [partnerResponse, lobbiesResponse, playersResponse, subResponse, ledgerRes, tourRes] = await Promise.all([
         api.get('/partner/summary'),
         api.get('/minitour-lobbies'),
         api.get('/partner/players'),
-        api.get('/partner/subscription').catch(() => ({ data: { data: { plan: 'FREE' } } }))
+        api.get('/partner/subscription').catch(() => ({ data: { data: { plan: 'STARTER' } } })),
+        api.get('/partner/wallet/ledger').catch(() => ({ data: null })),
+        api.get('/tournaments/my').catch(() => ({ data: { tournaments: [] } }))
       ]);
-      const plan = subResponse.data?.data?.plan || 'FREE';
+      const plan = subResponse.data?.data?.plan || 'STARTER';
       setPartnerData({ ...partnerResponse.data.data, subscriptionPlan: plan });
       setLobbies(lobbiesResponse.data.data);
       setPlayers(playersResponse.data.data);
+      setLedger(ledgerRes.data);
+      setTournaments(tourRes.data.tournaments || []);
     } catch (error) {
       console.error('Failed to refresh dashboard:', error);
     }
@@ -160,7 +173,14 @@ export default function PartnerDashboardPage() {
               {isSidebarOpen ? <PanelLeftClose className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </Button>
           </div>
-          <TabsList className="flex flex-col h-full bg-transparent border-0 p-2 justify-start items-start gap-2 w-full">
+          <TabsList className="flex flex-col h-full bg-transparent border-0 p-2 justify-start items-start gap-1 w-full overflow-y-auto">
+            {isSidebarOpen && (
+              <div className="flex flex-row items-center gap-2 mt-4 mb-1 px-3 w-full">
+                <div className="shrink-0 w-1.5 h-1.5 rounded-full bg-orange-500/80 shadow-[0_0_5px_rgba(249,115,22,0.5)]"></div>
+                <span className="text-[10px] uppercase font-bold tracking-[0.15em] text-slate-400 shrink-0">Manage</span>
+                <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent"></div>
+              </div>
+            )}
             <TabsTrigger value="overview" className={`w-full ${isSidebarOpen ? "justify-start" : "justify-center"} gap-3 data-[state=active]:bg-primary/20`}>
               <BarChart3 className="h-4 w-4 shrink-0" /> {isSidebarOpen && "Overview"}
             </TabsTrigger>
@@ -173,16 +193,43 @@ export default function PartnerDashboardPage() {
             <TabsTrigger value="team" className={`w-full ${isSidebarOpen ? "justify-start" : "justify-center"} gap-3 data-[state=active]:bg-primary/20`}>
               <Plus className="h-4 w-4 shrink-0" /> {isSidebarOpen && "Players"}
             </TabsTrigger>
+            
+            {isSidebarOpen && (
+              <div className="flex flex-row items-center gap-2 mt-4 mb-1 px-3 w-full">
+                <div className="shrink-0 w-1.5 h-1.5 rounded-full bg-green-500/80 shadow-[0_0_5px_rgba(34,197,94,0.5)]"></div>
+                <span className="text-[10px] uppercase font-bold tracking-[0.15em] text-slate-400 shrink-0">Finance & Analytics</span>
+                <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent"></div>
+              </div>
+            )}
             <TabsTrigger value="revenue" className={`w-full ${isSidebarOpen ? "justify-start" : "justify-center"} gap-3 data-[state=active]:bg-primary/20`}>
               <HandCoins className="h-4 w-4 shrink-0" /> {isSidebarOpen && "Revenue"}
             </TabsTrigger>
+            <TabsTrigger value="wallet" className={`w-full ${isSidebarOpen ? "justify-start" : "justify-center"} gap-3 data-[state=active]:bg-primary/20`}>
+              <DollarSign className="h-4 w-4 shrink-0" /> {isSidebarOpen && "Wallet"}
+            </TabsTrigger>
             <TabsTrigger value="analytics" className={`w-full ${isSidebarOpen ? "justify-start" : "justify-center"} gap-3 data-[state=active]:bg-primary/20`}>
-              <DollarSign className="h-4 w-4 shrink-0" /> {isSidebarOpen && "Analytics"}
+              <BarChart3 className="h-4 w-4 shrink-0" /> {isSidebarOpen && "Analytics"}
+            </TabsTrigger>
+            <TabsTrigger value="plans" className={`w-full ${isSidebarOpen ? "justify-start" : "justify-center"} gap-3 data-[state=active]:bg-primary/20`}>
+              <Crown className="h-4 w-4 shrink-0" /> {isSidebarOpen && "Plans"}
+            </TabsTrigger>
+
+            {isSidebarOpen && (
+              <div className="flex flex-row items-center gap-2 mt-4 mb-1 px-3 w-full">
+                <div className="shrink-0 w-1.5 h-1.5 rounded-full bg-cyan-500/80 shadow-[0_0_5px_rgba(6,182,212,0.5)]"></div>
+                <span className="text-[10px] uppercase font-bold tracking-[0.15em] text-slate-400 shrink-0">Engagement & Settings</span>
+                <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent"></div>
+              </div>
+            )}
+            <TabsTrigger value="rewards" className={`w-full ${isSidebarOpen ? "justify-start" : "justify-center"} gap-3 data-[state=active]:bg-primary/20`}>
+              <Gift className="h-4 w-4 shrink-0" /> {isSidebarOpen && "Rewards"}
+            </TabsTrigger>
+            <TabsTrigger value="achievements" className={`w-full ${isSidebarOpen ? "justify-start" : "justify-center"} gap-3 data-[state=active]:bg-primary/20`}>
+              <Star className="h-4 w-4 shrink-0" /> {isSidebarOpen && "Achievements"}
             </TabsTrigger>
             <TabsTrigger value="settings" className={`w-full ${isSidebarOpen ? "justify-start" : "justify-center"} gap-3 data-[state=active]:bg-primary/20`}>
               <Settings className="h-4 w-4 shrink-0" /> {isSidebarOpen && "Settings"}
             </TabsTrigger>
-
           </TabsList>
         </div>
 
@@ -203,7 +250,7 @@ export default function PartnerDashboardPage() {
 
           <div className="w-full">
             <TabsContent value="overview" className="m-0 space-y-4 outline-none">
-              <OverviewTabNew key={partnerData?.id} partnerData={partnerData as any} lobbies={lobbies as any} />
+              <OverviewTabNew key={partnerData?.id} partnerData={partnerData as any} lobbies={lobbies as any} ledger={ledger} tournaments={tournaments} />
             </TabsContent>
 
             <TabsContent value="tournaments" className="m-0 space-y-4 outline-none">
@@ -226,7 +273,28 @@ export default function PartnerDashboardPage() {
             </TabsContent>
 
             <TabsContent value="revenue" className="m-0 space-y-4 outline-none">
-              <RevenueTab partnerData={partnerData as any} lobbies={lobbies as any} />
+              <RevenueTab 
+                partnerData={partnerData as any} 
+                lobbies={lobbies as any} 
+                tournaments={(partnerData as any)?.tournaments}
+                ledger={(partnerData as any)?.ledger}
+              />
+            </TabsContent>
+
+            <TabsContent value="wallet" className="m-0 space-y-4 outline-none">
+              <WalletTab />
+            </TabsContent>
+
+            <TabsContent value="rewards" className="m-0 space-y-4 outline-none">
+              <PartnerRewardTab />
+            </TabsContent>
+
+            <TabsContent value="achievements" className="m-0 space-y-4 outline-none">
+              <PartnerAchievementTab />
+            </TabsContent>
+
+            <TabsContent value="plans" className="m-0 space-y-4 outline-none">
+              <SubscriptionTab partnerId={partnerData?.id} />
             </TabsContent>
 
             <TabsContent value="settings" className="m-0 space-y-4 outline-none">

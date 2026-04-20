@@ -20,6 +20,8 @@ import lobbyStateRoutes from './lobbyState.routes';
 import devRoutes from './dev.routes';
 import escrowRoutes from './escrow.routes';
 import adminEscrowRoutes from './adminEscrow.routes';
+import { getPublicPlans } from '../controllers/adminSettings.controller';
+import partnerRewardRoutes from './partnerReward.routes';
 
 const router = Router();
 
@@ -42,8 +44,24 @@ router.use('/admin/notifications', adminNotificationsRoutes);
 router.use('/admin/settings', adminSettingsRoutes);
 router.use('/minitour-lobbies', miniTourLobbyRoutes);
 router.use('/partner', partnerRoutes);
+router.use('/partner/rewards', partnerRewardRoutes);
 router.use('/', lobbyStateRoutes); // Lobby state machine REST endpoints
+import sepayRoutes from './sepay.routes';
+import walletRoutes from './wallet.routes';
+
+router.use('/webhooks/sepay', sepayRoutes);
+router.use('/partner/wallet', walletRoutes);
 router.use('/dev', devRoutes);   // Dev/test utilities
 
-export default router;
+// Public endpoints (no auth)
+router.get('/public/plans', getPublicPlans);
 
+import { getPublicPartnerRewards } from '../controllers/partnerReward.controller';
+import SepayPgController from '../controllers/SepayPgController';
+
+router.get('/public/partner-rewards/:partnerId', getPublicPartnerRewards);
+router.get('/payments/sepay-pg/:transactionId', SepayPgController.renderCheckout);
+router.post('/payments/sepay-pg/ipn/:transactionId', SepayPgController.handleIpn);
+router.post('/payments/confirm-pending/:tournamentId', SepayPgController.confirmPendingPayment);
+
+export default router;

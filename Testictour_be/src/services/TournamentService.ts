@@ -10,6 +10,67 @@ import EscrowService from './EscrowService';
 import RoundService from './RoundService';
 
 export default class TournamentService {
+  // Cache platform fee with a 10-minute TTL to ensure changes propagate without reboot
+  private static platformFeeCache = new Map<string, { fee: number; expiresAt: number }>();
+
+  private static async getPlatformFeePercent(organizerId: string): Promise<number> {
+    const now = Date.now();
+    const cached = this.platformFeeCache.get(organizerId);
+    
+    if (cached && cached.expiresAt > now) {
+      return cached.fee;
+    }
+
+    const sub = await prisma.partnerSubscription.findUnique({ where: { userId: organizerId } });
+    const planConfig = await prisma.subscriptionPlanConfig.findUnique({ where: { plan: sub?.plan || 'STARTER' } });
+    const fee = planConfig?.platformFeePercent ?? 0.05;
+    
+    // Vô hiệu hoá cache tự động sau 10 phút (600000 ms)
+    this.platformFeeCache.set(organizerId, { fee, expiresAt: now + 600000 });
+    return fee;
+  }
+
+  static async calculateNetPrizePool(
+    tournament: any, 
+    counts: { registered: number, reserve: number, absent: number },
+    escrow?: any
+  ): Promise<number> {
+    const maxPlayers = tournament.maxPlayers || tournament.expectedParticipants || 0;
+    const totalCount = counts.registered + counts.reserve;
+    const isUpcoming = tournament.status === 'UPCOMING' || tournament.status === 'DRAFT' || tournament.status === 'REGISTRATION';
+    const multiplier = isUpcoming ? Math.max(maxPlayers, totalCount) : totalCount;
+    
+    let grossPool = multiplier * (tournament.entryFee || 0);
+
+    if (!tournament.isCommunityMode) {
+      if (escrow && escrow.fundedAmount > 0) {
+        grossPool = Math.max(grossPool, escrow.fundedAmount);
+      } else if (tournament.escrowRequiredAmount && tournament.escrowRequiredAmount > grossPool) {
+        grossPool = tournament.escrowRequiredAmount;
+      }
+    }
+
+    let standardPool = grossPool;
+
+    // Subtract unassigned reserves refund estimate (money going back, not to winners)
+    const unassignedReserves = Math.max(0, totalCount - maxPlayers);
+    const reserveRefundAmount = Math.min(unassignedReserves * (tournament.entryFee || 0), standardPool);
+    standardPool -= reserveRefundAmount;
+
+    // Subtract absent penalties if host keeps them
+    let absentKeepAmount = 0;
+    if (tournament.absentFeePolicy === 'keep') {
+      absentKeepAmount = Math.min(counts.absent * (tournament.entryFee || 0), standardPool);
+      standardPool -= absentKeepAmount;
+    }
+    
+    const hostFeePercent = tournament.hostFeePercent || 0;
+    const platformFeePercent = await this.getPlatformFeePercent(tournament.organizerId);
+
+    const netPrizePool = standardPool * (1 - hostFeePercent - platformFeePercent);
+    return Math.floor(netPrizePool);
+  }
+
   /**
    * Provides a lightweight list of tournaments for general users.
    * Fetches only the necessary data for a public listing to ensure performance.
@@ -23,23 +84,48 @@ export default class TournamentService {
         status: { notIn: ['DRAFT', 'CANCELLED'] } // Hide non-public tournaments
       },
       include: {
+        organizer: {
+          include: {
+            partnerSubscription: true
+          }
+        },
         _count: {
-          select: { participants: true }
+          select: {
+            participants: { where: { isReserve: false } },
+          }
         }
       }
     });
 
-    return tournaments.map(t => {
-      const { entryFee, hostFeePercent } = t as any;
-      const registeredCount = t._count.participants;
+    // Batch-fetch reserve counts for all tournament IDs
+    const tournamentIds = tournaments.map(t => t.id);
+    const [reserveCounts, absentCounts] = await Promise.all([
+      prisma.participant.groupBy({
+        by: ['tournamentId'],
+        where: { tournamentId: { in: tournamentIds }, isReserve: true },
+        _count: true,
+      }),
+      prisma.participant.groupBy({
+        by: ['tournamentId'],
+        where: { tournamentId: { in: tournamentIds }, isAbsent: true },
+        _count: true,
+      })
+    ]);
+    const reserveMap = new Map(reserveCounts.map(r => [r.tournamentId, r._count]));
+    const absentMap = new Map(absentCounts.map(r => [r.tournamentId, r._count]));
 
-      // The prize pool (budget) shows max potential if UPCOMING, adjusts actual when started
-      const multiplier = t.status === 'UPCOMING' ? Math.max(t.maxPlayers || 0, registeredCount) : registeredCount;
-      const totalCollected = multiplier * (entryFee || 0);
-      const platformFee = Math.floor(totalCollected * (hostFeePercent || 0.1));
-      const finalPrizePool = totalCollected - platformFee;
+    return Promise.all(tournaments.map(async t => {
+      // _count.participants now only counts non-reserve players
+      const registeredCount = (t._count as any).participants;
+      const reserveCount = reserveMap.get(t.id) || 0;
+      const absentCount = absentMap.get(t.id) || 0;
+
+      const finalPrizePool = await this.calculateNetPrizePool(t, {
+        registered: registeredCount,
+        reserve: reserveCount,
+        absent: absentCount
+      });
       
-      // Return a slimmed-down object
       return {
         id: t.id,
         name: t.name,
@@ -50,9 +136,13 @@ export default class TournamentService {
         maxPlayers: t.maxPlayers,
         entryFee: t.entryFee,
         registered: registeredCount,
+        reserveCount,
+        reservePlayersLimit: (t as any).reservePlayersLimit || 0,
         budget: finalPrizePool,
+        organizer: t.organizer,
+        isCommunityMode: t.isCommunityMode,
       };
-    });
+    }));
   }
 
   /**
@@ -72,12 +162,31 @@ export default class TournamentService {
           }
         },
         _count: {
-          select: { participants: true }
+          select: {
+            participants: { where: { isReserve: false } },
+          }
         }
       }
     });
 
-    return tournaments.map(t => {
+    // Batch-fetch reserve and absent counts
+    const tournamentIds = tournaments.map(t => t.id);
+    const [reserveCounts, absentCounts] = await Promise.all([
+      prisma.participant.groupBy({
+        by: ['tournamentId'],
+        where: { tournamentId: { in: tournamentIds }, isReserve: true },
+        _count: true,
+      }),
+      prisma.participant.groupBy({
+        by: ['tournamentId'],
+        where: { tournamentId: { in: tournamentIds }, isAbsent: true },
+        _count: true,
+      })
+    ]);
+    const reserveMap = new Map(reserveCounts.map(r => [r.tournamentId, r._count]));
+    const absentMap = new Map(absentCounts.map(r => [r.tournamentId, r._count]));
+
+    return Promise.all(tournaments.map(async t => {
       const roundsTotal = t.phases.reduce((sum, phase) => sum + (phase.numberOfRounds || 0), 0);
       
       let currentRound = 0;
@@ -87,35 +196,42 @@ export default class TournamentService {
         currentRound = round?.roundNumber || 0;
       }
       
-      const registeredCount = t._count.participants;
+      const registeredCount = (t._count as any).participants;
+      const reserveCount = reserveMap.get(t.id) || 0;
+      const absentCount = absentMap.get(t.id) || 0;
       
-      const multiplier = t.status === 'UPCOMING' ? Math.max(t.maxPlayers || 0, registeredCount) : registeredCount;
-      const totalCollected = multiplier * (t.entryFee || 0);
-      const platformFee = Math.floor(totalCollected * (t.hostFeePercent || 0.1));
-      let finalPrizePool = totalCollected - platformFee;
-      
-      // If there's a manual budget/escrow configured, prefer it if it's higher
-      if (!t.isCommunityMode && t.escrowRequiredAmount > finalPrizePool) {
-        finalPrizePool = t.escrowRequiredAmount;
-      }
+      const finalPrizePool = await this.calculateNetPrizePool(t, {
+        registered: registeredCount,
+        reserve: reserveCount,
+        absent: absentCount
+      });
 
       return {
         ...t,
         registered: registeredCount,
+        reserveCount,
         roundsTotal,
         currentRound,
         budget: finalPrizePool,
       };
-    });
+    }));
   }
 
   static async detail(id: string) {
     const tournament = await prisma.tournament.findUnique({ 
       where: { id }, 
       include: { 
-        organizer: true,
+        organizer: {
+          include: {
+            partnerSubscription: true
+          }
+        },
         escrow: true,
-        _count: { select: { participants: true } },
+        _count: {
+          select: {
+            participants: { where: { isReserve: false } },
+          }
+        },
         phases: { 
           orderBy: { phaseNumber: 'asc' },
           include: { 
@@ -142,34 +258,28 @@ export default class TournamentService {
     });
     if (!tournament) throw new ApiError(404, 'Tournament not found');
 
-    // Use _count for registered count instead of fetching ALL participants
-    const registeredCount = tournament._count.participants;
+    // Count only non-reserve participants for registration and prize pool
+    const registeredCount = (tournament._count as any).participants;
+    // Count reserves separately
+    const reserveCount = await prisma.participant.count({
+      where: { tournamentId: id, isReserve: true }
+    });
 
-    // The prize pool (budget) shows max potential if UPCOMING, adjusts actual when started
-    const maxPlayers = tournament.maxPlayers || tournament.expectedParticipants || 0;
-    const multiplier = tournament.status === 'UPCOMING' ? Math.max(maxPlayers, registeredCount) : registeredCount;
-    const totalCollected = multiplier * (tournament.entryFee || 0);
-    const platformFee = Math.floor(totalCollected * (tournament.hostFeePercent || 0.1));
-    let finalPrizePool = totalCollected - platformFee;
+    const absentCount = await prisma.participant.count({
+      where: { tournamentId: id, isAbsent: true }
+    });
 
-    if (!tournament.isCommunityMode && tournament.escrowRequiredAmount > finalPrizePool) {
-      finalPrizePool = tournament.escrowRequiredAmount;
-    }
-
-    let finalBudget = finalPrizePool;
-    if (!tournament.isCommunityMode && (tournament as any).escrow) {
-      const escrow = (tournament as any).escrow;
-      if (escrow.fundedAmount > finalPrizePool) {
-        finalBudget = escrow.fundedAmount;
-      } else if (escrow.fundedAmount > 0) {
-        finalBudget = Math.max(finalPrizePool, escrow.fundedAmount);
-      }
-    }
+    const finalBudget = await this.calculateNetPrizePool(tournament, {
+      registered: registeredCount,
+      reserve: reserveCount,
+      absent: absentCount
+    }, (tournament as any).escrow);
 
     const result = {
       ...tournament,
       participants: [],  // No longer fetched here — use /participants endpoint with pagination
       registered: registeredCount,
+      reserveCount,
       budget: finalBudget
     };
 
@@ -195,6 +305,8 @@ export default class TournamentService {
     customPrizePool?: number;
     discordUrl?: string;
     sponsors?: any;
+    reservePlayersLimit?: number;
+    absentFeePolicy?: string;
   }) {
     let templateData: any = {};
     let finalStartTime = data.startTime;
@@ -418,6 +530,18 @@ export default class TournamentService {
 
     if (!tournament) return;
 
+    // Check if there are any successful transactions (funds collected)
+    const successfulTransactions = await prisma.transaction.count({
+      where: {
+        tournamentId: id,
+        status: { in: ['success', 'paid', 'completed'] }
+      }
+    });
+
+    if (successfulTransactions > 0) {
+      throw new ApiError(400, 'Cannot delete a tournament that has active financial transactions or collected funds. Please change its status to CANCELLED instead to ensure participants are properly refunded.');
+    }
+
     const phaseIds = tournament.phases.map(p => p.id);
     const roundIds = tournament.phases.flatMap(p => p.rounds.map(r => r.id));
     const lobbyIds = tournament.phases.flatMap(p => p.rounds.flatMap(r => r.lobbies.map(l => l.id)));
@@ -479,6 +603,7 @@ export default class TournamentService {
       const tournament = await db.tournament.findUnique({ where: { id: tournamentId } });
       if (!tournament) throw new ApiError(404, 'Tournament not found');
 
+      // Count all participants config entry fees for prize pool calculate (including reserves)
       const actualCount = await db.participant.count({ where: { tournamentId } });
       const entryFee = (tournament as any).entryFee || 0;
       const hostFeePercent = (tournament as any).hostFeePercent || 0.1;

@@ -85,7 +85,7 @@ export const createMiniTourLobby = asyncHandler(async (req: Request, res: Respon
   const creatorUser = await prisma.user.findUnique({ where: { id: creatorId } });
   if (creatorUser && (creatorUser.role === 'PARTNER' || creatorUser.role === 'partner')) {
     const sub = await prisma.partnerSubscription.findUnique({ where: { userId: creatorId } });
-    const planName = sub?.plan || 'FREE';
+    const planName = sub?.plan || 'STARTER';
     const planConfig = await prisma.subscriptionPlanConfig.findUnique({ where: { plan: planName } });
 
     const features = sub?.features as any || {};

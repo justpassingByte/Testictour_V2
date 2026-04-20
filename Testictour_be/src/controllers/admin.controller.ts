@@ -378,7 +378,7 @@ export const getAdminStats = asyncHandler(async (req: Request, res: Response) =>
   // Count subscription plans
   const subscriptionPlans = { FREE: 0, PRO: 0, ENTERPRISE: 0 };
   subscriptions.forEach(s => {
-    if (s.plan === 'FREE') subscriptionPlans.FREE++;
+    if (s.plan === 'STARTER') subscriptionPlans.FREE++;
     else if (s.plan === 'PRO') subscriptionPlans.PRO++;
     else if (s.plan === 'ENTERPRISE') subscriptionPlans.ENTERPRISE++;
   });
@@ -512,7 +512,7 @@ export const updateSubscription = asyncHandler(async (req: Request, res: Respons
         },
         create: {
           userId: partnerId,
-          plan: plan || 'FREE',
+          plan: plan || 'STARTER',
           status: status || 'ACTIVE',
           features: features || {},
           monthlyPrice: monthlyPrice || null,
@@ -627,7 +627,7 @@ export const getAdminAnalytics = asyncHandler(async (req: Request, res: Response
       joinedAt: p.createdAt,
       totalLobbies: p.createdMiniTourLobbies.length,
       activeLobbies: p.createdMiniTourLobbies.filter(l => l.status === 'IN_PROGRESS').length,
-      plan: p.partnerSubscription?.plan || 'FREE',
+      plan: p.partnerSubscription?.plan || 'STARTER',
       subscriptionStatus: p.partnerSubscription?.status || 'NONE',
       revenue: p.partnerSubscription?.monthlyPrice || 0,
     }))
@@ -771,19 +771,21 @@ export const getPartnerDetailForAdmin = asyncHandler(async (req: Request, res: R
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  // Combine transactions logic
+  // Calculate revenue from lobbies (same logic as partner.controller.ts getSummary)
   let totalRevenue = 0;
   let monthlyRevenue = 0;
 
-  partner.transactions.forEach(t => {
-    // Only count positive deposits or specific deposit_revenue events
-    if (t.amount > 0 && t.type !== 'withdraw') {
-      totalRevenue += Number(t.amount);
-      if (new Date(t.createdAt) >= startOfMonth) {
-        monthlyRevenue += Number(t.amount);
-      }
+  lobbies.forEach(lobby => {
+    const legacyShare = lobby.partnerRevenueShare || 0.10;
+    const lobbyRevenue = lobby.entryFee * lobby.currentPlayers * legacyShare;
+    totalRevenue += lobbyRevenue;
+    if (new Date(lobby.createdAt) >= startOfMonth) {
+      monthlyRevenue += lobbyRevenue;
     }
   });
+
+  totalRevenue = Math.round(totalRevenue * 100) / 100;
+  monthlyRevenue = Math.round(monthlyRevenue * 100) / 100;
 
   let enrichedSubscription: any = partner.partnerSubscription;
   if (partner.partnerSubscription) {
@@ -813,12 +815,26 @@ export const getPartnerDetailForAdmin = asyncHandler(async (req: Request, res: R
     };
   }
 
+  // Fetch all tournaments (Needs to be outside the if scope)
+  const tournaments = await prisma.tournament.findMany({
+    where: { organizerId: partnerId },
+    include: {
+      _count: {
+        select: { participants: true }
+      }
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  const WalletLedgerService = (await import('../services/WalletLedgerService')).default;
+  const ledger = await WalletLedgerService.getPartnerLedger(partnerId);
+
   // Return the combined object AdminPartnerDetail
   res.status(200).json({
     partner: partnerDetail,
     stats: {
       totalPlayers: players.length,
-      totalRevenue,
+      totalRevenue: ledger.totals.netPartnerBalance || totalRevenue, // Prioritize the ledger net balance
       monthlyRevenue,
       activeLobbies,
       totalLobbies,
@@ -828,7 +844,8 @@ export const getPartnerDetailForAdmin = asyncHandler(async (req: Request, res: R
     },
     transactions: partner.transactions,
     lobbies,
-    tournaments: [],
+    tournaments,
+    ledger, // Send the wallet ledger
     players,
     subscription: enrichedSubscription
   });

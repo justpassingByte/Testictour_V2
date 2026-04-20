@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import { Plus, Settings, DollarSign, Users, Trophy, BarChart3, Crown, Menu, PanelLeftClose, HandCoins } from "lucide-react";
+import { Plus, Settings, DollarSign, Users, Trophy, BarChart3, Crown, Menu, PanelLeftClose, HandCoins, Gift, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function PartnerLayout({ children }: { children: React.ReactNode }) {
@@ -16,6 +16,17 @@ export default function PartnerLayout({ children }: { children: React.ReactNode 
     return <>{children}</>;
   }
 
+  const navigateToTab = (tabId: string) => {
+    const locale = pathname.split('/')[1] || 'en';
+    router.push(`/${locale}/dashboard/partner?tab=${tabId}`);
+  };
+
+  const isActive = (tabId: string) => {
+    if (tabId === 'tournaments' && pathname.includes('/tournaments')) return true;
+    if (tabId === 'lobbies' && pathname.includes('/lobbies')) return true;
+    return false;
+  };
+
   // If we are deep inside a separate page (like tournament detail), we render a standalone 
   // Sidebar that looks structurally identical and acts as navigation back to the SPA.
   return (
@@ -28,40 +39,83 @@ export default function PartnerLayout({ children }: { children: React.ReactNode 
             {isSidebarOpen ? <PanelLeftClose className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </Button>
         </div>
-        <div className="flex flex-col h-full bg-transparent border-0 p-2 justify-start items-start gap-2 w-full">
+        <div className="flex flex-col h-full bg-transparent border-0 p-2 justify-start items-start gap-1 w-full overflow-y-auto">
+          {isSidebarOpen && (
+            <div className="flex flex-row items-center gap-2 mt-4 mb-1 px-3 w-full">
+              <div className="shrink-0 w-1.5 h-1.5 rounded-full bg-orange-500/80 shadow-[0_0_5px_rgba(249,115,22,0.5)]"></div>
+              <span className="text-[10px] uppercase font-bold tracking-[0.15em] text-slate-400 shrink-0">Manage</span>
+              <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent"></div>
+            </div>
+          )}
           {[
             { id: 'overview', icon: BarChart3, label: 'Overview' },
             { id: 'tournaments', icon: Trophy, label: 'Tournaments' },
             { id: 'lobbies', icon: Users, label: 'Lobbies' },
-            { id: 'team', icon: Plus, label: 'Players' },
-            { id: 'revenue', icon: HandCoins, label: 'Revenue' },
-            { id: 'analytics', icon: DollarSign, label: 'Analytics' },
-            { id: 'settings', icon: Settings, label: 'Settings' }
+            { id: 'team', icon: Plus, label: 'Players' }
           ].map(tab => {
             const Icon = tab.icon;
-            // Highlight 'tournaments' randomly as active if we are in tournament detail
-            const isActive = pathname.includes('/tournaments') && tab.id === 'tournaments';
             return (
               <Button 
                 key={tab.id}
                 variant="ghost" 
-                className={`w-full ${isSidebarOpen ? "justify-start" : "justify-center"} gap-3 px-3 py-1.5 h-auto ${isActive ? 'bg-primary/20 text-primary hover:bg-primary/30' : 'hover:bg-white/10'} font-normal`}
-                onClick={() => router.push(`/dashboard/partner?tab=${tab.id}`)}
+                className={`w-full ${isSidebarOpen ? "justify-start" : "justify-center"} gap-3 px-3 py-1.5 h-auto ${isActive(tab.id) ? 'bg-primary/20 text-primary hover:bg-primary/30' : 'hover:bg-white/10'} font-normal`}
+                onClick={() => navigateToTab(tab.id)}
               >
                 <Icon className="h-4 w-4 shrink-0" /> {isSidebarOpen && tab.label}
               </Button>
             )
           })}
 
-          <div className="my-2 h-px bg-white/10 w-full" />
+          {isSidebarOpen && (
+            <div className="flex flex-row items-center gap-2 mt-4 mb-1 px-3 w-full">
+              <div className="shrink-0 w-1.5 h-1.5 rounded-full bg-green-500/80 shadow-[0_0_5px_rgba(34,197,94,0.5)]"></div>
+              <span className="text-[10px] uppercase font-bold tracking-[0.15em] text-slate-400 shrink-0">Finance & Analytics</span>
+              <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent"></div>
+            </div>
+          )}
+          {[
+            { id: 'revenue', icon: HandCoins, label: 'Revenue' },
+            { id: 'wallet', icon: DollarSign, label: 'Wallet' },
+            { id: 'analytics', icon: BarChart3, label: 'Analytics' },
+            { id: 'plans', icon: Crown, label: 'Plans' }
+          ].map(tab => {
+            const Icon = tab.icon;
+            return (
+              <Button 
+                key={tab.id}
+                variant="ghost" 
+                className={`w-full ${isSidebarOpen ? "justify-start" : "justify-center"} gap-3 px-3 py-1.5 h-auto ${isActive(tab.id) ? 'bg-primary/20 text-primary hover:bg-primary/30' : 'hover:bg-white/10'} font-normal`}
+                onClick={() => navigateToTab(tab.id)}
+              >
+                <Icon className="h-4 w-4 shrink-0" /> {isSidebarOpen && tab.label}
+              </Button>
+            )
+          })}
 
-          <Button 
-            variant="ghost"
-            className={`w-full ${isSidebarOpen ? "justify-start" : "justify-center"} gap-3 px-3 py-1.5 h-auto text-yellow-500 hover:bg-yellow-500/10 font-normal`}
-            onClick={() => router.push(`/dashboard/partner?tab=plans`)}
-          >
-            <Crown className="h-4 w-4 shrink-0" /> {isSidebarOpen && "Plans & Billing"}
-          </Button>
+          {isSidebarOpen && (
+            <div className="flex flex-row items-center gap-2 mt-4 mb-1 px-3 w-full">
+              <div className="shrink-0 w-1.5 h-1.5 rounded-full bg-cyan-500/80 shadow-[0_0_5px_rgba(6,182,212,0.5)]"></div>
+              <span className="text-[10px] uppercase font-bold tracking-[0.15em] text-slate-400 shrink-0">Engagement & Settings</span>
+              <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent"></div>
+            </div>
+          )}
+          {[
+            { id: 'rewards', icon: Gift, label: 'Rewards' },
+            { id: 'achievements', icon: Star, label: 'Achievements' },
+            { id: 'settings', icon: Settings, label: 'Settings' }
+          ].map(tab => {
+            const Icon = tab.icon;
+            return (
+              <Button 
+                key={tab.id}
+                variant="ghost" 
+                className={`w-full ${isSidebarOpen ? "justify-start" : "justify-center"} gap-3 px-3 py-1.5 h-auto ${isActive(tab.id) ? 'bg-primary/20 text-primary hover:bg-primary/30' : 'hover:bg-white/10'} font-normal`}
+                onClick={() => navigateToTab(tab.id)}
+              >
+                <Icon className="h-4 w-4 shrink-0" /> {isSidebarOpen && tab.label}
+              </Button>
+            )
+          })}
         </div>
       </div>
       

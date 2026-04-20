@@ -314,13 +314,26 @@ export function AnalyticsTab({ analyticsData }: { analyticsData: AnalyticsData |
   );
 }
 
-export function RevenueTab({ partnerData, lobbies }: { partnerData: PartnerData | null; lobbies: MiniTourLobby[] }) {
+export function RevenueTab({ 
+  partnerData, 
+  lobbies,
+  tournaments = [],
+  ledger
+}: { 
+  partnerData: PartnerData | null; 
+  lobbies: MiniTourLobby[];
+  tournaments?: any[];
+  ledger?: any;
+}) {
   const t = useTranslations("common")
   if (!partnerData) return <p>{t("error")}</p>
 
-  // Calculate additional revenue metrics
+  // Determine if we should use the new ledger system
+  const useLedger = !!ledger;
+
+  const totalTournaments = tournaments.length;
+  // Fallbacks if no ledger (using old lobby logic)
   const completedLobbies = lobbies.filter(l => l.status === 'COMPLETED')
-  const totalEntryFees = lobbies.reduce((sum, lobby) => sum + (lobby.entryFee || 0), 0)
   const averagePrizePool = lobbies.length > 0 ? Math.floor(lobbies.reduce((sum, lobby) => sum + (lobby.prizePool || 0), 0) / lobbies.length) : 0
 
   return (
@@ -331,9 +344,11 @@ export function RevenueTab({ partnerData, lobbies }: { partnerData: PartnerData 
             <div className="flex items-center">
               <DollarSign className="mr-3 h-8 w-8 text-primary" />
               <div>
-                <p className="text-2xl font-bold">${partnerData.totalRevenue?.toLocaleString() || 0}</p>
-                <p className="text-xs text-muted-foreground">{t("budget")}</p>
-                <p className="text-xs text-green-600">From all completed matches</p>
+                <p className="text-2xl font-bold">
+                  {useLedger ? `$${ledger.totals.netPartnerBalance.toLocaleString()}` : `$${partnerData.totalRevenue?.toLocaleString() || 0}`}
+                </p>
+                <p className="text-xs text-muted-foreground">Net Partner Balance</p>
+                <p className="text-xs text-green-600">Actual profit from entries</p>
               </div>
             </div>
           </CardContent>
@@ -341,11 +356,11 @@ export function RevenueTab({ partnerData, lobbies }: { partnerData: PartnerData 
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center">
-              <Star className="mr-3 h-8 w-8 text-primary" />
+              <Trophy className="mr-3 h-8 w-8 text-indigo-500" />
               <div>
-                <p className="text-2xl font-bold">{partnerData.revenueShare || 10}%</p>
-                <p className="text-xs text-muted-foreground">Host Fee Config</p>
-                <p className="text-xs text-blue-600">Per tournament payout</p>
+                <p className="text-2xl font-bold">{totalTournaments}</p>
+                <p className="text-xs text-muted-foreground">Total Tournaments</p>
+                <p className="text-xs text-indigo-600">All time tournaments</p>
               </div>
             </div>
           </CardContent>
@@ -355,9 +370,11 @@ export function RevenueTab({ partnerData, lobbies }: { partnerData: PartnerData 
             <div className="flex items-center">
               <TrendingUp className="mr-3 h-8 w-8 text-primary" />
               <div>
-                <p className="text-2xl font-bold">${partnerData.monthlyRevenue?.toLocaleString() || 0}</p>
-                <p className="text-xs text-muted-foreground">{t("this_month")}</p>
-                <p className="text-xs text-orange-600">Last 30 days earnings</p>
+                <p className="text-2xl font-bold">
+                  {useLedger ? `$${ledger.totals.totalPlatformFee.toLocaleString()}` : `$${partnerData.monthlyRevenue?.toLocaleString() || 0}`}
+                </p>
+                <p className="text-xs text-muted-foreground">Platform Fee Paid</p>
+                <p className="text-xs text-orange-600">To TesTicTour</p>
               </div>
             </div>
           </CardContent>
@@ -365,11 +382,13 @@ export function RevenueTab({ partnerData, lobbies }: { partnerData: PartnerData 
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center">
-              <Trophy className="mr-3 h-8 w-8 text-primary" />
+              <Users className="mr-3 h-8 w-8 text-primary" />
               <div>
-                <p className="text-2xl font-bold">{partnerData.totalMatches?.toLocaleString() || 0}</p>
-                <p className="text-xs text-muted-foreground">{t("match_history")}</p>
-                <p className="text-xs text-purple-600">Across all lobbies</p>
+                <p className="text-2xl font-bold">
+                  {useLedger ? `$${ledger.totals.outgoingPayouts.toLocaleString()}` : partnerData.totalMatches?.toLocaleString() || 0}
+                </p>
+                <p className="text-xs text-muted-foreground">{useLedger ? "Total Payouts" : "Matches Played"}</p>
+                <p className="text-xs text-purple-600">Disbursed to players</p>
               </div>
             </div>
           </CardContent>
@@ -379,83 +398,102 @@ export function RevenueTab({ partnerData, lobbies }: { partnerData: PartnerData 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>{t("prize_pool")}</CardTitle>
-            <CardDescription>{t("performance")}</CardDescription>
+            <CardTitle>Cash Flow Summary</CardTitle>
+            <CardDescription>Income and expenditures</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-between">
-              <span className="text-sm">{t("prize_pool")}</span>
-              <span className="text-sm font-medium">${lobbies.reduce((sum, lobby) => sum + (lobby.prizePool || 0), 0).toLocaleString()}</span>
-            </div>
-
-            <div className="flex justify-between">
-              <span className="text-sm">{t("budget")}</span>
-              <span className="text-sm font-bold text-green-600">${partnerData.totalRevenue?.toLocaleString() || 0}</span>
+              <span className="text-sm">Incoming (Players Entry Fee)</span>
+              <span className="text-sm font-medium text-green-600">${useLedger ? ledger.totals.incomingPlayers.toLocaleString() : "0"}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-sm">{t("this_month")}</span>
-              <span className="text-sm font-bold text-blue-600">${partnerData.monthlyRevenue?.toLocaleString() || 0}</span>
+              <span className="text-sm">Incoming (Host Escrow Funding)</span>
+              <span className="text-sm font-medium text-green-600">${useLedger ? ledger.totals.incomingSponsors.toLocaleString() : "0"}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm">Outgoing (Payouts)</span>
+              <span className="text-sm font-medium text-red-500">-${useLedger ? ledger.totals.outgoingPayouts.toLocaleString() : "0"}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm">Outgoing (Refunds)</span>
+              <span className="text-sm font-medium text-red-500">-${useLedger ? ledger.totals.outgoingRefunds.toLocaleString() : "0"}</span>
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>{t("minitour_lobbies_title")}</CardTitle>
-            <CardDescription>{t("statistics")}</CardDescription>
+            <CardTitle>Tournament Usage</CardTitle>
+            <CardDescription>Based on plan limits</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex justify-between">
-              <span className="text-sm">{t("all")}</span>
-              <span className="text-sm font-medium">{partnerData.totalLobbies || 0}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-sm">{t("active_players")}</span>
-              <span className="text-sm font-medium text-green-600">{partnerData.activeLobbies || 0}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-sm">{t("completed")}</span>
-              <span className="text-sm font-medium text-blue-600">{completedLobbies.length}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-sm">{t("avg_points")}</span>
-              <span className="text-sm font-medium">${averagePrizePool.toLocaleString()}</span>
-            </div>
+            {tournaments.length > 0 ? (
+              <div className="space-y-3">
+                 <div className="flex justify-between">
+                  <span className="text-sm">Total Tournaments Created</span>
+                  <span className="text-sm font-medium">{totalTournaments}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm">Completed Tournaments</span>
+                  <span className="text-sm font-medium text-blue-600">{tournaments.filter(t => t.status === 'completed').length}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm">Total Participants Engaged</span>
+                  <span className="text-sm font-medium">{tournaments.reduce((sum, t) => sum + (t._count?.participants || 0), 0)}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center text-sm text-muted-foreground pt-4">Data tracking active</div>
+            )}
+            
           </CardContent>
         </Card>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Revenue by Lobby</CardTitle>
-          <CardDescription>Detailed breakdown of each lobby's performance</CardDescription>
+          <CardTitle>Tournaments / Lobbies Revenue</CardTitle>
+          <CardDescription>Detailed breakdown per event</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{t("lobby")}</TableHead>
-                <TableHead>{t("status")}</TableHead>
-                <TableHead>{t("prize_pool")}</TableHead>
-                <TableHead>Host Fee %</TableHead>
-                <TableHead>Revenue</TableHead>
+                <TableHead>Event Name</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Participants</TableHead>
+                <TableHead>Entry Fee</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {lobbies.map((lobby) => {
+              {tournaments.slice(0, 10).map((t) => (
+                 <TableRow key={t.id}>
+                 <TableCell className="font-medium">{t.name}</TableCell>
+                 <TableCell><Badge className="bg-indigo-500/10 text-indigo-500 border-indigo-500/20">Tournament</Badge></TableCell>
+                 <TableCell>
+                   <Badge variant="outline">
+                     {t.status}
+                   </Badge>
+                 </TableCell>
+                 <TableCell>{t._count?.participants || 0}</TableCell>
+                 <TableCell>${t.entryFee || 0}</TableCell>
+               </TableRow>
+              ))}
+              {lobbies.slice(0, 10).map((lobby) => {
                 const sharePercent = (lobby.partnerRevenueShare !== undefined ? lobby.partnerRevenueShare : 0.2);
                 const lobbyRevenue = Math.floor((lobby.entryFee || 0) * (lobby.currentPlayers || 0) * sharePercent);
                 return (
-                  <TableRow key={lobby.id}>
+                  <TableRow key={`lobby-${lobby.id}`}>
                     <TableCell className="font-medium">{lobby.name}</TableCell>
+                    <TableCell><Badge className="bg-slate-500/10 text-slate-500 border-slate-500/20">Legacy Lobby</Badge></TableCell>
                     <TableCell>
                       <Badge variant={lobby.status === 'COMPLETED' ? 'default' : 'secondary'}>
                         {lobby.status}
                       </Badge>
                     </TableCell>
-                    <TableCell>${(lobby.prizePool || 0).toLocaleString()}</TableCell>
-                    <TableCell>{Math.round(sharePercent * 100)}%</TableCell>
-                    <TableCell className="font-bold text-green-600">${lobbyRevenue.toLocaleString()}</TableCell>
+                    <TableCell>{lobby.currentPlayers}/{lobby.maxPlayers}</TableCell>
+                    <TableCell className="text-muted-foreground">${lobby.entryFee || 0}</TableCell>
                   </TableRow>
                 )
               })}

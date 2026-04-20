@@ -123,38 +123,19 @@ export default function EscrowSettingsSection() {
         </CardContent>
       </Card>
 
-      {/* Platform Fee */}
-      <Card className="bg-purple-500/5 border-purple-500/15">
+      {/* Platform Fee — now determined per-partner by SubscriptionPlanConfig */}
+      <Card className="bg-purple-500/5 border-purple-500/15 opacity-60">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm flex items-center gap-2">
             <Percent className="h-4 w-4 text-purple-400" />
             Platform Fee Rate
+            <Badge variant="outline" className="text-[10px] border-yellow-500/30 text-yellow-400 bg-yellow-500/10 ml-2">Deprecated</Badge>
           </CardTitle>
           <CardDescription className="text-xs">
-            Percentage of participant entry fees retained as platform service fee, applied in settlement calculations.
+            Platform fee is now calculated per-partner based on their <strong>Subscription Plan</strong> (FREE / PRO / ENTERPRISE). 
+            This global setting is no longer used. Manage fee rates in <strong>Subscription Plan Config</strong>.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-3">
-            <Percent className="h-4 w-4 text-purple-400 shrink-0" />
-            <div className="flex-1">
-              <Label htmlFor="feePercent" className="text-xs text-muted-foreground mb-1 block">Fee % (0.00 – 1.00)</Label>
-              <Input
-                id="feePercent"
-                type="number"
-                min={0}
-                max={1}
-                step={0.01}
-                value={settings?.escrowPlatformFeePercent ?? 0.1}
-                onChange={e => setSettings(prev => prev ? { ...prev, escrowPlatformFeePercent: parseFloat(e.target.value) } : prev)}
-                className="bg-zinc-900/80 border-purple-500/30 focus:border-purple-400 max-w-[200px]"
-              />
-            </div>
-            <div className="text-xs text-muted-foreground">
-              Effective rate: <span className="font-mono font-bold text-purple-400">{((settings?.escrowPlatformFeePercent ?? 0.1) * 100).toFixed(1)}%</span>
-            </div>
-          </div>
-        </CardContent>
       </Card>
 
       {/* Default Provider */}

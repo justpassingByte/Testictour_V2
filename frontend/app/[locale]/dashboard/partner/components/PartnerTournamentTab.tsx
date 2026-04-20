@@ -34,16 +34,20 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
   const [searchQuery, setSearchQuery] = useState("")
   const [createOpen, setCreateOpen] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [platformFeePercent, setPlatformFeePercent] = useState(0.05)
 
-  const canCreate = subscriptionPlan === 'PRO' || subscriptionPlan === 'ENTERPRISE'
+  const canCreate = subscriptionPlan === 'PRO' || subscriptionPlan === 'ENTERPRISE' || subscriptionPlan === 'STARTER'
+  const canCustomBrand = subscriptionPlan === 'PRO' || subscriptionPlan === 'ENTERPRISE'
 
   const [form, setForm] = useState({
     name: "",
     description: "",
     region: "APAC",
     maxPlayers: 32,
+    reservePlayersLimit: 0,
     entryFee: 0,
     hostFeePercent: 0.1,
+    customPrizePool: 0,
     startTime: "",
     registrationDeadline: "",
     image: "",
@@ -72,7 +76,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
   }
 
   const [phases, setPhases] = useState([
-    { name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "top_n_scores", advancementValue: 4, matchesPerRound: 1 }
+    { name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "top_n_scores", advancementValue: 4, matchesPerRound: 1, carryOverScores: false }
   ])
 
   const addPhase = () => {
@@ -84,6 +88,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
       advancementType: "top_n_scores",
       advancementValue: 4,
       matchesPerRound: 1,
+      carryOverScores: false,
     }])
   }
 
@@ -98,6 +103,14 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
   const fetchMyTournaments = async () => {
     setLoading(true)
     try {
+      api.get('/partner/subscription').then(res => {
+        if(res.data?.data?.planConfig?.platformFeePercent !== undefined) {
+           setPlatformFeePercent(res.data.data.planConfig.platformFeePercent);
+        } else {
+           setPlatformFeePercent(subscriptionPlan === 'ENTERPRISE' ? 0.03 : 0.05);
+        }
+      }).catch(() => setPlatformFeePercent(subscriptionPlan === 'ENTERPRISE' ? 0.03 : 0.05));
+      
       const res = await api.get('/tournaments/my')
       setTournaments(res.data.tournaments || [])
     } catch (error) {
@@ -131,6 +144,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
         numberOfRounds: p.numberOfRounds,
         matchesPerRound: p.matchesPerRound,
         advancementCondition: { type: p.advancementType, value: p.advancementValue },
+        carryOverScores: p.carryOverScores,
       }))
 
       await api.post('/tournaments', {
@@ -143,11 +157,13 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
         registrationDeadline: new Date(form.registrationDeadline).toISOString(),
         hostFeePercent: form.hostFeePercent,
         expectedParticipants: form.maxPlayers,
-        image: imageFile ? (imagePreview || form.image || undefined) : (form.image || undefined),
+        customPrizePool: Math.max(form.customPrizePool, form.maxPlayers * form.entryFee),
+        image: canCustomBrand ? (imageFile ? (imagePreview || form.image || undefined) : (form.image || undefined)) : '/images/default-tournament-banner.png',
         roundsTotal: phases.reduce((sum, p) => sum + p.numberOfRounds, 0),
         config: { phases: phaseConfigs },
-        isCommunityMode: form.isCommunityMode,
+        isCommunityMode: canCustomBrand ? false : form.isCommunityMode,
         discordUrl: form.discordUrl,
+        reservePlayersLimit: form.reservePlayersLimit,
         sponsors: await Promise.all(sponsors.map(async (s) => {
           if (s.file) {
             // Simulated upload because we don't have an S3 upload route built here.
@@ -176,9 +192,9 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
 
       toast({ title: "Tournament Created!", description: `${form.name} has been created successfully.` })
       setCreateOpen(false)
-      setForm({ name: "", description: "", region: "APAC", maxPlayers: 32, entryFee: 0, hostFeePercent: 0.1, startTime: "", registrationDeadline: "", image: "", isCommunityMode: false, discordUrl: "" })
+      setForm({ name: "", description: "", region: "APAC", maxPlayers: 32, reservePlayersLimit: 0, entryFee: 0, hostFeePercent: 0.1, startTime: "", registrationDeadline: "", image: "", isCommunityMode: false, discordUrl: "" })
       setSponsors([])
-      setPhases([{ name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "top_n_scores", advancementValue: 4, matchesPerRound: 1 }])
+      setPhases([{ name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "top_n_scores", advancementValue: 4, matchesPerRound: 1, carryOverScores: false }])
       setImageFile(null)
       setImagePreview(null)
       fetchMyTournaments()
@@ -269,7 +285,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
               </TableHeader>
               <TableBody>
                 {filteredTournaments.map((tournament) => {
-                  const prizePool = tournament.budget || ((tournament.registered || 0) * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)))
+                  const prizePool = Math.max(tournament.budget || 0, (tournament.registered || 0) * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)))
                   return (
                     <TableRow key={tournament.id} className="hover:bg-white/5">
                       <TableCell>
@@ -288,7 +304,14 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1">
-                          <span className="text-sm">{tournament.registered || 0} / {tournament.maxPlayers}</span>
+                          <span className="text-sm">
+                            {tournament.registered || 0} / {tournament.maxPlayers}
+                          </span>
+                          {(tournament.reservePlayersLimit || 0) > 0 && (
+                             <span className="text-[11px] text-amber-500/80 font-medium ml-2">
+                               (Dự bị: {(tournament as any).reserveCount || 0}/{tournament.reservePlayersLimit})
+                             </span>
+                          )}
                           <Progress value={((tournament.registered || 0) / tournament.maxPlayers) * 100} className="h-1.5" />
                         </div>
                       </TableCell>
@@ -360,8 +383,25 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
 
             {/* Image Upload */}
             <div className="space-y-2">
-              <Label>Cover Image</Label>
-              {imagePreview ? (
+              <div className="flex items-center justify-between">
+                <Label>Cover Image</Label>
+                {!canCustomBrand && (
+                  <Badge variant="outline" className="bg-yellow-500/10 text-yellow-500 border-yellow-500/20 text-[10px]">
+                    <Lock className="mr-1 h-3 w-3" /> PRO Feature
+                  </Badge>
+                )}
+              </div>
+              
+              {!canCustomBrand ? (
+                <div className="relative w-full h-32 rounded-lg overflow-hidden border border-white/10 opacity-70">
+                  <img src="/images/default-tournament-banner.png" alt="Default Banner" className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center pointer-events-none">
+                    <Lock className="h-6 w-6 text-yellow-500 mb-2" />
+                    <span className="text-sm font-semibold">Custom Branding Locked</span>
+                    <span className="text-xs text-muted-foreground mt-1">Default branding applied</span>
+                  </div>
+                </div>
+              ) : imagePreview ? (
                 <div className="relative w-full h-40 rounded-lg overflow-hidden border border-white/10 group bg-black/40">
                   <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
                   <button
@@ -387,6 +427,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
               <Input
                 placeholder="https://example.com/image.jpg"
                 value={form.image}
+                disabled={!canCustomBrand}
                 onChange={(e) => {
                   setForm(p => ({ ...p, image: e.target.value }));
                   if (e.target.value) setImagePreview(e.target.value);
@@ -407,7 +448,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
             </div>
 
             {/* Players & Fees */}
-            <div className="grid gap-4 md:grid-cols-3 bg-white/5 p-4 rounded border border-white/10">
+            <div className="grid gap-4 md:grid-cols-5 bg-white/5 p-4 rounded border border-white/10">
               <div className="space-y-2">
                 <Label>Max Players</Label>
                 <Select value={form.maxPlayers.toString()} onValueChange={(v) => setForm(p => ({ ...p, maxPlayers: parseInt(v) }))}>
@@ -417,26 +458,65 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                     <SelectItem value="32">32 Players</SelectItem>
                     <SelectItem value="48">48 Players</SelectItem>
                     <SelectItem value="64">64 Players</SelectItem>
+                    <SelectItem value="128">128 Players</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Entry Fee</Label>
-                <Input type="number" min={0} value={form.entryFee} onChange={(e) => setForm(p => ({ ...p, entryFee: parseFloat(e.target.value) }))} />
+                <Label>Reserve Slots</Label>
+                <Input type="number" min={0} max={16} value={form.reservePlayersLimit} onChange={(e) => setForm(p => ({ ...p, reservePlayersLimit: parseInt(e.target.value) || 0 }))} />
+                <p className="text-[9px] text-muted-foreground mt-1">Số slot dự bị (0 = tắt)</p>
+              </div>
+              <div className="space-y-2">
+                <Label>Entry Fee ($)</Label>
+                <Input type="number" min={0} value={form.entryFee} onChange={(e) => setForm(p => ({ ...p, entryFee: parseFloat(e.target.value) || 0 }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Gross Prize Pool ($)</Label>
+                <Input 
+                  type="number" 
+                  min={form.maxPlayers * form.entryFee} 
+                  value={Math.max(form.customPrizePool, form.maxPlayers * form.entryFee)} 
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value) || 0;
+                    setForm(p => ({ ...p, customPrizePool: val }));
+                  }} 
+                />
+                <p className="text-[9px] text-muted-foreground mt-1">Min: ${form.maxPlayers * form.entryFee}</p>
               </div>
               <div className="space-y-2">
                 <Label>Host Fee (%)</Label>
-                <Input type="number" min={0} max={10} step={0.1} value={(form.hostFeePercent * 100).toFixed(1).replace(/\.0$/, '')} onChange={(e) => setForm(p => ({ ...p, hostFeePercent: parseFloat(e.target.value) / 100 }))} />
+                <Input type="number" min={0} max={10} step={0.1} value={(form.hostFeePercent * 100).toFixed(1).replace(/\.0$/, '')} onChange={(e) => setForm(p => ({ ...p, hostFeePercent: (parseFloat(e.target.value) || 0) / 100 }))} />
               </div>
             </div>
-            {form.entryFee > 0 && (
-              <div className="text-sm bg-violet-500/10 border border-violet-500/20 rounded-md p-3">
-                Estimated Prize Pool: <strong className="text-violet-400">
-                  ${(form.maxPlayers * form.entryFee * (1 - form.hostFeePercent)).toLocaleString()} USD
-                </strong>
-                {" "}(When 100% full capacity)
-              </div>
-            )}
+            {form.entryFee > 0 && (() => {
+              const activePrizePool = Math.max(form.customPrizePool, form.maxPlayers * form.entryFee);
+              const platformAmount = activePrizePool * platformFeePercent;
+              const hostAmount = activePrizePool * form.hostFeePercent;
+              const netPool = activePrizePool - platformAmount - hostAmount;
+              
+              return (
+                <div className="text-sm bg-violet-500/5 flex flex-col border border-violet-500/20 rounded-md p-4 space-y-3">
+                  <div className="flex justify-between items-center text-muted-foreground">
+                    <span>Gross Prize Pool (From Entry/Sponsors):</span>
+                    <span className="font-semibold text-white">${activePrizePool.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-red-400">
+                    <span>Platform Fee ({(platformFeePercent * 100).toFixed(1)}% via {subscriptionPlan || 'STARTER'}):</span>
+                    <span>-${platformAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-red-400">
+                    <span>Host Fee ({(form.hostFeePercent * 100).toFixed(1)}%):</span>
+                    <span>-${hostAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                  </div>
+                  <div className="h-px bg-white/10 my-1 w-full" />
+                  <div className="flex justify-between items-center font-bold text-emerald-400 text-lg">
+                    <span>Net Prize Pool (For Players):</span>
+                    <span>${netPool.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Dynamic Community & Sponsors Config */}
             <div className="border border-white/10 rounded-lg p-0">
@@ -519,28 +599,52 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
             <div className="border border-white/10 rounded-lg p-0">
                <div className="p-3 border-b border-white/10 bg-black/20 flex flex-col sm:flex-row items-center justify-between">
                  <div className="mb-2 sm:mb-0">
-                    <h3 className="font-bold cursor-pointer hover:underline text-orange-400">Escrow / Community Mode</h3>
+                    <h3 className="font-bold flex items-center gap-2">
+                       {canCustomBrand ? (
+                         <span className="text-emerald-400">Trusted Partner Mode</span>
+                       ) : (
+                         <span className="text-orange-400">Escrow / Community Mode</span>
+                       )}
+                    </h3>
                  </div>
                </div>
                <div className="p-4 space-y-4">
-                 <div className="flex items-center gap-4 border border-white/10 p-3 bg-white/5 rounded-md">
-                   <div className="flex-1">
-                     <h4 className="font-semibold text-sm">Mode: {form.isCommunityMode ? 'Community Mode' : 'Escrow Secured'}</h4>
-                     <p className="text-xs text-muted-foreground">
-                       {form.isCommunityMode 
-                         ? 'Giải đấu tự do. Không có quỹ Escrow bảo lãnh từ nền tảng. Phù hợp đánh giao hữu.' 
-                         : 'Giải đấu bảo lãnh Escrow. Yêu cầu tạo quỹ tiền thưởng trước khi giải bắt đầu. An toàn, minh bạch.'}
-                     </p>
+                 {canCustomBrand ? (
+                   <div className="flex items-center gap-4 border border-emerald-500/30 p-3 bg-emerald-500/5 rounded-md relative overflow-hidden">
+                     <div className="flex-1 z-10">
+                       <h4 className="font-semibold text-sm text-emerald-400">
+                          Verified Trusted Organizer (PRO+)
+                       </h4>
+                       <p className="text-xs text-muted-foreground mt-1">
+                         Là đối tác Trusted Partner, bạn <strong>không cần phải đóng quỹ Escrow</strong> để bảo lãnh giải đấu. Bạn được toàn quyền quản lý, chủ động thu phí và phát thưởng cho người chơi. Nền tảng đảm bảo uy tín cho bạn.
+                       </p>
+                     </div>
+                     <div className="z-10 flex items-center justify-center p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-md">
+                        <Trophy className="h-4 w-4 text-emerald-500 mr-2" />
+                        <span className="text-xs text-emerald-500 font-semibold">Escrow Waived</span>
+                     </div>
+                     <input type="hidden" value="false" name="isCommunityMode" />
                    </div>
-                   <Button 
-                     type="button" 
-                     variant={form.isCommunityMode ? "outline" : "default"} 
-                     className={!form.isCommunityMode ? "bg-emerald-600 hover:bg-emerald-700" : "border-orange-500/50 text-orange-400"}
-                     onClick={() => setForm(p => ({ ...p, isCommunityMode: !p.isCommunityMode }))}
-                   >
-                     {form.isCommunityMode ? 'Switch to Escrow' : 'Switch to Community'}
-                   </Button>
-                 </div>
+                 ) : (
+                   <div className="flex items-center gap-4 border border-white/10 p-3 bg-white/5 rounded-md">
+                     <div className="flex-1">
+                       <h4 className="font-semibold text-sm">Mode: {form.isCommunityMode ? 'Community Mode' : 'Escrow Secured'}</h4>
+                       <p className="text-xs text-muted-foreground mt-1">
+                         {form.isCommunityMode 
+                           ? 'Giải đấu tự do. Không có quỹ Escrow bảo lãnh từ nền tảng. Phù hợp đánh giao hữu.' 
+                           : 'Giải đấu bảo lãnh Escrow. Yêu cầu tạo quỹ tiền thưởng trước khi giải bắt đầu. An toàn, minh bạch.'}
+                       </p>
+                     </div>
+                     <Button 
+                       type="button" 
+                       variant={form.isCommunityMode ? "outline" : "default"} 
+                       className={!form.isCommunityMode ? "bg-emerald-600 hover:bg-emerald-700" : "border-orange-500/50 text-orange-400"}
+                       onClick={() => setForm(p => ({ ...p, isCommunityMode: !p.isCommunityMode }))}
+                     >
+                       {form.isCommunityMode ? 'Switch to Escrow' : 'Switch to Community'}
+                     </Button>
+                   </div>
+                 )}
                </div>
             </div>
 
@@ -616,6 +720,16 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                           <div className="space-y-1.5">
                             <Label className="text-[11px] uppercase tracking-wide">Advance Target</Label>
                             <Input type="number" min={1} value={phase.advancementValue} onChange={(e) => updatePhase(index, "advancementValue", parseInt(e.target.value))} className="bg-black/40" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-[11px] uppercase tracking-wide">Carry Over Scores</Label>
+                            <Select value={phase.carryOverScores ? "true" : "false"} onValueChange={(v) => updatePhase(index, "carryOverScores", v === "true")}>
+                              <SelectTrigger className="bg-black/40"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="false">No — Reset mỗi phase</SelectItem>
+                                <SelectItem value="true">Yes — Giữ điểm từ phase trước</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </div>
                         </div>
                       </CardContent>

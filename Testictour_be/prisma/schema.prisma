@@ -5,8 +5,8 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 // ----------------------
@@ -42,24 +42,29 @@ model User {
   createdMiniTourLobbies    MiniTourLobby[]            @relation("CreatedMiniTourLobbies")
 
   // Admin settings relations
-  sentNotifications         Notification[]
+  sentNotifications Notification[]
+
+  // Partner Rewards
+  partnerRewards PartnerReward[] @relation("PartnerRewards")
 
   // Password Reset
-  resetToken        String?   // SHA-256 hash of the reset token
-  resetTokenExpiry  DateTime? // Token expiry (30 min from creation)
+  resetToken       String? // SHA-256 hash of the reset token
+  resetTokenExpiry DateTime? // Token expiry (30 min from creation)
 
   // Stats cache fields
   rank               String?
   rankUpdatedAt      DateTime?
-  totalMatchesPlayed Int       @default(0)
-  averagePlacement   Float     @default(0)
-  topFourRate        Float     @default(0)
-  firstPlaceRate     Float     @default(0)
-  tournamentsPlayed  Int       @default(0)
-  tournamentsWon     Int       @default(0)
-  totalPoints        Int       @default(0)
-  lobbiesPlayed      Int       @default(0)
+  totalMatchesPlayed Int                @default(0)
+  averagePlacement   Float              @default(0)
+  topFourRate        Float              @default(0)
+  firstPlaceRate     Float              @default(0)
+  tournamentsPlayed  Int                @default(0)
+  tournamentsWon     Int                @default(0)
+  totalPoints        Int                @default(0)
+  lobbiesPlayed      Int                @default(0)
+  totalPrizeWon      Float              @default(0)
   lastUpdatedStats   DateTime?
+  SettlementPeriod   SettlementPeriod[]
 }
 
 model TournamentTemplate {
@@ -77,6 +82,7 @@ model TournamentTemplate {
   createdBy            User         @relation("UserCreatedTournamentTemplates", fields: [createdById], references: [id])
   createdById          String
   createdAt            DateTime     @default(now())
+  absentFeePolicy      String       @default("prizepool") // prizepool, keep, refund
   tournaments          Tournament[]
 
   @@unique([name])
@@ -113,20 +119,24 @@ model Tournament {
   userTournamentSummaries UserTournamentSummary[]
 
   // Dynamic Content & Branding
-  discordUrl              String?                 @db.Text
-  sponsors                Json?                   @default("[]") // Array of { name: string, url: string } or raw objects
+  discordUrl String? @db.Text
+  sponsors   Json?   @default("[]") // Array of { name: string, url: string } or raw objects
 
   // Escrow & Payment
-  isCommunityMode            Boolean @default(false)
-  escrowStatus               String  @default("not_funded")
-  escrowRequiredAmount       Float   @default(0)
-  communityThresholdSnapshot Float   @default(150)
+  isCommunityMode            Boolean       @default(false)
+  escrowStatus               String        @default("not_funded")
+  escrowRequiredAmount       Float         @default(0)
+  communityThresholdSnapshot Float         @default(150)
   escrow                     Escrow?
   transactions               Transaction[]
 
+  // Reserve Players
+  reservePlayersLimit Int    @default(0) // Max number of reserve slots (0 = disabled)
+  absentFeePolicy     String @default("prizepool") // prizepool, keep, refund
+
   // Sync status
-  lastSyncTime            DateTime?
-  syncStatus              String?                 @default("IDLE") // e.g., IDLE, SYNCING, SUCCESS, FAILED
+  lastSyncTime DateTime?
+  syncStatus   String?   @default("IDLE") // e.g., IDLE, SYNCING, SUCCESS, FAILED
 }
 
 model Phase {
@@ -164,7 +174,9 @@ model Participant {
   paid            Boolean        @default(false)
   paymentStatus   String         @default("pending")
   rewarded        Boolean        @default(false)
-  referralSource  String?        // New: How did they hear about the tournament
+  isReserve       Boolean        @default(false) // true = reserve player (backup), false = main player
+  isAbsent        Boolean        @default(false) // New: marks if the player was a no-show
+  referralSource  String? // New: How did they hear about the tournament
   rewards         Reward[]
   roundOutcomes   RoundOutcome[]
 
@@ -198,28 +210,28 @@ model Round {
 }
 
 model Lobby {
-  id                    String    @id @default(uuid())
-  round                 Round     @relation(fields: [roundId], references: [id])
+  id                    String  @id @default(uuid())
+  round                 Round   @relation(fields: [roundId], references: [id])
   roundId               String
   name                  String
   participants          Json
-  matchId               String?
-  fetchedResult         Boolean   @default(false)
+  matchId               String? // @deprecated — unused, all match lookup uses matches[] relation. Remove in next schema cleanup.
+  fetchedResult         Boolean @default(false)
   matches               Match[]
-  completedMatchesCount Int       @default(0)
-  matchNumber           Int       @default(1) // Which match in a multi-match round (1=first, 2=second, etc.)
+  completedMatchesCount Int     @default(0)
+  matchNumber           Int     @default(1) // Which match in a multi-match round (1=first, 2=second, etc.)
 
   // State Machine
-  state                    String    @default("WAITING")
-  delayRequests            Json      @default("[]")   // DelayRequest[]
-  phaseStartedAt           DateTime?
-  matchStartedAt           DateTime?
-  totalDelaysUsed          Int       @default(0)
-  lastPolledAt             DateTime?
+  state           String    @default("WAITING")
+  delayRequests   Json      @default("[]") // DelayRequest[]
+  phaseStartedAt  DateTime?
+  matchStartedAt  DateTime?
+  totalDelaysUsed Int       @default(0)
+  lastPolledAt    DateTime?
 
   // Pause support
   pausedFromState          String?
-  remainingDurationOnPause Int?      // seconds remaining when paused
+  remainingDurationOnPause Int? // seconds remaining when paused
 }
 
 model Match {
@@ -256,34 +268,38 @@ model Balance {
 }
 
 model Transaction {
-  id        String   @id @default(uuid())
-  user      User     @relation(fields: [userId], references: [id])
-  userId    String
-  type      String // deposit, withdraw, refund, entry_fee, reward
-  currency  String   @default("usd") // usd, coins
-  amount    Float
-  status    String // pending, success, failed
-  refId              String?
-  tournamentId       String?
-  escrowId           String?
-  paymentMethod      String?
-  externalRefId      String?
-  providerEventId    String?
-  proofUrl           String?
-  payoutDestination  String?
-  reviewedById       String?
-  reviewedAt         DateTime?
-  reviewNotes        String?
-  retryCount         Int       @default(0)
-  lastRetryAt        DateTime?
-  failureReason      String?
+  id                String    @id @default(uuid())
+  user              User      @relation(fields: [userId], references: [id])
+  userId            String
+  type              String // deposit, withdraw, refund, entry_fee, reward
+  currency          String    @default("usd") // usd, coins
+  amount            Float
+  status            String // pending, success, failed
+  refId             String?
+  tournamentId      String?
+  escrowId          String?
+  paymentMethod     String?
+  externalRefId     String?
+  providerEventId   String?
+  proofUrl          String?
+  payoutDestination String?
+  reviewedById      String?
+  reviewedAt        DateTime?
+  reviewNotes       String?
+  retryCount        Int       @default(0)
+  lastRetryAt       DateTime?
+  failureReason     String?
 
-  tournament         Tournament? @relation(fields: [tournamentId], references: [id])
-  createdAt DateTime @default(now())
+  expiresAt DateTime?
 
+  tournament Tournament? @relation(fields: [tournamentId], references: [id])
+  createdAt  DateTime    @default(now())
+
+  @@unique([externalRefId])
   @@index([userId])
   @@index([type])
   @@index([createdAt])
+  @@index([providerEventId])
 }
 
 model RoundOutcome {
@@ -345,35 +361,35 @@ enum MiniTourLobbyStatus {
 
 // New model for MiniTour Lobbies
 model MiniTourLobby {
-  id                String              @id @default(uuid())
-  name              String
-  description       String?
-  image             String?
-  status            MiniTourLobbyStatus @default(WAITING)
-  currentPlayers    Int                 @default(0)
-  maxPlayers        Int                 @default(8)
-  entryFee          Float               @default(0)
-  entryType         String              @default("coins")
-  prizePool         Float               @default(0)
-  gameMode          String              @default("Normal")
-  skillLevel        String              @default("Any")
-  theme             String?
-  customLogoUrl     String?
-  partnerRevenueShare Float             @default(0)
-  averageRating     Float               @default(0)
-  totalMatches      Int                 @default(0)
-  region            String              @default("APAC")
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  tags              String[]            @default([])
-  rules             String[]            @default([])
-  prizeDistribution Json?
-  settings          Json?
+  id                  String              @id @default(uuid())
+  name                String
+  description         String?
+  image               String?
+  status              MiniTourLobbyStatus @default(WAITING)
+  currentPlayers      Int                 @default(0)
+  maxPlayers          Int                 @default(8)
+  entryFee            Float               @default(0)
+  entryType           String              @default("coins")
+  prizePool           Float               @default(0)
+  gameMode            String              @default("Normal")
+  skillLevel          String              @default("Any")
+  theme               String?
+  customLogoUrl       String?
+  partnerRevenueShare Float               @default(0)
+  averageRating       Float               @default(0)
+  totalMatches        Int                 @default(0)
+  region              String              @default("APAC")
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  tags                String[]            @default([])
+  rules               String[]            @default([])
+  prizeDistribution   Json?
+  settings            Json?
 
   // Relations (no explicit host, any player can start/end)
-  creator           User                     @relation("CreatedMiniTourLobbies", fields: [creatorId], references: [id])
-  creatorId         String
-  participants      MiniTourLobbyParticipant[]
+  creator      User                       @relation("CreatedMiniTourLobbies", fields: [creatorId], references: [id])
+  creatorId    String
+  participants MiniTourLobbyParticipant[]
 
   matches MiniTourMatch[]
 }
@@ -385,7 +401,7 @@ model MiniTourMatch {
   miniTourLobby        MiniTourLobby         @relation(fields: [miniTourLobbyId], references: [id])
   miniTourLobbyId      String
   status               String                @default("PENDING") // PENDING, COMPLETED, FAILED
-  startTime            DateTime?             // Th?i di?m tr?n d?u du?c b?m n�t "Start"
+  startTime            DateTime? // Th?i di?m tr?n d?u du?c b?m n�t "Start"
   fetchedAt            DateTime?
   matchData            Json?
   miniTourMatchResults MiniTourMatchResult[]
@@ -396,14 +412,14 @@ model MiniTourMatch {
 
 // New model for MiniTourMatch results
 model MiniTourMatchResult {
-  id                String        @id @default(uuid())
-  miniTourMatch     MiniTourMatch @relation(fields: [miniTourMatchId], references: [id], onDelete: Cascade)
-  miniTourMatchId   String
-  user              User          @relation(fields: [userId], references: [id])
-  userId            String
-  placement         Int
-  points            Float
-  prize             Float?
+  id              String        @id @default(uuid())
+  miniTourMatch   MiniTourMatch @relation(fields: [miniTourMatchId], references: [id], onDelete: Cascade)
+  miniTourMatchId String
+  user            User          @relation(fields: [userId], references: [id])
+  userId          String
+  placement       Int
+  points          Float
+  prize           Float?
 
   @@unique([miniTourMatchId, userId])
 }
@@ -418,10 +434,11 @@ model MiniTourLobbyParticipant {
   joinedAt        DateTime      @default(now())
   isHost          Boolean       @default(false) // This can be used for UI distinction if needed, but not for control
 
-  totalPoints      Int      @default(0)
-  matchesPlayed    Int      @default(0)
-  averagePlacement Float    @default(0.0)
+  totalPoints        Int   @default(0)
+  matchesPlayed      Int   @default(0)
+  averagePlacement   Float @default(0.0)
   lastFivePlacements Int[]
+
   @@unique([miniTourLobbyId, userId])
 }
 
@@ -438,31 +455,59 @@ model PartnerSubscription {
   monthlyPrice Float?
   annualPrice  Float?
   autoRenew    Boolean   @default(true)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+
+  // Sepay config
+  sepayApiKey  String?
+  walletStatus String    @default("UNCONNECTED") // UNCONNECTED, CONNECTED, ERROR
+  lastSyncAt   DateTime?
+  lastError    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SettlementPeriod {
+  id        String @id @default(uuid())
+  partnerId String
+  partner   User   @relation(fields: [partnerId], references: [id])
+
+  weekStart DateTime
+  weekEnd   DateTime
+
+  totalPlatformFee Float
+  totalHostFee     Float
+  netSettlement    Float
+
+  status String    @default("unpaid") // unpaid, paid, overdue
+  paidAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([partnerId, weekStart, weekEnd])
 }
 
 // --- Admin Settings Models -------------------------------------------
 
 model Notification {
-  id          String   @id @default(cuid())
-  title       String
-  body        String
-  targetType  String   // "all" | "players" | "partners" | "tier:PRO" | "tier:ENTERPRISE"
-  sentBy      String
-  sentAt      DateTime @default(now())
-  status      String   @default("sent") // "sent" | "cancelled"
+  id         String   @id @default(cuid())
+  title      String
+  body       String
+  targetType String // "all" | "players" | "partners" | "tier:PRO" | "tier:ENTERPRISE" | "user:<userId>"
+  sentBy     String?
+  sentAt     DateTime @default(now())
+  status     String   @default("sent") // "sent" | "cancelled"
 
-  sender      User     @relation(fields: [sentBy], references: [id])
+  sender User? @relation(fields: [sentBy], references: [id])
 }
 
 model PlatformSetting {
   id        String   @id @default(cuid())
   key       String   @unique
   value     String
-  type      String   // "boolean" | "number" | "string"
+  type      String // "boolean" | "number" | "string"
   label     String
-  group     String   // "general" | "financial" | "limits"
+  group     String // "general" | "financial" | "limits"
   updatedAt DateTime @updatedAt
   updatedBy String?
 }
@@ -488,51 +533,93 @@ model NotificationTemplate {
 
 // Replaces hardcoded plan prices/limits in AdminPartnerSubscriptionTab.tsx
 model SubscriptionPlanConfig {
-  id                    String   @id @default(cuid())
-  plan                  String   @unique // "FREE" | "PRO" | "ENTERPRISE"
-  monthlyPrice          Float    @default(0)
-  annualPrice           Float    @default(0)
-  maxLobbies            Int      @default(1)
-  maxTournamentSize     Int      @default(32)
-  maxTournamentsPerMonth Int     @default(5)
-  platformFeePercent    Float    @default(0.05) // Platform commission: PRO=5%, ENTERPRISE=3%, configurable
-  features              Json     @default("{}")
-  updatedAt             DateTime @updatedAt
-  updatedBy             String?
+  id                     String   @id @default(cuid())
+  plan                   String   @unique // "FREE" | "STARTER" | "PRO" | "ENTERPRISE"
+  displayName            String   @default("") // Human-readable: "Free", "Starter", "Pro", "Enterprise"
+  description            String   @default("") // Short tagline for pricing card
+  monthlyPrice           Float    @default(0)
+  annualPrice            Float    @default(0)
+  earlyAccessPrice       Float? // Strikethrough price for early access promotions
+  maxLobbies             Int      @default(1)
+  maxTournamentSize      Int      @default(32)
+  maxTournamentsPerMonth Int      @default(5)
+  platformFeePercent     Float    @default(0.05) // Platform commission: PRO=5%, ENTERPRISE=3%, configurable
+  features               Json     @default("{}")
+  sortOrder              Int      @default(0) // Display order on pricing page (0=first)
+  updatedAt              DateTime @updatedAt
+  updatedBy              String?
+}
+
+// ─── Partner Rewards ─────────────────────────────────────────────
+
+model PartnerReward {
+  id                 String    @id @default(uuid())
+  partnerId          String
+  partner            User      @relation("PartnerRewards", fields: [partnerId], references: [id])
+  title              String
+  description        String?
+  type               String    @default("custom") // custom, bonus, badge, prize
+  value              Float     @default(0) // Monetary or point value
+  currency           String    @default("coins") // coins, usd
+  imageUrl           String?
+  isActive           Boolean   @default(true)
+  conditions         Json? // e.g. { minPlacement: 1, minGamesPlayed: 3 }
+  maxRedemptions     Int? // null = unlimited
+  currentRedemptions Int       @default(0)
+  validFrom          DateTime  @default(now())
+  validUntil         DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  redemptions PartnerRewardRedemption[]
+
+  @@index([partnerId])
+}
+
+model PartnerRewardRedemption {
+  id           String        @id @default(uuid())
+  rewardId     String
+  reward       PartnerReward @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+  userId       String
+  lobbyId      String? // Which lobby/tournament this was earned in
+  tournamentId String?
+  redeemedAt   DateTime      @default(now())
+
+  @@unique([rewardId, userId, lobbyId])
+  @@index([userId])
 }
 
 // ─── Escrow Models ───────────────────────────────────────────────
 
 model Escrow {
-  id                    String      @id @default(uuid())
-  tournamentId          String      @unique
-  requiredAmount        Float       @default(0)
-  fundedAmount          Float       @default(0)
-  releasedAmount        Float       @default(0)
-  status                String      // not_funded, partially_funded, funded, locked, released, cancelled, disputed
-  reconciliationStatus  String      @default("pending") // pending, success, failed, stale
-  
-  lockedAt              DateTime?
-  releasedAt            DateTime?
-  cancelledAt           DateTime?
-  cancelReason          String?
-  disputedAt            DateTime?
-  
-  disputeReason         String?
-  disputeResolvedAt     DateTime?
-  disputeResolution     String?
-  
-  latestWebhookEventId  String?
-  lastReviewedById      String?
-  lastReviewedAt        DateTime?
-  
-  retryCount            Int         @default(0)
-  lastRetryAt           DateTime?
-  nextRetryAt           DateTime?
-  
-  createdAt             DateTime    @default(now())
-  updatedAt             DateTime    @updatedAt
-  
-  tournament            Tournament  @relation(fields: [tournamentId], references: [id])
-}
+  id                   String @id @default(uuid())
+  tournamentId         String @unique
+  requiredAmount       Float  @default(0)
+  fundedAmount         Float  @default(0)
+  releasedAmount       Float  @default(0)
+  status               String // not_funded, partially_funded, funded, locked, released, cancelled, disputed
+  reconciliationStatus String @default("pending") // pending, success, failed, stale
 
+  lockedAt     DateTime?
+  releasedAt   DateTime?
+  cancelledAt  DateTime?
+  cancelReason String?
+  disputedAt   DateTime?
+
+  disputeReason     String?
+  disputeResolvedAt DateTime?
+  disputeResolution String?
+
+  latestWebhookEventId String?
+  lastReviewedById     String?
+  lastReviewedAt       DateTime?
+
+  retryCount  Int       @default(0)
+  lastRetryAt DateTime?
+  nextRetryAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id])
+}

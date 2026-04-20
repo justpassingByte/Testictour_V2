@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { ChevronRight, Loader2, Search, ArrowRight, AlertCircle, CheckCircle2, MessageSquare, Share2, ImageIcon, Users, Calendar, Trophy, Globe, Lock, ShieldCheck, DollarSign, Crown } from "lucide-react"
+import { ChevronRight, Loader2, Search, ArrowRight, AlertCircle, CheckCircle2, MessageSquare, Share2, ImageIcon, Users, Calendar, Trophy, Globe, Lock, ShieldCheck, DollarSign, Crown, UserPlus } from "lucide-react"
 import { useTranslations } from 'next-intl'
 import { format } from "date-fns"
 import Image from "next/image"
@@ -51,6 +51,7 @@ export default function TournamentRegistration({ params }: { params: { id: strin
   const [discordId, setDiscordId] = useState("")
   const [referralSource, setReferralSource] = useState("")
   const [origin, setOrigin] = useState("")
+  const [joinAsReserve, setJoinAsReserve] = useState(false)
   useEffect(() => {
     if (typeof window !== "undefined") setOrigin(window.location.origin)
   }, [])
@@ -66,6 +67,9 @@ export default function TournamentRegistration({ params }: { params: { id: strin
   useEffect(() => {
     if (currentUser?.riotGameName) {
       setSummonerName(currentUser.riotGameName || "")
+      if (currentUser?.riotGameTag) {
+        setGameTag(currentUser.riotGameTag)
+      }
       // Mock summoner info based on current user since they already linked it
       setSummonerInfo({
         name: currentUser.riotGameName,
@@ -134,7 +138,9 @@ export default function TournamentRegistration({ params }: { params: { id: strin
     setErrorMessage("")
 
     try {
-      const result = await ParticipantService.join(tournament.id, discordId.trim(), referralSource)
+      const result = await ParticipantService.join(tournament.id, discordId.trim(), referralSource, joinAsReserve)
+
+      console.log('[REGISTER DEBUG] join result:', JSON.stringify(result))
 
       if (result.requiresPayment && result.checkoutUrl) {
         // Paid tournament — redirect to payment gateway (Stripe / MoMo)
@@ -155,6 +161,11 @@ export default function TournamentRegistration({ params }: { params: { id: strin
     } catch (err: any) {
       setStatus("error")
       setErrorMessage(err?.message || "An error occurred during registration. Please try again.")
+      toast({
+        title: "Registration Failed",
+        description: err?.message || "Please check your eligibility or contact support.",
+        variant: "destructive"
+      })
     }
   }
 
@@ -293,7 +304,7 @@ export default function TournamentRegistration({ params }: { params: { id: strin
         <Card className="overflow-hidden bg-card border border-border shadow-2xl">
           <div className="relative h-64 sm:h-80 w-full block">
             <Image
-              src={tournament.image || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80'}
+              src={tournament.image?.trim() ? tournament.image : 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80'}
               alt={tournament.name}
               fill
               className="object-cover"
@@ -312,8 +323,12 @@ export default function TournamentRegistration({ params }: { params: { id: strin
                       <ShieldCheck className="w-3 h-3 sm:w-4 sm:h-4 text-white drop-shadow-md" />
                     </div>
                     <div className="flex flex-col pr-1">
-                      <span className="text-white text-[9px] sm:text-[10px] font-black uppercase tracking-widest leading-none mb-0.5">TesTicTour</span>
-                      <span className="text-emerald-400 font-bold text-[10px] sm:text-[11px] uppercase tracking-wider leading-none">Escrow Guarantee</span>
+                      <span className="text-white text-[9px] sm:text-[10px] font-black uppercase tracking-widest leading-none mb-0.5">
+                        {tournament.organizer?.partnerSubscription?.plan === 'PRO' || tournament.organizer?.partnerSubscription?.plan === 'ENTERPRISE' ? "Verified Host" : "TesTicTour"}
+                      </span>
+                      <span className="text-emerald-400 font-bold text-[10px] sm:text-[11px] uppercase tracking-wider leading-none">
+                        {tournament.organizer?.partnerSubscription?.plan === 'PRO' || tournament.organizer?.partnerSubscription?.plan === 'ENTERPRISE' ? "Trusted Partner" : "Escrow Guarantee"}
+                      </span>
                     </div>
                   </div>
                   <div className="bg-emerald-950/60 self-stretch flex items-center px-2 sm:px-3 border-l border-emerald-500/30">
@@ -393,14 +408,7 @@ export default function TournamentRegistration({ params }: { params: { id: strin
           )}
 
 
-          {/* Escrow gating */}
-          {!tournament.isCommunityMode && tournament.escrowStatus === "not_funded" && (
-            <Alert className="mb-6 border-red-500/30 bg-red-500/10 shadow-sm shadow-red-500/10">
-              <AlertCircle className="h-5 w-5 !text-red-500" />
-              <AlertTitle className="text-red-400 font-bold tracking-wide uppercase text-sm">Registration Unavailable</AlertTitle>
-              <AlertDescription className="mt-1 text-red-300/90">This tournament&apos;s escrow has <strong>not been funded</strong>. Registration is locked until the organizer deposits the required amount.</AlertDescription>
-            </Alert>
-          )}
+
 
           <Card className="bg-card border-t-8 border-t-[#673AB7] shadow-xl border-x-border border-b-border rounded-xl">
             <CardHeader className="px-6 py-6 pb-2">
@@ -429,6 +437,14 @@ export default function TournamentRegistration({ params }: { params: { id: strin
                       <SubRegionSelector id="region-select" value={region} onChange={setRegion} />
                     </div>
                   </div>
+
+                  <Alert className="bg-red-500/10 border-red-500/30 text-red-500 shadow-sm shadow-red-500/10 py-3">
+                    <AlertCircle className="h-4 w-4 !text-red-500" />
+                    <AlertTitle className="font-bold text-sm tracking-wide ml-2 uppercase">{t("warning_title")}</AlertTitle>
+                    <AlertDescription className="text-xs opacity-90 mt-1 ml-2">
+                       {t("absent_warning_desc")}
+                    </AlertDescription>
+                  </Alert>
 
                   <div className="space-y-3">
                     <Label htmlFor="discord-id" className="text-base font-semibold block">
@@ -543,7 +559,31 @@ export default function TournamentRegistration({ params }: { params: { id: strin
                     </div>
                   )}
 
-                  {status === "error" && (
+                  {/* Reserve Player Toggle */}
+              {tournament && (tournament.reservePlayersLimit || 0) > 0 && (tournament.registered || 0) >= tournament.maxPlayers && (
+                <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <UserPlus className="h-4 w-4 text-amber-400" />
+                    <span className="text-sm font-bold text-amber-400 uppercase tracking-wide">Main Slots Full — Join as Reserve?</span>
+                  </div>
+                  <p className="text-xs text-amber-300/80">
+                    All {tournament.maxPlayers} main slots are taken. You can join as a <strong className="text-amber-300">reserve player (dự bị)</strong>.
+                    If a spot opens up, you'll be notified via email and assigned to a lobby by the admin.
+                    Your entry fee will be <strong>automatically refunded</strong> if you are not assigned.
+                  </p>
+                  <Button
+                    type="button"
+                    variant={joinAsReserve ? "default" : "outline"}
+                    className={joinAsReserve ? "bg-amber-600 hover:bg-amber-700 w-full" : "border-amber-500/50 text-amber-400 w-full"}
+                    onClick={() => setJoinAsReserve(!joinAsReserve)}
+                  >
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    {joinAsReserve ? '✓ You will join as Reserve' : 'Click to Join as Reserve'}
+                  </Button>
+                </div>
+              )}
+
+              {status === "error" && (
                     <Alert variant="destructive" className="animate-fade-in py-2">
                       <AlertCircle className="h-4 w-4" />
                       <AlertTitle className="text-sm">{t("error")}</AlertTitle>
@@ -569,7 +609,10 @@ export default function TournamentRegistration({ params }: { params: { id: strin
               <Button variant="outline" size="lg" asChild>
                 <Link href={`/tournaments/${params.id}`}>{t("cancel")}</Link>
               </Button>
-              <Button size="lg" onClick={handleSubmit} disabled={!currentUser?.riotGameName || !discordId.trim() || status === "loading" || (!tournament.isCommunityMode && tournament.escrowStatus === "not_funded")}>
+              <Button size="lg" onClick={handleSubmit} disabled={
+                !currentUser?.riotGameName || !discordId.trim() || status === "loading" || 
+                ((tournament.registered || 0) >= tournament.maxPlayers && !joinAsReserve && (tournament.reservePlayersLimit || 0) > 0)
+              }>
                 {status === "loading" ? (
                   <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{tournament.entryFee > 0 ? "Reserving slot..." : t("registering")}</>
                 ) : tournament.entryFee > 0 ? (

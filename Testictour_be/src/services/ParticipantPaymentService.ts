@@ -23,9 +23,16 @@ export default class ParticipantPaymentService {
       throw new ApiError(404, `Entry fee transaction ${transactionId} not found.`);
     }
 
+    const participantId = transaction.refId; // set in ParticipantService.join
+    if (!participantId) {
+      throw new ApiError(400, `Transaction ${transactionId} has no linked participantId (refId).`);
+    }
+
+    const participant = await prisma.participant.findUnique({ where: { id: participantId } });
+    
     // Idempotency guard — already processed
-    if (transaction.status === 'success') {
-      logger.info(`[EntryFee] Transaction ${transactionId} already confirmed. Skipping.`);
+    if (participant && participant.paid) {
+      logger.info(`[EntryFee] Participant ${participantId} already marked paid via transaction ${transactionId}. Skipping.`);
       return { alreadyConfirmed: true };
     }
 
@@ -33,21 +40,18 @@ export default class ParticipantPaymentService {
       throw new ApiError(400, `Transaction ${transactionId} is not an entry_fee transaction.`);
     }
 
-    const participantId = transaction.refId; // set in ParticipantService.join
-    if (!participantId) {
-      throw new ApiError(400, `Transaction ${transactionId} has no linked participantId (refId).`);
-    }
-
     await prisma.$transaction(async (tx) => {
-      // 1. Mark transaction as success
-      await tx.transaction.update({
-        where: { id: transactionId },
-        data: {
-          status: 'success',
-          providerEventId,
-          reviewedAt: new Date(),
-        },
-      });
+      // 1. Mark transaction as success (or keep as paid/success)
+      if (transaction.status !== 'success' && transaction.status !== 'paid') {
+          await tx.transaction.update({
+            where: { id: transactionId },
+            data: {
+              status: 'success',
+              providerEventId,
+              reviewedAt: new Date(),
+            },
+          });
+      }
 
       // 2. Mark participant as paid
       await tx.participant.update({

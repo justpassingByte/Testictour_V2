@@ -12,4 +12,7 @@ const router = Router();
  */
 router.post('/payments/:provider', PaymentWebhookController.handleWebhook);
 
+import SepayWebhookController from '../controllers/SepayWebhookController';
+router.post('/sepay/:partnerId', SepayWebhookController.handleWebhook);
+
 export default router;

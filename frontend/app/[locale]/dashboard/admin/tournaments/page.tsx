@@ -162,7 +162,7 @@ export default function AdminTournamentsPage() {
               </TableHeader>
               <TableBody>
                 {filteredTournaments.map((tournament) => {
-                  const prizePool = tournament.budget || ((tournament.registered || 0) * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)))
+                  const prizePool = Math.max(tournament.budget || 0, (tournament.registered || 0) * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)))
                   return (
                     <TableRow key={tournament.id} className="hover:bg-white/5">
                       <TableCell>
@@ -187,7 +187,10 @@ export default function AdminTournamentsPage() {
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1">
-                          <span className="text-sm">{tournament.registered || 0} / {tournament.maxPlayers}</span>
+                          <span className="text-sm">
+                            {tournament.registered || 0} / {tournament.maxPlayers}
+                            {(tournament as any).reserveCount ? <span className="text-xs text-amber-500 font-semibold ml-1">+{ (tournament as any).reserveCount } dự bị</span> : null}
+                          </span>
                           <Progress value={((tournament.registered || 0) / tournament.maxPlayers) * 100} className="h-1.5" />
                         </div>
                       </TableCell>

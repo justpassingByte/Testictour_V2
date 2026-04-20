@@ -257,7 +257,12 @@ export default function AdminPartnersPage() {
                   </TabsContent>
                   <TabsContent value="revenue" className="mt-0">
                     <div className="overflow-hidden">
-                      <RevenueTab partnerData={partnerData as any} lobbies={(selectedPartnerDetail.lobbies || []) as any} />
+                      <RevenueTab 
+                        partnerData={partnerData as any} 
+                        lobbies={(selectedPartnerDetail.lobbies || []) as any} 
+                        tournaments={selectedPartnerDetail.tournaments}
+                        ledger={selectedPartnerDetail.ledger}
+                      />
                     </div>
                   </TabsContent>
                 </Tabs>

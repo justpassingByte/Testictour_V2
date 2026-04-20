@@ -86,6 +86,7 @@ export interface AdminPartnerDetail {
   transactions: ITransaction[];
   lobbies: any[];
   tournaments: any[];
+  ledger?: any;
   players: PartnerPlayer[];
   subscription?: ISubscription | null;
 }

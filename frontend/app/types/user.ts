@@ -15,6 +15,10 @@ export interface IUser {
     amount: number;
     coins: number;
   };
+  partnerSubscription?: {
+    plan: string;
+    status: string;
+  };
 }
 
 export interface IPlayerProfile extends IUser {

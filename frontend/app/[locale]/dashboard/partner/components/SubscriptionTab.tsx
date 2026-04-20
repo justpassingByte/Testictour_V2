@@ -1,11 +1,10 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Crown, Users, DollarSign, CheckCircle, XCircle, TrendingUp, Calendar, Settings, CreditCard, ArrowUpCircle, ArrowDownCircle, Wallet } from "lucide-react"
+import { Crown, Users, CheckCircle, Sparkles, Zap, Building2, Clock, CalendarDays, ArrowRight } from "lucide-react"
 import api from "@/app/lib/apiConfig"
 
 interface PartnerSubscription {
@@ -28,48 +27,43 @@ interface PartnerSubscription {
   }
 }
 
-const PLAN_FEATURES = {
-  FREE: {
-    playerManagement: true,
-    basicAnalytics: true,
-    revenueTracking: true,
-    csvExport: true,
-    maxTournamentSize: 32,
-    maxLobbies: 1,
-    maxTournamentsPerMonth: 2,
-    supportLevel: 'basic',
-    automaticWithdrawals: false,
-    customBranding: false
+interface PlanConfig {
+  plan: string
+  displayName: string
+  description: string
+  monthlyPrice: number
+  annualPrice: number
+  earlyAccessPrice?: number | null
+  maxLobbies: number
+  maxTournamentSize: number
+  maxTournamentsPerMonth: number
+  platformFeePercent: number
+  features: Record<string, boolean>
+  sortOrder: number
+}
+
+const PLAN_STYLES: Record<string, {
+  icon: any, color: string, border: string, bg: string, text: string, button: string, accent: string
+}> = {
+  STARTER: {
+    icon: Zap, color: 'green', border: 'border-emerald-500/40', bg: 'from-emerald-500/10',
+    text: 'text-emerald-400', button: 'bg-emerald-600 hover:bg-emerald-700 text-white font-bold', accent: 'text-emerald-400',
   },
   PRO: {
-    playerManagement: true,
-    advancedAnalytics: true,
-    revenueTracking: true,
-    csvExport: true,
-    maxTournamentSize: 64,
-    maxLobbies: 5,
-    maxTournamentsPerMonth: 15,
-    supportLevel: 'priority',
-    automaticWithdrawals: true,
-    customBranding: true
+    icon: Crown, color: 'yellow', border: 'border-yellow-500/50', bg: 'from-yellow-500/10',
+    text: 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.5)]',
+    button: 'bg-yellow-500 hover:bg-yellow-600 text-black font-bold', accent: 'text-yellow-400',
   },
   ENTERPRISE: {
-    playerManagement: true,
-    advancedAnalytics: true,
-    revenueTracking: true,
-    csvExport: true,
-    maxTournamentSize: -1, // unlimited
-    maxLobbies: -1, // unlimited
-    maxTournamentsPerMonth: -1, // unlimited
-    supportLevel: 'dedicated',
-    automaticWithdrawals: true,
-    customBranding: true
-  }
+    icon: Building2, color: 'purple', border: 'border-purple-500/50', bg: 'from-purple-500/10',
+    text: 'text-purple-400 drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]',
+    button: 'bg-purple-600 hover:bg-purple-700 text-white font-bold shadow-[0_0_15px_rgba(168,85,247,0.5)]', accent: 'text-purple-400',
+  },
 }
 
 export default function SubscriptionTab({ partnerId }: { partnerId?: string }) {
   const [subscription, setSubscription] = useState<PartnerSubscription | null>(null)
-  const [availablePlans, setAvailablePlans] = useState<any[]>([])
+  const [availablePlans, setAvailablePlans] = useState<PlanConfig[]>([])
   const [loading, setLoading] = useState(true)
 
   const fetchSubscription = useCallback(async () => {
@@ -86,8 +80,6 @@ export default function SubscriptionTab({ partnerId }: { partnerId?: string }) {
         if (response.data.availablePlans) {
           setAvailablePlans(response.data.availablePlans)
         }
-      } else {
-        console.error('Failed to fetch subscription')
       }
     } catch (error) {
       console.error('Error fetching subscription:', error)
@@ -100,50 +92,13 @@ export default function SubscriptionTab({ partnerId }: { partnerId?: string }) {
     fetchSubscription()
   }, [fetchSubscription])
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'ACTIVE':
-        return <Badge className="bg-green-100 text-green-800">Active</Badge>
-      case 'INACTIVE':
-        return <Badge className="bg-gray-100 text-gray-800">Inactive</Badge>
-      case 'SUSPENDED':
-        return <Badge className="bg-red-100 text-red-800">Suspended</Badge>
-      default:
-        return <Badge className="bg-yellow-100 text-yellow-800">Unknown</Badge>
-    }
-  }
-
-  const getPlanIcon = (plan: string) => {
-    switch (plan) {
-      case 'PRO':
-        return <Crown className="h-4 w-4 text-yellow-500" />
-      case 'ENTERPRISE':
-        return <Crown className="h-4 w-4 text-purple-500" />
-      default:
-        return <Users className="h-4 w-4 text-gray-500" />
-    }
-  }
-
-  const getPlanColor = (plan: string) => {
-    switch (plan) {
-      case 'PRO':
-        return 'text-yellow-600 bg-yellow-50 border-yellow-200'
-      case 'ENTERPRISE':
-        return 'text-purple-600 bg-purple-50 border-purple-200'
-      default:
-        return 'text-gray-600 bg-gray-50 border-gray-200'
-    }
-  }
-
   const handleUpgradePlan = async (plan: string) => {
     try {
-      // Free plan downgrade or current plan is not handled through Stripe
       const response = await api.post('/partner/subscription/upgrade', { plan });
-
       if (response.data && response.data.success) {
         if (response.data.data.requiresPayment && response.data.data.checkoutUrl) {
-           window.location.href = response.data.data.checkoutUrl;
-           return;
+          window.location.href = response.data.data.checkoutUrl;
+          return;
         }
         alert('Plan updated successfully');
         fetchSubscription();
@@ -165,39 +120,15 @@ export default function SubscriptionTab({ partnerId }: { partnerId?: string }) {
     )
   }
 
-  // Merge dynamic DB config over the static PLAN_FEATURES skeleton
-  const ACTIVE_PLAN_FEATURES = (() => {
-    if (!availablePlans || availablePlans.length === 0) return PLAN_FEATURES;
+  // Build plan data from API — fully dynamic
+  const plansToRender = availablePlans.length > 0
+    ? [...availablePlans].sort((a, b) => a.sortOrder - b.sortOrder)
+    : [];
 
-    const merged: Record<string, any> = {};
-
-    ['FREE', 'PRO', 'ENTERPRISE'].forEach(planKey => {
-      const plan = availablePlans.find((p: any) => p.plan === planKey);
-      const defaultFeatures = (PLAN_FEATURES as any)[planKey] || {};
-      
-      merged[planKey] = { ...defaultFeatures };
-      
-      // Remove all boolean keys from default features so deleted features don't show up
-      Object.keys(merged[planKey]).forEach(key => {
-          if (typeof merged[planKey][key] === 'boolean') {
-              delete merged[planKey][key];
-          }
-      });
-
-      if (plan) {
-          // Add back the dynamically configured boolean features from DB
-          if (typeof plan.features === 'object' && plan.features) {
-              Object.assign(merged[planKey], plan.features);
-          }
-
-          if (plan.maxLobbies !== undefined) merged[planKey].maxLobbies = plan.maxLobbies;
-          if (plan.maxTournamentSize !== undefined) merged[planKey].maxTournamentSize = plan.maxTournamentSize;
-          if (plan.maxTournamentsPerMonth !== undefined) merged[planKey].maxTournamentsPerMonth = plan.maxTournamentsPerMonth;
-      }
-    });
-
-    return merged as typeof PLAN_FEATURES;
-  })();
+  // Calculate days remaining for current plan
+  const daysRemaining = subscription?.endDate
+    ? Math.max(0, Math.ceil((new Date(subscription.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : null;
 
   return (
     <div className="space-y-6 pb-20">
@@ -205,6 +136,61 @@ export default function SubscriptionTab({ partnerId }: { partnerId?: string }) {
         <p className="text-muted-foreground text-sm">Review your active limits and upgrade your plan to scale your business.</p>
       </div>
 
+      {/* Current Plan Status Card */}
+      {subscription && (
+        <Card className="bg-gradient-to-r from-primary/5 via-card/60 to-primary/5 border-primary/20 backdrop-blur-xl">
+          <CardContent className="p-6">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="p-3 rounded-xl bg-primary/10 border border-primary/20">
+                  {(() => {
+                    const style = PLAN_STYLES[subscription.plan] || PLAN_STYLES.STARTER;
+                    const Icon = style.icon;
+                    return <Icon className={`h-6 w-6 ${style.accent}`} />;
+                  })()}
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold flex items-center gap-2">
+                    {availablePlans.find(p => p.plan === subscription.plan)?.displayName || subscription.plan}
+                    <Badge className={`text-[10px] ${subscription.status === 'ACTIVE' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'}`}>
+                      {subscription.status}
+                    </Badge>
+                  </h3>
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
+                    {subscription.startDate && (
+                      <span className="flex items-center gap-1">
+                        <CalendarDays className="h-3 w-3" />
+                        Started: {new Date(subscription.startDate).toLocaleDateString()}
+                      </span>
+                    )}
+                    {subscription.endDate && (
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        Expires: {new Date(subscription.endDate).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                {daysRemaining !== null && subscription.plan !== 'STARTER' && (
+                  <div className={`text-center px-4 py-2 rounded-lg border ${daysRemaining <= 7 ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`}>
+                    <div className="text-2xl font-bold">{daysRemaining}</div>
+                    <div className="text-[10px] uppercase tracking-wider font-medium">Days Left</div>
+                  </div>
+                )}
+                {subscription.autoRenew && (
+                  <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/20">
+                    Auto-Renew
+                  </Badge>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Plan Cards — Fully Dynamic */}
       {!subscription ? (
         <Card>
           <CardContent className="text-center py-8">
@@ -219,123 +205,139 @@ export default function SubscriptionTab({ partnerId }: { partnerId?: string }) {
           </CardContent>
         </Card>
       ) : (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {['FREE', 'PRO', 'ENTERPRISE'].map((planKey) => {
-              const features = ACTIVE_PLAN_FEATURES[planKey as keyof typeof ACTIVE_PLAN_FEATURES] as any;
-              const isCurrent = subscription.plan === planKey;
-              const dbPlan = availablePlans.find((p: any) => p.plan === planKey);
-              const title = planKey === 'FREE' ? 'Basic' : planKey === 'PRO' ? 'Professional' : 'Enterprise';
-              const price = dbPlan?.monthlyPrice !== undefined ? dbPlan.monthlyPrice : (planKey === 'FREE' ? 0 : planKey === 'PRO' ? 29.99 : 99.99);
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {plansToRender.map((planConfig) => {
+            const style = PLAN_STYLES[planConfig.plan] || PLAN_STYLES.STARTER;
+            const Icon = style.icon;
+            const isCurrent = subscription.plan === planConfig.plan;
+            const features = planConfig.features || {};
+            const isRecommended = planConfig.plan === 'PRO';
 
-              const borderColors = planKey === 'FREE' ? 'border-slate-500/30' : planKey === 'PRO' ? 'border-yellow-500/50' : 'border-purple-500/50';
-              const bgGlow = planKey === 'FREE' ? 'from-slate-500/5' : planKey === 'PRO' ? 'from-yellow-500/10' : 'from-purple-500/10';
-              const textGlow = planKey === 'FREE' ? 'text-slate-200' : planKey === 'PRO' ? 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.5)]' : 'text-purple-400 drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]';
-              const buttonTheme = planKey === 'FREE' ? 'bg-slate-700 hover:bg-slate-600' : planKey === 'PRO' ? 'bg-yellow-500 hover:bg-yellow-600 text-black font-bold' : 'bg-purple-600 hover:bg-purple-700 text-white font-bold shadow-[0_0_15px_rgba(168,85,247,0.5)]';
-
-              return (
-                <div key={planKey} className={`relative flex flex-col rounded-xl overflow-hidden backdrop-blur-xl border ${borderColors} ${isCurrent ? 'ring-2 ring-primary/50' : ''}`}>
-                  <div className={`absolute inset-0 bg-gradient-to-br ${bgGlow} to-transparent z-0`}></div>
-                  <div className="relative z-10 p-6 flex flex-col h-full bg-card/40 hover:bg-card/60 transition-colors duration-300">
+            return (
+              <div key={planConfig.plan} className={`relative flex flex-col rounded-xl overflow-hidden backdrop-blur-xl border ${style.border} ${isCurrent ? 'ring-2 ring-primary/50' : ''}`}>
+                {isRecommended && (
+                  <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-400" />
+                )}
+                <div className={`absolute inset-0 bg-gradient-to-br ${style.bg} to-transparent z-0`}></div>
+                <div className="relative z-10 p-5 flex flex-col h-full bg-card/40 hover:bg-card/60 transition-colors duration-300">
                   {isCurrent && (
-                     <div className="absolute top-4 right-4">
-                       <Badge className="bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30 shadow-lg px-3 py-1 font-semibold uppercase tracking-wider text-[10px]">
-                         Active Plan
-                       </Badge>
-                     </div>
+                    <div className="absolute top-3 right-3">
+                      <Badge className="bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30 shadow-lg px-2 py-0.5 font-semibold uppercase tracking-wider text-[9px]">
+                        Active
+                      </Badge>
+                    </div>
                   )}
-                  <div className="pb-4">
-                    <div className="flex items-center gap-3 mb-2">
-                       <div className={`p-2 rounded-lg bg-black/40 border border-white/10 ${textGlow}`}>
-                         {getPlanIcon(planKey)}
-                       </div>
-                       <h3 className={`text-2xl font-black uppercase tracking-widest ${textGlow}`}>{title}</h3>
+                  {isRecommended && !isCurrent && (
+                    <div className="absolute top-3 right-3">
+                      <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 px-2 py-0.5 text-[9px] font-bold uppercase">
+                        <Sparkles className="h-3 w-3 mr-1" />
+                        Popular
+                      </Badge>
                     </div>
-                    <div className="mt-4 flex items-end gap-1">
-                       <span className="text-4xl font-extrabold tracking-tight">${price}</span>
-                       <span className="text-sm text-muted-foreground font-medium pb-1">/month</span>
+                  )}
+
+                  {/* Plan Header */}
+                  <div className="pb-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className={`p-1.5 rounded-lg bg-black/40 border border-white/10 ${style.text}`}>
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <h3 className={`text-lg font-black uppercase tracking-widest ${style.text}`}>
+                        {planConfig.displayName || planConfig.plan}
+                      </h3>
+                    </div>
+                    {planConfig.description && (
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">{planConfig.description}</p>
+                    )}
+                    <div className="mt-3 flex items-end gap-1">
+                      {planConfig.earlyAccessPrice ? (
+                        <>
+                          <span className="text-lg text-muted-foreground line-through">${planConfig.monthlyPrice}</span>
+                          <span className={`text-3xl font-extrabold tracking-tight ${style.accent}`}>${planConfig.earlyAccessPrice}</span>
+                        </>
+                      ) : (
+                        <span className="text-3xl font-extrabold tracking-tight">${planConfig.monthlyPrice}</span>
+                      )}
+                      <span className="text-xs text-muted-foreground font-medium pb-1">/mo</span>
                     </div>
                   </div>
-                  <div className="flex-1 flex flex-col">
-                     <div className="flex flex-col gap-4 mb-6">
-                       {/* Max Tournament Size */}
-                       <div className="bg-black/30 border border-white/5 p-3 rounded-xl flex items-center justify-between">
-                          <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Tournament Size</span>
-                          <span className="text-lg font-bold text-blue-400">{features.maxTournamentSize === -1 ? 'Unlimited' : features.maxTournamentSize + ' Players'}</span>
-                       </div>
 
-                       {/* Lobbies (Concurrent MiniTours) */}
-                       <div className="bg-black/30 border border-white/5 p-3 rounded-xl flex flex-col gap-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Active Lobbies</span>
-                            <span className="text-lg font-bold text-emerald-400">{features.maxLobbies === -1 ? 'Unlimited' : features.maxLobbies}</span>
-                          </div>
-                          {isCurrent && subscription?.currentUsage && features.maxLobbies !== -1 && (
-                            <div className="flex flex-col gap-1">
-                              <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
-                                <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, (subscription.currentUsage.activeLobbies / features.maxLobbies) * 100)}%` }}></div>
-                              </div>
-                              <span className="text-xs text-right text-emerald-500 font-medium">{subscription.currentUsage.activeLobbies} / {features.maxLobbies} Used</span>
-                            </div>
-                          )}
-                       </div>
+                  {/* Limits */}
+                  <div className="flex flex-col gap-2 mb-4">
+                    <div className="bg-black/30 border border-white/5 p-2.5 rounded-lg flex items-center justify-between">
+                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Max Players</span>
+                      <span className="text-sm font-bold text-blue-400">{planConfig.maxTournamentSize === -1 ? '∞' : planConfig.maxTournamentSize}</span>
+                    </div>
 
-                       {/* Tournaments Per Month */}
-                       <div className="bg-black/30 border border-white/5 p-3 rounded-xl flex flex-col gap-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Tournaments / Mo</span>
-                            <span className="text-lg font-bold text-purple-400">{features.maxTournamentsPerMonth === -1 ? 'Unlimited' : features.maxTournamentsPerMonth}</span>
+                    <div className="bg-black/30 border border-white/5 p-2.5 rounded-lg flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Lobbies</span>
+                        <span className="text-sm font-bold text-emerald-400">{planConfig.maxLobbies === -1 ? '∞' : planConfig.maxLobbies}</span>
+                      </div>
+                      {isCurrent && subscription?.currentUsage && planConfig.maxLobbies !== -1 && (
+                        <div className="flex flex-col gap-0.5">
+                          <div className="w-full bg-white/10 rounded-full h-1 overflow-hidden">
+                            <div className="bg-emerald-500 h-1 rounded-full" style={{ width: `${Math.min(100, (subscription.currentUsage.activeLobbies / planConfig.maxLobbies) * 100)}%` }}></div>
                           </div>
-                          {isCurrent && subscription?.currentUsage && features.maxTournamentsPerMonth !== -1 && (
-                            <div className="flex flex-col gap-1">
-                              <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
-                                <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, (subscription.currentUsage.tournamentsThisMonth / features.maxTournamentsPerMonth) * 100)}%` }}></div>
-                              </div>
-                              <span className="text-xs text-right text-purple-500 font-medium">{subscription.currentUsage.tournamentsThisMonth} / {features.maxTournamentsPerMonth} Used</span>
-                            </div>
-                          )}
-                       </div>
-                     </div>
-                     <div className="space-y-3 mb-8 flex-1 grid grid-cols-2 gap-x-2 gap-y-3">
-                        {Object.entries(features).map(([key, value]) => {
-                           if (key === 'maxTournamentSize' || key === 'maxTournamentsPerMonth' || key === 'maxPlayers' || key === 'maxLobbies' || key === 'supportLevel' || key === 'withdrawalProcessing') return null;
-                           if (!value) return null; // Don't show inactive features
-                           
-                           return (
-                             <div key={key} className="flex items-center gap-2 text-xs">
-                               <CheckCircle className="h-3 w-3 text-emerald-500 shrink-0" />
-                               <span className="text-muted-foreground">{key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}</span>
-                             </div>
-                           );
-                        })}
-                        <div className="flex items-center gap-2 text-xs">
-                           <CheckCircle className="h-3 w-3 text-emerald-500 shrink-0" />
-                           <span className="text-muted-foreground capitalize">{features.supportLevel} Support</span>
+                          <span className="text-[9px] text-right text-emerald-500 font-medium">{subscription.currentUsage.activeLobbies} / {planConfig.maxLobbies}</span>
                         </div>
-                        {features.withdrawalProcessing && (
-                           <div className="flex items-center gap-2 text-xs">
-                             <CheckCircle className="h-3 w-3 text-emerald-500 shrink-0" />
-                             <span className="text-muted-foreground capitalize">{features.withdrawalProcessing} Withdrawals</span>
-                           </div>
-                        )}
-                     </div>
-                     <div className="mt-auto pt-4">
-                       <Button 
-                         className={`w-full py-6 text-sm uppercase tracking-widest transition-transform hover:scale-[1.02] ${buttonTheme}`}
-                         variant={isCurrent ? "outline" : "default"}
-                         disabled={isCurrent}
-                         onClick={() => handleUpgradePlan(planKey)}
-                       >
-                         {isCurrent ? 'Current Plan' : `Select ${title}`}
-                       </Button>
-                     </div>
+                      )}
+                    </div>
+
+                    <div className="bg-black/30 border border-white/5 p-2.5 rounded-lg flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Tournaments/Mo</span>
+                        <span className="text-sm font-bold text-purple-400">{planConfig.maxTournamentsPerMonth === -1 ? '∞' : planConfig.maxTournamentsPerMonth}</span>
+                      </div>
+                      {isCurrent && subscription?.currentUsage && planConfig.maxTournamentsPerMonth !== -1 && (
+                        <div className="flex flex-col gap-0.5">
+                          <div className="w-full bg-white/10 rounded-full h-1 overflow-hidden">
+                            <div className="bg-purple-500 h-1 rounded-full" style={{ width: `${Math.min(100, (subscription.currentUsage.tournamentsThisMonth / planConfig.maxTournamentsPerMonth) * 100)}%` }}></div>
+                          </div>
+                          <span className="text-[9px] text-right text-purple-500 font-medium">{subscription.currentUsage.tournamentsThisMonth} / {planConfig.maxTournamentsPerMonth}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="bg-black/30 border border-white/5 p-2.5 rounded-lg flex items-center justify-between">
+                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Platform Fee</span>
+                      <span className="text-sm font-bold text-orange-400">{Math.round(planConfig.platformFeePercent * 100)}%</span>
+                    </div>
                   </div>
-                 </div>
+
+                  {/* Features */}
+                  <div className="space-y-1.5 mb-6 flex-1">
+                    {Object.entries(features)
+                      .filter(([, value]) => value === true)
+                      .map(([key]) => (
+                        <div key={key} className="flex items-center gap-1.5 text-[11px]">
+                          <CheckCircle className="h-3 w-3 text-emerald-500 shrink-0" />
+                          <span className="text-muted-foreground">{key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}</span>
+                        </div>
+                      ))}
+                  </div>
+
+                  {/* CTA */}
+                  <div className="mt-auto pt-2">
+                    <Button
+                      className={`w-full py-5 text-xs uppercase tracking-widest transition-transform hover:scale-[1.02] ${style.button}`}
+                      variant={isCurrent ? "outline" : "default"}
+                      disabled={isCurrent}
+                      onClick={() => handleUpgradePlan(planConfig.plan)}
+                    >
+                      {isCurrent ? 'Current Plan' : (
+                        <span className="flex items-center gap-2">
+                          {planConfig.plan === 'STARTER' ? 'Downgrade' : 'Upgrade'}
+                          <ArrowRight className="h-3 w-3" />
+                        </span>
+                      )}
+                    </Button>
+                  </div>
                 </div>
-              )
-            })}
-          </div>
-        </>
+              </div>
+            )
+          })}
+        </div>
       )}
     </div>
   )

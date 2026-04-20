@@ -87,6 +87,7 @@ export interface PartnerData {
   totalMatches: number
   revenueShare: number
   subscription?: any
+  subscriptionPlan?: string
   lobbyStatuses?: {
     WAITING: number
     IN_PROGRESS: number
@@ -102,6 +103,10 @@ export interface PartnerData {
     totalMatches: number
     revenueShare: number
   }
+  referralStats?: {
+    source: string
+    count: number
+  }[]
 }
 
 export interface AnalyticsData {

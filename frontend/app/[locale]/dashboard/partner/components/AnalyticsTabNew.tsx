@@ -14,7 +14,11 @@ import {
   XAxis,
   YAxis,
   Tooltip,
-  CartesianGrid
+  CartesianGrid,
+  PieChart,
+  Pie,
+  Cell,
+  Legend
 } from "recharts"
 import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO } from "date-fns"
 
@@ -86,6 +90,22 @@ export function AnalyticsTabNew({ partnerData, lobbies }: AnalyticsTabNewProps) 
         }
       })
 
+      // Process new Tournaments
+      if (partnerData && (partnerData as any).tournaments) {
+         ((partnerData as any).tournaments).forEach((t: any) => {
+            const tDate = t.createdAt ? parseISO(t.createdAt) : new Date()
+
+            if (isWithinInterval(tDate, { start: month.monthStart, end: month.monthEnd })) {
+                const isPaid = t.entryFee > 0
+                if (isPaid) {
+                   const share = t.hostFeePercent || ((partnerData as any).revenueShare / 100) || 0.1
+                   revenueCount += (t.entryFee * (t._count?.participants || 0) * share)
+                }
+                playersCount += t._count?.participants || 0
+            }
+         })
+      }
+
       return {
         name: month.name,
         players: playersCount,
@@ -97,7 +117,7 @@ export function AnalyticsTabNew({ partnerData, lobbies }: AnalyticsTabNewProps) 
     const totalRevenueGrowth = data[5].revenue - data[0].revenue
 
     return { chartData: data, totalPlayerGrowth, totalRevenueGrowth }
-  }, [lobbies])
+  }, [lobbies, partnerData])
 
   if (!partnerData) return <p>Could not load analytics.</p>
 
@@ -275,49 +295,99 @@ export function AnalyticsTabNew({ partnerData, lobbies }: AnalyticsTabNewProps) 
         </Card>
       </div>
 
-      {/* Additional Insights */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Performance Insights</CardTitle>
-          <CardDescription>Key metrics and trends for your partnership</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-3">
-              <h4 className="font-medium text-sm text-muted-foreground">Lobby Performance</h4>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Total Lobbies</span>
-                  <span className="font-medium">{metrics?.totalLobbies || 0}</span>
+      <div className="grid gap-6 md:grid-cols-2">
+        {/* Additional Insights */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Performance Insights</CardTitle>
+            <CardDescription>Key metrics and trends for your partnership</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-3">
+                <h4 className="font-medium text-sm text-muted-foreground">Lobby Performance</h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Total Lobbies</span>
+                    <span className="font-medium">{metrics?.totalLobbies || 0}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span>Active Rate</span>
+                    <span className="font-medium text-green-600">
+                      {(metrics?.totalLobbies || 0) > 0 ? Math.round(((metrics?.activeLobbies || 0) / (metrics?.totalLobbies || 0)) * 100) : 0}%
+                    </span>
+                  </div>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span>Active Rate</span>
-                  <span className="font-medium text-green-600">
-                    {(metrics?.totalLobbies || 0) > 0 ? Math.round(((metrics?.activeLobbies || 0) / (metrics?.totalLobbies || 0)) * 100) : 0}%
-                  </span>
+              </div>
+              <div className="space-y-3">
+                <h4 className="font-medium text-sm text-muted-foreground">Financial Summary</h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Total Revenue</span>
+                    <span className="font-medium">${(metrics?.totalRevenue || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span>Current Balance</span>
+                    <span className="font-medium">${(metrics?.balance || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span>Avg Monthly</span>
+                    <span className="font-medium">${Math.round((metrics?.totalRevenue || 0) / 6).toLocaleString()}</span>
+                  </div>
                 </div>
               </div>
             </div>
-            <div className="space-y-3">
-              <h4 className="font-medium text-sm text-muted-foreground">Financial Summary</h4>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Total Revenue</span>
-                  <span className="font-medium">${(metrics?.totalRevenue || 0).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>Current Balance</span>
-                  <span className="font-medium">${(metrics?.balance || 0).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>Avg Monthly</span>
-                  <span className="font-medium">${Math.round((metrics?.totalRevenue || 0) / 6).toLocaleString()}</span>
-                </div>
+          </CardContent>
+        </Card>
+
+        {/* Referral Status */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Users className="mr-2 h-5 w-5 text-purple-500" />
+              Player Acquisition Sources
+            </CardTitle>
+            <CardDescription>Where your players discovered your tournaments</CardDescription>
+          </CardHeader>
+          <CardContent className="flex justify-center items-center h-[200px]">
+            {partnerData?.referralStats && partnerData.referralStats.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={partnerData.referralStats}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="count"
+                    labelLine={false}
+                  >
+                    {partnerData.referralStats.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'][index % 5]} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    formatter={(value: number, name: string, props: any) => [value, props.payload.source]}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', backgroundColor: 'rgba(0,0,0,0.8)' }}
+                  />
+                  <Legend 
+                    layout="vertical" 
+                    verticalAlign="middle" 
+                    align="right"
+                    formatter={(value, entry: any) => <span className="text-sm text-muted-foreground">{entry.payload.source}</span>}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                <Users className="h-8 w-8 mb-2 opacity-20" />
+                <p className="text-sm">No acquisition data available yet</p>
               </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

@@ -12,6 +12,8 @@ import attachUser from './middlewares/attachUser';
 // Redis/BullMQ cron jobs disabled — re-enable when Redis is available
 // import './jobs/autoTournamentCron';
 import './jobs/autoRoundAdvanceCron';
+import './jobs/weeklySettlementCron';
+import './jobs/orderExpiryCron';
 import { REDIS_ENABLED, lobbyTimerQueue } from './lib/queues';
 import { initLobbyTimerQueue } from './services/LobbyTimerService';
 import { prisma } from './services/prisma';

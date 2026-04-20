@@ -23,14 +23,18 @@ export default function LeaderboardClient() {
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [sortBy, setSortBy] = useState<string>("totalPoints")
+  const [region, setRegion] = useState<string>("All")
+  const [achievementSortBy, setAchievementSortBy] = useState<string>("tournamentsWon")
   const [mainTab, setMainTab] = useState("rankings")
+  const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
+  const limit = 50
 
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true)
       try {
-        const result = await PlayerService.getLeaderboard(searchQuery || undefined, 50, 0)
+        const result = await PlayerService.getLeaderboard(searchQuery || undefined, limit, (page - 1) * limit, region, sortBy)
         setPlayers(result.data)
         setTotal(result.total)
       } catch (err) {
@@ -41,18 +45,19 @@ export default function LeaderboardClient() {
     }
     const timer = setTimeout(fetchData, searchQuery ? 300 : 0)
     return () => clearTimeout(timer)
-  }, [searchQuery])
+  }, [searchQuery, sortBy, region, page])
 
-  const sortedPlayers = [...players].sort((a, b) => {
-    if (sortBy === "totalPoints") return (b.totalPoints || 0) - (a.totalPoints || 0)
-    if (sortBy === "lobbiesPlayed") return (b.lobbiesPlayed || 0) - (a.lobbiesPlayed || 0)
-    if (sortBy === "topFourRate") return (b.topFourRate || 0) - (a.topFourRate || 0)
-    if (sortBy === "tournamentsWon") return (b.tournamentsWon || 0) - (a.tournamentsWon || 0)
-    if (sortBy === "username") return (a.username || "").localeCompare(b.username || "")
+  const sortedPlayers = players
+  const topPlayers = page === 1 ? sortedPlayers.slice(0, 3) : []
+
+  // Achievement tab: local sort (independent of server sortBy)
+  const achievementSortedPlayers = [...players].sort((a, b) => {
+    if (achievementSortBy === "tournamentsWon") return (b.tournamentsWon || 0) - (a.tournamentsWon || 0)
+    if (achievementSortBy === "topFourRate") return (b.topFourRate || 0) - (a.topFourRate || 0)
+    if (achievementSortBy === "lobbiesPlayed") return (b.lobbiesPlayed || 0) - (a.lobbiesPlayed || 0)
+    if (achievementSortBy === "totalPoints") return (b.totalPoints || 0) - (a.totalPoints || 0)
     return 0
   })
-
-  const topPlayers = sortedPlayers.slice(0, 3)
 
   // Compute achievement category leaders
   const topWinner = [...players].sort((a, b) => (b.tournamentsWon || 0) - (a.tournamentsWon || 0))[0]
@@ -144,66 +149,36 @@ export default function LeaderboardClient() {
         {/* ===================== RANKINGS TAB ===================== */}
         <TabsContent value="rankings" className="space-y-8 mt-6">
           {topPlayers.length > 0 && (
-            <div className="grid gap-4 md:grid-cols-3">
-              {topPlayers.map((player, index) => (
-                <Link href={`/players/${player.id}`} key={player.id}>
-                  <Card
-                    className={`
-                      relative overflow-hidden cursor-pointer transition-all duration-500 hover:scale-[1.02]
-                      ${index === 0 ? "border-yellow-500/50 bg-gradient-to-br from-yellow-500/10 via-amber-500/5 to-card dark:to-transparent shadow-md" : ""}
-                      ${index === 1 ? "border-gray-400/50 bg-gradient-to-br from-gray-400/10 via-slate-400/5 to-card dark:to-transparent shadow-md" : ""}
-                      ${index === 2 ? "border-amber-700/50 bg-gradient-to-br from-amber-700/10 via-orange-700/5 to-card dark:to-transparent shadow-md" : ""}
-                      card-hover-effect
-                    `}
-                    style={{ animationDelay: `${index * 100}ms` }}
-                  >
-                    <div className={`
-                      absolute top-3 right-3 w-10 h-10 rounded-full flex items-center justify-center text-white font-black text-lg shadow-lg
-                      ${index === 0 ? "bg-gradient-to-br from-yellow-400 to-amber-600" : ""}
-                      ${index === 1 ? "bg-gradient-to-br from-gray-300 to-slate-500" : ""}
-                      ${index === 2 ? "bg-gradient-to-br from-amber-600 to-orange-800" : ""}
-                    `}>
-                      {index === 0 && <Crown className="h-5 w-5" />}
-                      {index === 1 && <Medal className="h-5 w-5" />}
-                      {index === 2 && <Medal className="h-5 w-5" />}
-                    </div>
-
-                    <CardContent className="pt-6 pb-5">
-                      <div className="flex items-center space-x-4">
-                        <Avatar className="h-16 w-16 ring-2 ring-offset-2 ring-offset-background ring-primary/30">
-                          <AvatarFallback className="text-lg font-bold">{player.username?.charAt(0) || "?"}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center space-x-2 mb-1">
-                            <h3 className="font-bold text-lg truncate">{player.username}</h3>
-                            {player.region && (
-                              <Badge variant="outline" className="text-xs shrink-0">{player.region}</Badge>
-                            )}
-                          </div>
-                          {player.riotGameName && (
-                            <p className="text-sm text-muted-foreground truncate">{player.riotGameName}#{player.riotGameTag}</p>
-                          )}
-                          <div className="text-2xl font-black text-primary mt-1">
-                            {(player.totalPoints || 0).toLocaleString()}{" "}
-                            <span className="text-sm font-medium text-muted-foreground">pts</span>
-                          </div>
-                          <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
-                            <span>{player.tournamentsWon || 0} {t('tournaments_won')}</span>
-                            <span>·</span>
-                            <span>{player.topFourRate || 0}% Top 4</span>
-                          </div>
-                        </div>
+            <div className="flex flex-col md:flex-row justify-center items-end gap-6 h-auto md:h-80 py-10 w-full">
+              {[topPlayers[1], topPlayers[0], topPlayers[2]].map((player, idx) => {
+                if (!player) return null;
+                const isFirst = idx === 1;
+                const isSecond = idx === 0;
+                return (
+                  <Link href={`/players/${player.id}`} key={player.id} className={`w-full md:w-64 max-w-sm flex flex-col items-center group transition-transform duration-300 hover:-translate-y-2 ${isFirst ? 'order-first md:order-none z-10' : ''}`}>
+                    <div className="relative mb-4">
+                      <Avatar className={`ring-4 ring-offset-4 ring-offset-background shadow-2xl ${isFirst ? 'h-32 w-32 ring-yellow-400' : isSecond ? 'h-24 w-24 ring-gray-300' : 'h-20 w-20 ring-amber-700'}`}>
+                        <AvatarFallback className="text-3xl font-black">{player.username?.charAt(0) || "?"}</AvatarFallback>
+                      </Avatar>
+                      {isFirst && <Crown className="absolute -top-6 left-1/2 -translate-x-1/2 h-10 w-10 text-yellow-400 drop-shadow-md animate-bounce" />}
+                      <div className={`absolute -bottom-3 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full flex items-center justify-center text-white font-black text-sm shadow-lg ${isFirst ? "bg-gradient-to-br from-yellow-400 to-amber-600" : isSecond ? "bg-gradient-to-br from-gray-300 to-slate-500" : "bg-gradient-to-br from-amber-600 to-orange-800"}`}>
+                        {isFirst ? 1 : isSecond ? 2 : 3}
                       </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
+                    </div>
+                    <div className={`w-full rounded-t-xl rounded-b-md text-center p-4 bg-gradient-to-b ${isFirst ? 'from-yellow-500/20 to-transparent border border-yellow-500/30 md:h-48' : isSecond ? 'from-gray-400/20 to-transparent border border-gray-400/30 md:h-36' : 'from-amber-700/20 to-transparent border border-amber-700/30 md:h-28'}`}>
+                      <h3 className={`font-bold truncate group-hover:text-primary transition-colors ${isFirst ? 'text-2xl mt-2' : 'text-xl'}`}>{player.username}</h3>
+                      <div className="text-primary font-black mt-1">{(player.totalPoints || 0).toLocaleString()} <span className="text-xs font-medium text-muted-foreground">pts</span></div>
+                      <div className="text-emerald-500 font-bold text-sm -mt-0.5">${(player.totalPrizeWon || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    </div>
+                  </Link>
+                )
+              })}
             </div>
           )}
 
-          {/* Search */}
+          {/* Search & Filters */}
           <div className="flex flex-col space-y-4 md:flex-row md:items-center md:space-y-0 md:space-x-4">
-            <div className="relative flex-1">
+            <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder={t('search_players')}
@@ -212,6 +187,29 @@ export default function LeaderboardClient() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
+            <Select value={region} onValueChange={(v) => { setRegion(v); setPage(1) }}>
+              <SelectTrigger className="w-[150px]">
+                <SelectValue placeholder="Region" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="All">All Regions</SelectItem>
+                <SelectItem value="NA">NA</SelectItem>
+                <SelectItem value="EUW">EUW</SelectItem>
+                <SelectItem value="APAC">APAC</SelectItem>
+                <SelectItem value="KR">KR</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={sortBy} onValueChange={(v) => { setSortBy(v); setPage(1) }}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Sort By" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="totalPoints">Total Points</SelectItem>
+                <SelectItem value="totalPrizeWon">Total Prize Won</SelectItem>
+                <SelectItem value="topFourRate">Top 4 Rate</SelectItem>
+                <SelectItem value="tournamentsWon">Tournaments Won</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Rankings Table */}
@@ -229,6 +227,7 @@ export default function LeaderboardClient() {
                     <TableHead>{t('summoner_name')}</TableHead>
                     <TableHead className="text-center">{t('region')}</TableHead>
                     <TableHead className="text-right">{t('points')}</TableHead>
+                    <TableHead className="text-right">Prize</TableHead>
                     <TableHead className="text-center">{t('tournaments_won')}</TableHead>
                     <TableHead className="text-center">{t('top_four_rate')}</TableHead>
                     <TableHead className="text-center">{t('avg_placement')}</TableHead>
@@ -237,7 +236,7 @@ export default function LeaderboardClient() {
                 <TableBody>
                   {sortedPlayers.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                         {isLoading ? t('loading') : searchQuery ? t('no_tournaments_match') : 'No players found'}
                       </TableCell>
                     </TableRow>
@@ -250,7 +249,7 @@ export default function LeaderboardClient() {
                             ${idx === 1 ? "text-gray-400" : ""}
                             ${idx === 2 ? "text-amber-700" : ""}
                           `}>
-                            #{idx + 1}
+                            #{(page - 1) * limit + idx + 1}
                           </span>
                         </TableCell>
                         <TableCell>
@@ -270,6 +269,9 @@ export default function LeaderboardClient() {
                         <TableCell className="text-right font-bold text-primary">
                           {(player.totalPoints || 0).toLocaleString()}
                         </TableCell>
+                        <TableCell className="text-right text-emerald-500 font-medium">
+                          ${(player.totalPrizeWon || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </TableCell>
                         <TableCell className="text-center">
                           <span className="flex items-center justify-center gap-1">
                             <Trophy className="h-3 w-3 text-yellow-500" />
@@ -283,6 +285,21 @@ export default function LeaderboardClient() {
                   )}
                 </TableBody>
               </Table>
+              {total > limit && (
+                <div className="flex justify-between items-center mt-4 px-2 py-4 border-t">
+                  <span className="text-sm text-muted-foreground">
+                    Showing {(page - 1) * limit + 1} to {Math.min(page * limit, total)} of {total} players
+                  </span>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
+                      Previous
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setPage(p => p + 1)} disabled={page * limit >= total}>
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -358,7 +375,7 @@ export default function LeaderboardClient() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
-              <Select value={sortBy} onValueChange={setSortBy}>
+              <Select value={achievementSortBy} onValueChange={setAchievementSortBy}>
                 <SelectTrigger className="w-[210px]">
                   <SelectValue placeholder="Sort by achievement" />
                 </SelectTrigger>
@@ -390,14 +407,14 @@ export default function LeaderboardClient() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {sortedPlayers.length === 0 ? (
+                    {achievementSortedPlayers.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                           {isLoading ? t('loading') : 'No players found'}
                         </TableCell>
                       </TableRow>
                     ) : (
-                      sortedPlayers.map((player, idx) => (
+                      achievementSortedPlayers.map((player, idx) => (
                         <TableRow key={player.id} className="hover:bg-muted/50 transition-colors">
                           <TableCell className="font-bold">
                             <span className={`

@@ -274,7 +274,7 @@ export default function PartnerSubscriptionTab() {
 function SubscriptionModal({ open, onClose, subscription, onSave }: SubscriptionModalProps) {
   const [formData, setFormData] = useState({
     partnerId: subscription?.userId || '',
-    plan: subscription?.plan || 'FREE',
+    plan: subscription?.plan || 'STARTER',
     features: subscription?.features || {},
     status: subscription?.status || 'ACTIVE'
   })

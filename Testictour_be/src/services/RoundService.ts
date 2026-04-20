@@ -910,7 +910,8 @@ export default class RoundService {
       where: {
         tournamentId,
         userId: { in: Array.from(completedRoundUserIds) },
-        eliminated: false
+        eliminated: false,
+        isReserve: false
       }
     });
 
@@ -1161,7 +1162,7 @@ export default class RoundService {
 
 
             const participants = await tx.participant.findMany({
-              where: { tournamentId: tournament.id, eliminated: false },
+              where: { tournamentId: tournament.id, eliminated: false, isReserve: false },
             });
             const shuffled = fisherYatesShuffle(participants);
 
@@ -1205,7 +1206,7 @@ export default class RoundService {
             });
 
             const participants = await tx.participant.findMany({
-              where: { tournamentId: currentRound.phase.tournamentId, eliminated: false },
+              where: { tournamentId: currentRound.phase.tournamentId, eliminated: false, isReserve: false },
             });
 
             const lobbySize = currentRound.phase.lobbySize || 8;
@@ -2796,19 +2797,29 @@ export default class RoundService {
     }
 
     const participantCount = tournament._count.participants;
-    const totalPot = participantCount * tournament.entryFee;
-    const computedPrizePool = totalPot * (1 - (tournament.hostFeePercent || 0));
+    
+    // Use FeeCalculationService instead of gross entry pool calculation
+    const FeeCalculationService = (await import('./FeeCalculationService')).default;
+    const financials = await FeeCalculationService.calculateTournamentAggregateFinancials(
+      tournamentId,
+      participantCount
+    );
 
-    let prizePool = computedPrizePool;
+    let prizePool = financials.aggregates.entryPrizePool;
+    const basePool = tournament.escrowRequiredAmount || financials.aggregates.totalEntryRevenue;
+
     if (!tournament.isCommunityMode && tournament.escrow) {
-      if (tournament.escrow.fundedAmount > computedPrizePool) {
-        prizePool = tournament.escrow.fundedAmount;
+      const effectiveFundedEntries = tournament.entryFee > 0 ? Math.floor(tournament.escrow.fundedAmount / tournament.entryFee) : 0;
+      const netFunded = effectiveFundedEntries * financials.perEntryBreakdown.prizeContribution;
+
+      if (tournament.escrow.fundedAmount > basePool) {
+        prizePool = netFunded;
       } else if (tournament.escrow.fundedAmount > 0) {
-        prizePool = Math.max(computedPrizePool, tournament.escrow.fundedAmount);
+        prizePool = Math.max(prizePool, netFunded);
       }
     }
 
-    logger.debug(`Calculating prizes for tournament ${tournamentId}. Total pot: ${totalPot}, Prize pool: ${prizePool}`);
+    logger.debug(`Calculating prizes for tournament ${tournamentId}. Total revenue: ${financials.aggregates.totalEntryRevenue}, Prize pool: ${prizePool}`);
 
     const customStructure = tournament.prizeStructure;
     const hasCustomStructure = customStructure && (

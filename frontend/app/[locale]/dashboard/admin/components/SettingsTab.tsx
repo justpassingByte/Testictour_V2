@@ -30,9 +30,6 @@ export default function SettingsTab() {
             <TabsTrigger value="system" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-6 py-3">
               <Settings className="mr-2 h-4 w-4" /> System
             </TabsTrigger>
-            <TabsTrigger value="plans" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-6 py-3">
-              <Crown className="mr-2 h-4 w-4" /> Plans
-            </TabsTrigger>
             <TabsTrigger value="escrow" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-6 py-3">
               <ShieldCheck className="mr-2 h-4 w-4 text-emerald-400" /> Escrow
             </TabsTrigger>
@@ -48,18 +45,12 @@ export default function SettingsTab() {
                   <SectionErrorBoundary fallbackTitle="Failed to load Platform Settings"><PlatformSettingsSection /></SectionErrorBoundary>
               </div>
               <div className="border-t border-white/10 pt-8 space-y-4">
-                  <h3 className="text-lg font-semibold flex items-center gap-2"><Bell className="h-5 w-5" /> Notifications & Maintenance</h3>
-                  <SectionErrorBoundary fallbackTitle="Failed to load Notifications section"><PushNotificationsSection /></SectionErrorBoundary>
-              </div>
-            </TabsContent>
-            <TabsContent value="plans" className="mt-0 space-y-12">
-              <div className="space-y-4">
                   <h3 className="text-lg font-semibold flex items-center gap-2"><Flag className="h-5 w-5" /> Global Feature Flags</h3>
                   <SectionErrorBoundary fallbackTitle="Failed to load Feature Flags"><FeatureFlagsSection /></SectionErrorBoundary>
               </div>
               <div className="border-t border-white/10 pt-8 space-y-4">
-                  <h3 className="text-lg font-semibold flex items-center gap-2"><Crown className="h-5 w-5" /> Subscription Plans</h3>
-                  <SectionErrorBoundary fallbackTitle="Failed to load Subscription Plans"><SubscriptionPlanConfigSection /></SectionErrorBoundary>
+                  <h3 className="text-lg font-semibold flex items-center gap-2"><Bell className="h-5 w-5" /> Notifications & Maintenance</h3>
+                  <SectionErrorBoundary fallbackTitle="Failed to load Notifications section"><PushNotificationsSection /></SectionErrorBoundary>
               </div>
             </TabsContent>
             <TabsContent value="escrow" className="mt-0">

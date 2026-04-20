@@ -8,7 +8,7 @@ export default class SettlementReportService {
       include: {
         organizer: { select: { id: true, username: true, email: true } },
         escrow: true,
-        _count: { select: { participants: true } },
+        _count: { select: { participants: { where: { isReserve: false } } } },
       },
     });
 
@@ -36,9 +36,17 @@ export default class SettlementReportService {
     const failedTransactions = transactions.filter((transaction) => transaction.status === 'failed');
     const unresolvedTransactions = transactions.filter((transaction) => transaction.status === 'pending');
 
-    const grossEntryPool = participantFees;
-    const platformFeeRate = tournament.hostFeePercent || 0;
-    const derivedPlatformFees = grossEntryPool * platformFeeRate;
+    const FeeCalculationService = (await import('./FeeCalculationService')).default;
+    
+    // We compute what the platform fees SHOULD be based on number of participants
+    const financials = await FeeCalculationService.calculateTournamentAggregateFinancials(
+      tournamentId, 
+      tournament._count.participants,
+      organizerFunding // treat existing organizer funding as sponsor contribution for now
+    );
+    
+    const derivedPlatformFees = financials.aggregates.totalPlatformFee;
+    const derivedHostFees = financials.aggregates.totalHostFee;
 
     const outstandingIssues = [
       ...failedTransactions.map((transaction) => ({
@@ -63,7 +71,8 @@ export default class SettlementReportService {
       organizerReturns -
       refunds -
       payouts -
-      derivedPlatformFees;
+      derivedPlatformFees -
+      derivedHostFees;
 
     return {
       tournament: {

@@ -6,9 +6,10 @@ export class ParticipantService {
     tournamentId: string,
     discordId?: string,
     referralSource?: string,
+    joinAsReserve?: boolean,
   ): Promise<{ participant: IParticipant; checkoutUrl: string | null; requiresPayment: boolean; transactionId?: string }> {
     try {
-      const response = await api.post(`/tournaments/${tournamentId}/participants`, { discordId, referralSource });
+      const response = await api.post(`/tournaments/${tournamentId}/join`, { discordId, referralSource, joinAsReserve });
       const data = response.data;
       return {
         participant: data.participant,
@@ -17,7 +18,7 @@ export class ParticipantService {
         transactionId: data.transactionId,
       };
     } catch (err: any) {
-      const message = err?.response?.data?.message || 'Error during joining tournament';
+      const message = err?.message || 'Error during joining tournament';
       throw new Error(message);
     }
   }
@@ -63,4 +64,22 @@ export const getParticipantHistory = async (participantId: string): Promise<IPar
     console.error('Failed to fetch participant history:', error);
     throw error;
   }
-}; 
+};
+
+// Reserve Player APIs
+export class ReservePlayerAPI {
+  static async listReserves(tournamentId: string) {
+    const response = await api.get(`/tournaments/${tournamentId}/reserves`);
+    return response.data.reserves || [];
+  }
+
+  static async kickPlayer(lobbyId: string, targetUserId: string) {
+    const response = await api.post(`/lobbies/${lobbyId}/kick-player`, { targetUserId });
+    return response.data;
+  }
+
+  static async assignReserve(lobbyId: string, reserveUserId: string) {
+    const response = await api.post(`/lobbies/${lobbyId}/assign-reserve`, { reserveUserId });
+    return response.data;
+  }
+} 

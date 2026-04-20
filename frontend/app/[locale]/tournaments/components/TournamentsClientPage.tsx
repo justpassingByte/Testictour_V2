@@ -313,7 +313,7 @@ function TournamentCard({ tournament, index }: { tournament: ITournament; index:
               </Badge>
               <div className="flex gap-2">
                 <Badge variant="outline" className={`bg-transparent backdrop-blur-sm shadow-black/50 shadow-sm ${tournament.isCommunityMode ? 'text-orange-400 border-orange-500/50 bg-orange-500/20' : 'text-emerald-400 border-emerald-500/50 bg-emerald-500/20'}`}>
-                  {tournament.isCommunityMode ? 'Community' : 'Escrow'}
+                  {tournament.isCommunityMode ? 'Community' : (tournament.organizer?.partnerSubscription?.plan === 'PRO' || tournament.organizer?.partnerSubscription?.plan === 'ENTERPRISE') ? 'Trusted' : 'Escrow'}
                 </Badge>
                 <Badge variant="outline" className="bg-transparent backdrop-blur-sm">
                   {t('region_label', { region: tournament.region })}
@@ -346,9 +346,15 @@ function TournamentCard({ tournament, index }: { tournament: ITournament; index:
             <span className="font-medium">{registrationFeeDisplay}</span>
           </div>
           <div className="flex items-center justify-between text-sm">
-            <span>{t('players')}:</span>
+            <span>{t('players', { fallback: 'Players' })}:</span>
             <span className="font-medium">
               {tournament.registered || 0}/{tournament.maxPlayers}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <span>{t('prize_pool', { fallback: 'Prize Pool' })}:</span>
+            <span className="font-bold text-emerald-400">
+              ${(tournament.budget || 0).toLocaleString()} <span className="text-[10px] text-muted-foreground font-normal">USD</span>
             </span>
           </div>
         </div>

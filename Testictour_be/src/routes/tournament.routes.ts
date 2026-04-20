@@ -70,7 +70,7 @@ router.get('/:id/live-summary', async (req: Request, res: Response, next: NextFu
         isCommunityMode: true, prizeStructure: true,
         lastSyncTime: true, syncStatus: true, discordUrl: true,
         organizer: { select: { id: true, username: true } },
-        _count: { select: { participants: true } },
+        _count: { select: { participants: { where: { isReserve: false } } } },
         phases: {
           orderBy: { phaseNumber: 'asc' },
           select: {

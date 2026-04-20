@@ -47,6 +47,8 @@ export const TournamentService = {
     config?: { phases: IPhaseConfig[] };
     isCommunityMode?: boolean;
     customPrizePool?: number;
+    reservePlayersLimit?: number;
+    absentFeePolicy?: string;
   }): Promise<ITournament> {
     try {
       const response = await api.post('/tournaments', {

@@ -7,6 +7,7 @@ import SettingsService from './SettingsService';
 import StripeService from './StripeService';
 import MomoService from './MomoService';
 import CurrencyService from './CurrencyService';
+import EmailService from './EmailService';
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -33,6 +34,7 @@ type PayoutRecipient = {
   payoutDestination?: string;
   isHostFee?: boolean;
   isPlatformFee?: boolean;
+  isReserveRefund?: boolean;
 };
 
 type PayoutRequest = {
@@ -71,14 +73,20 @@ export default class EscrowService {
     }
   }
 
-  static calculateGuaranteedPrizePool(input: EscrowComputationInput) {
+  static async calculateGuaranteedPrizePool(tournamentId: string, input: EscrowComputationInput) {
     const entrantCount = Math.max(input.expectedParticipants || 0, input.maxPlayers || 0);
-    const grossPool = entrantCount * (input.entryFee || 0);
-    return Math.max(0, grossPool);
+
+    const FeeCalculationService = (await import('./FeeCalculationService')).default;
+    const financials = await FeeCalculationService.calculateTournamentAggregateFinancials(
+      tournamentId,
+      entrantCount
+    );
+
+    return Math.max(0, financials.aggregates.entryPrizePool);
   }
 
-  static buildInitialEscrowState(input: EscrowComputationInput, thresholdUsd: number) {
-    const projectedPrizePool = this.calculateGuaranteedPrizePool(input);
+  static async buildInitialEscrowState(tournamentId: string, input: EscrowComputationInput, thresholdUsd: number) {
+    const projectedPrizePool = await this.calculateGuaranteedPrizePool(tournamentId, input);
     const isCommunityMode = projectedPrizePool < thresholdUsd;
     const requiredAmount = isCommunityMode ? 0 : projectedPrizePool;
 
@@ -138,7 +146,8 @@ export default class EscrowService {
     }
 
     const settings = await SettingsService.getEscrowSettings();
-    const nextState = this.buildInitialEscrowState(
+    const nextState = await this.buildInitialEscrowState(
+      tournamentId,
       {
         entryFee: overrides.entryFee ?? tournament.entryFee,
         maxPlayers: overrides.maxPlayers ?? tournament.maxPlayers,
@@ -516,10 +525,78 @@ export default class EscrowService {
 
       const reward = await db.reward.findUnique({ where: { id: transaction.refId } });
       if (reward) {
-        await db.participant.update({
+        const p = await db.participant.update({
           where: { id: reward.participantId },
           data: { rewarded: true, paymentStatus: 'paid' },
+          include: { user: true, tournament: true },
         });
+
+        // ── Push In-App Notification ──
+        const io = (global as any).io;
+        if (io && p.user) {
+          io.to(`user:${p.userId}`).emit('admin_notification', {
+            id: `payout_${p.id}_${Date.now()}`,
+            title: 'Prize Payout Released',
+            message: `Your prize of $${transaction.amount.toFixed(2)} for ${p.tournament.name} has been processed!`,
+            type: 'success',
+            createdAt: new Date(),
+          });
+        }
+        
+        // ── Send Email ──
+        if (p.user?.email && p.tournament) {
+          EmailService.sendPrizePayout({
+            to: p.user.email,
+            username: p.user.username || p.user.riotGameName || 'Player',
+            tournamentName: p.tournament.name,
+            amount: transaction.amount,
+          }).catch((err) => logger.error(`Email Error: ${err}`));
+        }
+      }
+    }
+
+    // ── Reserve Player Refund: update participant status & notify ──────────
+    if (
+      !transaction.refId &&
+      transaction.externalRefId &&
+      (transaction.externalRefId as string).startsWith('reserve_refund_')
+    ) {
+      // Extract userId from externalRefId pattern: reserve_refund_{userId}_{hex}
+      const refundUserId = transaction.userId;
+      if (refundUserId && transaction.tournamentId) {
+        const reserveParticipant = await db.participant.findFirst({
+          where: { tournamentId: transaction.tournamentId, userId: refundUserId, isReserve: true },
+          include: { user: true, tournament: true },
+        });
+        if (reserveParticipant) {
+          await db.participant.update({
+            where: { id: reserveParticipant.id },
+            data: { paymentStatus: 'refunded', paid: false },
+          });
+          logger.info(`[Payout] Reserve player ${refundUserId} marked as refunded for tournament ${transaction.tournamentId}`);
+
+          // ── Push In-App Notification ──
+          const io = (global as any).io;
+          if (io && reserveParticipant.user) {
+            io.to(`user:${reserveParticipant.userId}`).emit('admin_notification', {
+              id: `refund_${reserveParticipant.id}_${Date.now()}`,
+              title: 'Reserve Entry Fee Refunded',
+              message: `Your entry fee of $${transaction.amount.toFixed(2)} for ${reserveParticipant.tournament.name} has been refunded to you.`,
+              type: 'info',
+              createdAt: new Date(),
+            });
+          }
+
+          // ── Send Email ──
+          if (reserveParticipant.user?.email && reserveParticipant.tournament) {
+            EmailService.sendReserveRefund({
+              to: reserveParticipant.user.email,
+              username: reserveParticipant.user.username || reserveParticipant.user.riotGameName || 'Player',
+              tournamentName: reserveParticipant.tournament.name,
+              amount: transaction.amount,
+            }).catch((err) => logger.error(`Email Error: ${err}`));
+          }
+        }
       }
     }
 
@@ -653,11 +730,19 @@ export default class EscrowService {
     const [successfulPayouts, pendingPayouts, escrow] = await Promise.all([
       this.sumTransactionAmounts(db, { tournamentId, escrowId, type: 'payout', status: 'success' }),
       this.sumTransactionAmounts(db, { tournamentId, escrowId, type: 'payout', status: 'pending' }),
-      db.escrow.findUnique({ where: { id: escrowId } }),
+      db.escrow.findUnique({ where: { id: escrowId }, include: { tournament: true } }),
     ]);
 
     if (!escrow) {
       throw new ApiError(404, 'Escrow not found');
+    }
+
+    const sub = await db.partnerSubscription.findUnique({
+      where: { userId: escrow.tournament.organizerId }
+    });
+    
+    if (sub && (sub.plan === 'PRO' || sub.plan === 'ENTERPRISE')) {
+      return; // Partners with PRO/ENTERPRISE bypass strict escrow funding requirements
     }
 
     const reservedAmount = successfulPayouts + pendingPayouts;
@@ -716,6 +801,32 @@ export default class EscrowService {
               reviewNotes: (request.note || '') + ' [Platform Fee]',
               externalRefId: `platformfee_${tournament.id}_${crypto.randomBytes(8).toString('hex')}`,
               payoutDestination: 'SYSTEM_WALLET_PLATFORM',
+              paymentMethod: 'pending_release',
+            },
+          });
+          createdTransactions.push(payoutTransaction);
+          continue;
+        }
+
+        // ── Reserve Player Entry Fee Refund ──────────────────────────────────
+        if (recipient.isReserveRefund) {
+          const reserveUserId = recipient.userId;
+          if (!reserveUserId) {
+            logger.warn(`[Payout] Reserve refund recipient missing userId, skipping.`);
+            continue;
+          }
+          const payoutTransaction = await tx.transaction.create({
+            data: {
+              userId: reserveUserId,
+              tournamentId: tournament.id,
+              escrowId: tournament.escrow.id,
+              type: 'payout',
+              amount: recipient.amount,
+              currency: 'usd',
+              status: 'pending',
+              reviewNotes: (request.note || '') + ' [Reserve Player Entry Fee Refund]',
+              externalRefId: `reserve_refund_${reserveUserId}_${crypto.randomBytes(8).toString('hex')}`,
+              payoutDestination: recipient.payoutDestination || 'REFUND_TO_PLAYER',
               paymentMethod: 'pending_release',
             },
           });

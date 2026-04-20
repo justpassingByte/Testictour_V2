@@ -25,12 +25,12 @@ async function ensureOwnership(req: Request, tournamentId: string) {
 /**
  * Helper: Check if partner has a paid subscription to create tournaments.
  */
-async function ensurePaidPartner(userId: string) {
+async function ensurePaidPartner(userId: string, maxPlayers?: number) {
   const subscription = await prisma.partnerSubscription.findUnique({
     where: { userId },
     select: { plan: true, status: true },
   });
-  if (!subscription || subscription.status !== 'ACTIVE' || subscription.plan === 'FREE') {
+  if (!subscription || subscription.status !== 'ACTIVE' || subscription.plan === 'STARTER') {
     throw new ApiError(403, 'A PRO or ENTERPRISE subscription is required to create tournaments. Please upgrade your plan.');
   }
   
@@ -39,7 +39,7 @@ async function ensurePaidPartner(userId: string) {
     where: { plan: subscription.plan }
   });
   
-  const maxTournaments = planConfig ? planConfig.maxTournamentsPerMonth : 0;
+  const maxTournaments = planConfig ? planConfig.maxTournamentsPerMonth : -1;
   if (maxTournaments !== -1) {
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
@@ -64,6 +64,14 @@ async function ensurePaidPartner(userId: string) {
         });
       }
       throw new ApiError(403, `You have reached the limit of ${maxTournaments} tournaments this month for your ${subscription.plan} plan.`);
+    }
+  }
+
+  // Enforce max tournament size from plan config
+  if (maxPlayers && planConfig) {
+    const maxTournamentSize = planConfig.maxTournamentSize || 9999;
+    if (maxTournamentSize !== -1 && maxPlayers > maxTournamentSize) {
+      throw new ApiError(403, `Your ${subscription.plan} plan allows tournaments up to ${maxTournamentSize} players. Please upgrade your plan.`);
     }
   }
 }
@@ -92,8 +100,9 @@ const TournamentController = {
     const tournaments = await prisma.tournament.findMany({
       where: { organizerId: user.id },
       include: {
-        organizer: { select: { id: true, username: true, email: true } },
-        participants: { select: { id: true } },
+        organizer: { select: { id: true, username: true, email: true, partnerSubscription: true } },
+        participants: { select: { id: true, isReserve: true, isAbsent: true } },
+        escrow: true,
         phases: {
           include: {
             rounds: {
@@ -109,10 +118,24 @@ const TournamentController = {
       orderBy: { createdAt: 'desc' },
     });
 
-    // Map to include registered count
-    const mapped = tournaments.map((t) => ({
-      ...t,
-      registered: t.participants.length,
+    // Map to include registered count and calculate real budget
+    const mapped = await Promise.all(tournaments.map(async (t) => {
+      const registeredCount = t.participants.filter((p: any) => !p.isReserve).length;
+      const reserveCount = t.participants.filter((p: any) => p.isReserve).length;
+      const absentCount = t.participants.filter((p: any) => p.isAbsent).length;
+
+      const finalPrizePool = await TournamentService.calculateNetPrizePool(t, {
+        registered: registeredCount,
+        reserve: reserveCount,
+        absent: absentCount
+      }, (t as any).escrow);
+
+      return {
+        ...t,
+        registered: registeredCount,
+        reserveCount,
+        budget: finalPrizePool,
+      };
     }));
 
     res.json({ tournaments: mapped });
@@ -124,7 +147,7 @@ const TournamentController = {
 
       // If partner, check paid subscription
       if (user.role === 'partner') {
-        await ensurePaidPartner(user.id);
+        await ensurePaidPartner(user.id, req.body.maxPlayers);
       }
 
       const data = await TournamentService.create({
@@ -142,6 +165,9 @@ const TournamentController = {
         expectedParticipants: req.body.expectedParticipants,
         isCommunityMode: req.body.isCommunityMode,
         customPrizePool: req.body.customPrizePool,
+        discordUrl: req.body.discordUrl,
+        sponsors: req.body.sponsors,
+        reservePlayersLimit: req.body.reservePlayersLimit ?? 0,
       });
       res.json({ tournament: data });
     } catch (err) {

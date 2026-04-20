@@ -110,12 +110,39 @@ export const updateFeatureFlag = async (req: Request, res: Response) => {
 export const getSubscriptionPlans = async (_req: Request, res: Response) => {
     try {
         const plans = await prisma.subscriptionPlanConfig.findMany({
-            orderBy: { plan: 'asc' },
+            orderBy: { sortOrder: 'asc' },
         });
         return res.json({ plans });
     } catch (error) {
         console.error('[getSubscriptionPlans]', error);
         return res.status(500).json({ error: 'Failed to fetch subscription plans' });
+    }
+};
+
+// GET /public/plans — No auth required, for pricing page
+export const getPublicPlans = async (_req: Request, res: Response) => {
+    try {
+        const plans = await prisma.subscriptionPlanConfig.findMany({
+            orderBy: { sortOrder: 'asc' },
+            select: {
+                plan: true,
+                displayName: true,
+                description: true,
+                monthlyPrice: true,
+                annualPrice: true,
+                earlyAccessPrice: true,
+                maxLobbies: true,
+                maxTournamentSize: true,
+                maxTournamentsPerMonth: true,
+                platformFeePercent: true,
+                features: true,
+                sortOrder: true,
+            },
+        });
+        return res.json({ success: true, plans });
+    } catch (error) {
+        console.error('[getPublicPlans]', error);
+        return res.status(500).json({ error: 'Failed to fetch plans' });
     }
 };
 
@@ -125,10 +152,10 @@ export const updateSubscriptionPlan = async (req: Request, res: Response) => {
         const { plan } = req.params;
         const adminId = (req as any).user?.id;
         const {
-            monthlyPrice, annualPrice,
+            monthlyPrice, annualPrice, earlyAccessPrice,
             maxLobbies, maxTournamentSize, maxTournamentsPerMonth,
             platformFeePercent,
-            features,
+            features, displayName, description, sortOrder,
         } = req.body;
 
         const existing = await prisma.subscriptionPlanConfig.findUnique({ where: { plan } });
@@ -139,11 +166,15 @@ export const updateSubscriptionPlan = async (req: Request, res: Response) => {
             data: {
                 ...(monthlyPrice !== undefined && { monthlyPrice: parseFloat(monthlyPrice) }),
                 ...(annualPrice !== undefined && { annualPrice: parseFloat(annualPrice) }),
+                ...(earlyAccessPrice !== undefined && { earlyAccessPrice: earlyAccessPrice === null ? null : parseFloat(earlyAccessPrice) }),
                 ...(maxLobbies !== undefined && { maxLobbies: parseInt(maxLobbies) }),
                 ...(maxTournamentSize !== undefined && { maxTournamentSize: parseInt(maxTournamentSize) }),
                 ...(maxTournamentsPerMonth !== undefined && { maxTournamentsPerMonth: parseInt(maxTournamentsPerMonth) }),
                 ...(platformFeePercent !== undefined && { platformFeePercent: parseFloat(platformFeePercent) }),
                 ...(features !== undefined && { features }),
+                ...(displayName !== undefined && { displayName }),
+                ...(description !== undefined && { description }),
+                ...(sortOrder !== undefined && { sortOrder: parseInt(sortOrder) }),
                 updatedBy: adminId,
             },
         });
@@ -160,5 +191,65 @@ export const updateSubscriptionPlan = async (req: Request, res: Response) => {
     } catch (error) {
         console.error('[updateSubscriptionPlan]', error);
         return res.status(500).json({ error: 'Failed to update subscription plan' });
+    }
+};
+
+// ─── Admin Transactions ──────────────────────────────────────────────
+
+// GET /admin/transactions — Global transaction view
+export const getAdminTransactions = async (req: Request, res: Response) => {
+    try {
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 50;
+        const type = req.query.type as string;
+        const status = req.query.status as string;
+        const search = req.query.search as string;
+
+        const where: any = {};
+        if (type && type !== 'all') where.type = type;
+        if (status && status !== 'all') where.status = status;
+        if (search) {
+            where.OR = [
+                { id: { contains: search, mode: 'insensitive' } },
+                { refId: { contains: search, mode: 'insensitive' } },
+                { user: { username: { contains: search, mode: 'insensitive' } } },
+                { user: { email: { contains: search, mode: 'insensitive' } } },
+            ];
+        }
+
+        const [transactions, total] = await Promise.all([
+            prisma.transaction.findMany({
+                where,
+                include: {
+                    user: { select: { id: true, username: true, email: true, role: true } },
+                    tournament: { select: { id: true, name: true } },
+                },
+                orderBy: { createdAt: 'desc' },
+                skip: (page - 1) * limit,
+                take: limit,
+            }),
+            prisma.transaction.count({ where }),
+        ]);
+
+        // Summary stats
+        const stats = await prisma.transaction.groupBy({
+            by: ['type'],
+            where: { status: 'success' },
+            _sum: { amount: true },
+            _count: true,
+        });
+
+        return res.json({
+            success: true,
+            data: transactions,
+            pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+            stats: stats.reduce((acc, s) => {
+                acc[s.type] = { total: s._sum.amount || 0, count: s._count };
+                return acc;
+            }, {} as Record<string, any>),
+        });
+    } catch (error) {
+        console.error('[getAdminTransactions]', error);
+        return res.status(500).json({ error: 'Failed to fetch transactions' });
     }
 };

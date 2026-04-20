@@ -25,6 +25,7 @@ interface PlayerStats {
     eliminated: boolean;
     scoreTotal: number;
   }>;
+  totalPrizeWon: number;
 }
 
 // Interface for what's directly cached on the User model
@@ -35,6 +36,7 @@ interface SimpleCachedUserStats {
   averagePlacement: number;
   topFourRate: number;
   firstPlaceRate: number;
+  totalPrizeWon: number;
 }
 
 // Helper functions
@@ -48,6 +50,7 @@ const getSimpleCachedStats = (user: any): SimpleCachedUserStats | null => {
       averagePlacement: user.averagePlacement,
       topFourRate: user.topFourRate,
       firstPlaceRate: user.firstPlaceRate,
+      totalPrizeWon: user.totalPrizeWon,
     };
   }
   return null;
@@ -105,7 +108,7 @@ const calculatePlayerStats = async (userId: string): Promise<PlayerStats> => {
   // ── MiniTour data (production + dev) ─────────────────────────────────────
   const miniTourResults = await prisma.miniTourMatchResult.findMany({
     where: { userId },
-    select: { placement: true, points: true }
+    select: { placement: true, points: true, prize: true }
   });
 
   const miniTourLobbiesPlayed = await prisma.miniTourLobbyParticipant.count({
@@ -141,6 +144,15 @@ const calculatePlayerStats = async (userId: string): Promise<PlayerStats> => {
     };
   });
 
+  // Calculate totalPrizeWon
+  const rewardTransactions = await prisma.transaction.findMany({
+    where: { userId, type: 'reward', status: 'success' },
+    select: { amount: true }
+  });
+  const transactionPrizes = rewardTransactions.reduce((sum, t) => sum + t.amount, 0);
+  const miniTourPrizes = miniTourResults.reduce((sum, m) => sum + (m.prize || 0), 0);
+  const totalPrizeWon = transactionPrizes + miniTourPrizes;
+
   return {
     tournamentsPlayed: participations.length + miniTourLobbiesPlayed,
     tournamentsWon: tournamentWins,
@@ -149,7 +161,8 @@ const calculatePlayerStats = async (userId: string): Promise<PlayerStats> => {
     averagePlacement,
     topFourRate,
     firstPlaceRate,
-    tournamentStats
+    tournamentStats,
+    totalPrizeWon
   };
 };
 
@@ -163,6 +176,7 @@ const updateUserCachedStats = async (userId: string, stats: PlayerStats) => {
       firstPlaceRate: stats.firstPlaceRate,
       tournamentsPlayed: stats.tournamentsPlayed,
       tournamentsWon: stats.tournamentsWon,
+      totalPrizeWon: stats.totalPrizeWon,
       lastUpdatedStats: new Date()
     }
   });
@@ -185,6 +199,7 @@ const commonUserSelect = {
   firstPlaceRate: true,
   tournamentsPlayed: true,
   tournamentsWon: true,
+  totalPrizeWon: true,
   lastUpdatedStats: true,
 };
 
@@ -196,10 +211,16 @@ export default {
       const limit = parseInt(req.query.limit as string) || 50;
       const offset = parseInt(req.query.offset as string) || 0;
       const search = req.query.search as string;
+      const region = req.query.region as string;
+      const sortBy = req.query.sortBy as string || 'totalPoints';
 
       const whereCondition: any = {
         role: 'user',
       };
+
+      if (region && region !== 'All') {
+        whereCondition.region = region;
+      }
 
       if (search) {
         whereCondition.OR = [
@@ -226,10 +247,14 @@ export default {
             tournamentsWon: true,
             totalPoints: true,
             lobbiesPlayed: true,
+            totalPrizeWon: true,
             createdAt: true,
             lastUpdatedStats: true,
           },
           orderBy: [
+            sortBy === 'totalPrizeWon' ? { totalPrizeWon: 'desc' } :
+            sortBy === 'topFourRate' ? { topFourRate: 'desc' } :
+            sortBy === 'tournamentsWon' ? { tournamentsWon: 'desc' } :
             { totalPoints: 'desc' },
             { tournamentsWon: 'desc' },
             { topFourRate: 'desc' },
