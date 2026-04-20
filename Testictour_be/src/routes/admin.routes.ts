@@ -23,6 +23,10 @@ router.delete('/subscriptions/:partnerId', auth('admin'), deleteSubscription);
 // Partner Detail View
 router.get('/partners/:id', auth('admin'), getPartnerDetailForAdmin);
 
+// Transactions
+import { updateTransactionStatus } from '../controllers/admin.controller';
+router.put('/transactions/:id/status', auth('admin'), updateTransactionStatus);
+
 // User management
 router.post('/users/import', auth('admin'), upload.single('file'), importUsers);
 router.get('/users/by-referrer', auth('partner'), getUsersByReferrer);

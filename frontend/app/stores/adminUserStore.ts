@@ -108,6 +108,7 @@ interface AdminUserState {
   fetchPartnerDetail: (id: string) => Promise<void>; // Added
   createUser: (data: { username: string; email: string; password: string; role: string }) => Promise<void>;
   updateUser: (id: string, data: Partial<AdminUserDetail>) => Promise<void>;
+  updateTransactionStatus: (id: string, status: string, note?: string) => Promise<void>;
   banUser: (id: string) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
   deposit: (userId: string, amount: number) => Promise<void>;
@@ -193,6 +194,16 @@ export const useAdminUserStore = create<AdminUserState>((set, get) => ({
     } catch (error) {
       console.error("Failed to update user:", error);
       set({ loading: false });
+    }
+  },
+  updateTransactionStatus: async (id: string, status: string, note?: string) => {
+    try {
+      await api.put(`/admin/transactions/${id}/status`, { status, note });
+      // We don't fetch anything globally here because it's usually called from within a specific tab, 
+      // the tab itself can refresh data after this completes.
+    } catch (err) {
+      console.error("Failed to update transaction status:", err);
+      throw err;
     }
   },
   banUser: async (id) => {

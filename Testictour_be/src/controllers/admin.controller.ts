@@ -271,6 +271,55 @@ export const deleteUser = asyncHandler(async (req: Request, res: Response, next:
 
   res.status(200).json({ message: `User ${user.username} has been deleted successfully` });
 });
+export const updateTransactionStatus = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  const { id } = req.params;
+  const { status, note } = req.body;
+
+  const transaction = await prisma.transaction.findUnique({ where: { id } });
+  if (!transaction) return next(new ApiError(404, 'Transaction not found'));
+
+  let updatedTransaction;
+  // If it's an entry fee and they want to mark as success/paid, route it through ParticipantPaymentService to update the Participant
+  if (transaction.type === 'entry_fee' && (status === 'success' || status === 'paid') && transaction.status === 'pending') {
+    const ParticipantPaymentService = (await import('../services/ParticipantPaymentService')).default;
+    const providerEventId = `manual_admin_confirm_${transaction.id}_${Date.now()}`;
+    await ParticipantPaymentService.confirmEntryFeePayment(transaction.id, providerEventId);
+    
+    if (note) {
+      updatedTransaction = await prisma.transaction.update({
+        where: { id },
+        data: { reviewNotes: note }
+      });
+    } else {
+      updatedTransaction = await prisma.transaction.findUnique({ where: { id }});
+    }
+  } else {
+    // Normal update
+    updatedTransaction = await prisma.transaction.update({
+      where: { id },
+      data: {
+        status,
+        ...(note !== undefined && { reviewNotes: note })
+      }
+    });
+
+    // If marking entry_fee as failed/cancelled, we should delete the participant so they don't hold the slot
+    if (transaction.type === 'entry_fee' && (status === 'failed' || status === 'cancelled') && transaction.status === 'pending') {
+      const participant = await prisma.participant.findFirst({ where: { id: transaction.refId || '' } });
+      if (participant && !participant.paid) {
+        await prisma.$transaction([
+          prisma.participant.delete({ where: { id: participant.id } }),
+          ...(!participant.isReserve ? [prisma.tournament.update({
+            where: { id: transaction.tournamentId! },
+            data: { actualParticipantsCount: { decrement: 1 } }
+          })] : [])
+        ]);
+      }
+    }
+  }
+
+  res.status(200).json({ message: 'Transaction status updated successfully', transaction: updatedTransaction });
+});
 
 export const depositToUser = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
   const { id } = req.params;

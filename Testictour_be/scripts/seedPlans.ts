@@ -8,14 +8,14 @@ async function seedPlans() {
       plan: 'STARTER',
       displayName: 'Starter Partner',
       description: 'Bắt đầu nhanh, thay thế hoàn toàn Google Sheets',
-      monthlyPrice: 25,
-      earlyAccessPrice: 19,
-      annualPrice: 250,
+      monthlyPrice: 29.99,
+      earlyAccessPrice: 19.99,
+      annualPrice: 200,
       maxLobbies: -1,
       maxTournamentSize: 128,
       maxTournamentsPerMonth: 5,
       platformFeePercent: 0.05,
-      features: { 
+      features: {
         autoMatchResult: false,
         gateway: false,
         customReward: false,
@@ -29,14 +29,14 @@ async function seedPlans() {
       plan: 'PRO',
       displayName: 'PRO Partner',
       description: 'Tự động hóa vận hành + giữ chân player',
-      monthlyPrice: 49,
-      earlyAccessPrice: 39,
-      annualPrice: 490,
+      monthlyPrice: 39.99,
+      earlyAccessPrice: 29.99,
+      annualPrice: 300,
       maxLobbies: -1,
       maxTournamentSize: -1,
       maxTournamentsPerMonth: 10,
       platformFeePercent: 0.05,
-      features: { 
+      features: {
         autoMatchResult: true,
         gateway: true,
         customReward: true,
@@ -50,14 +50,14 @@ async function seedPlans() {
       plan: 'ENTERPRISE',
       displayName: 'Enterprise Partner',
       description: 'Scale lớn + vận hành chuyên nghiệp',
-      monthlyPrice: 99,
+      monthlyPrice: 99.99,
       earlyAccessPrice: null,
-      annualPrice: 990,
+      annualPrice: 900,
       maxLobbies: -1,
       maxTournamentSize: -1,
       maxTournamentsPerMonth: -1,
       platformFeePercent: 0.03,
-      features: { 
+      features: {
         autoMatchResult: true,
         gateway: true,
         customReward: true,
@@ -77,7 +77,7 @@ async function seedPlans() {
       create: { ...rest, ...(earlyAccessPrice !== undefined ? { earlyAccessPrice } : {}) } as any,
     });
   }
-  
+
   console.log('Subscription Plans seeded successfully!');
 }
 

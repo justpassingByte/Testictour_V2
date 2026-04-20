@@ -3,8 +3,9 @@
 import { useState, useEffect, useMemo } from "react"
 import {
   Receipt, Search, ArrowDownRight, ArrowUpRight, DollarSign,
-  TrendingUp, Wallet, RefreshCw, Filter, Users
+  TrendingUp, Wallet, RefreshCw, Filter, Users, MoreVertical, CheckCircle, XCircle
 } from "lucide-react"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -81,6 +82,20 @@ export default function AdminTransactionsPage() {
   useEffect(() => { fetchTransactions() }, [page, typeFilter, statusFilter])
 
   const handleSearch = () => { setPage(1); fetchTransactions() }
+
+  const handleUpdateStatus = async (id: string, status: string) => {
+    const note = window.prompt("Enter a review note or reason (optional):");
+    if (note === null) return; // user cancelled
+    setLoading(true);
+    try {
+      await api.put(`/admin/transactions/${id}/status`, { status, note });
+      await fetchTransactions();
+    } catch (err: any) {
+      console.error(err);
+      alert("Failed to update transaction status.");
+      setLoading(false);
+    }
+  }
 
   // Filter by tab category
   const filteredByTab = useMemo(() => {
@@ -190,6 +205,7 @@ export default function AdminTransactionsPage() {
                     <TableHead className="text-right">Amount</TableHead>
                     <TableHead>Tournament</TableHead>
                     <TableHead className="w-[100px]">ID</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -225,6 +241,27 @@ export default function AdminTransactionsPage() {
                           {tx.tournament?.name ? tx.tournament.name.substring(0, 20) : "—"}
                         </TableCell>
                         <TableCell className="text-[10px] text-muted-foreground font-mono">{tx.id.substring(0, 8)}...</TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" className="h-8 w-8 p-0">
+                                <span className="sr-only">Open menu</span>
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleUpdateStatus(tx.id, 'paid')} className="text-green-500">
+                                <CheckCircle className="mr-2 h-4 w-4" /> Force SUCCESS (Paid)
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleUpdateStatus(tx.id, 'failed')} className="text-red-500">
+                                <XCircle className="mr-2 h-4 w-4" /> Force FAILED
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleUpdateStatus(tx.id, 'pending')} className="text-yellow-500">
+                                <RefreshCw className="mr-2 h-4 w-4" /> Set to PENDING
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
                       </TableRow>
                     )
                   })}
