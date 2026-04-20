@@ -668,7 +668,7 @@ export const getAdminAnalytics = asyncHandler(async (req: Request, res: Response
     })
   );
 
-  // Top partners by lobby count
+  // Top partners by lobby count and tournament count combined (or keep tracking logic separate)
   const topPartners = await prisma.user.findMany({
     where: { role: 'partner' },
     select: {
@@ -677,24 +677,32 @@ export const getAdminAnalytics = asyncHandler(async (req: Request, res: Response
       email: true,
       createdAt: true,
       createdMiniTourLobbies: { select: { id: true, status: true } },
-      partnerSubscription: { select: { plan: true, status: true, monthlyPrice: true } },
+      organizedTournaments: { select: { id: true, status: true } },
+      partnerSubscription: { select: { plan: true, status: true, monthlyPrice: true, endDate: true } },
     },
     orderBy: { createdAt: 'asc' },
   });
 
   const topPartnersData = topPartners
-    .map(p => ({
-      id: p.id,
-      username: p.username,
-      email: p.email,
-      joinedAt: p.createdAt,
-      totalLobbies: p.createdMiniTourLobbies.length,
-      activeLobbies: p.createdMiniTourLobbies.filter(l => l.status === 'IN_PROGRESS').length,
-      plan: p.partnerSubscription?.plan || 'STARTER',
-      subscriptionStatus: p.partnerSubscription?.status || 'NONE',
-      revenue: p.partnerSubscription?.monthlyPrice || 0,
-    }))
-    .sort((a, b) => b.totalLobbies - a.totalLobbies)
+    .map(p => {
+      const isExpired = p.partnerSubscription?.endDate ? new Date(p.partnerSubscription.endDate) < now : false;
+      return {
+        id: p.id,
+        username: p.username,
+        email: p.email,
+        joinedAt: p.createdAt,
+        totalLobbies: p.createdMiniTourLobbies.length,
+        activeLobbies: p.createdMiniTourLobbies.filter(l => l.status === 'IN_PROGRESS' || l.status === 'WAITING').length,
+        totalTournaments: p.organizedTournaments.length,
+        activeTournaments: p.organizedTournaments.filter(t => t.status === 'in_progress').length,
+        plan: p.partnerSubscription?.plan || 'STARTER',
+        subscriptionStatus: p.partnerSubscription?.status || 'NONE',
+        isExpired,
+        revenue: p.partnerSubscription?.monthlyPrice || 0,
+        totalUsage: p.createdMiniTourLobbies.length + p.organizedTournaments.length,
+      }
+    })
+    .sort((a, b) => b.totalUsage - a.totalUsage)
     .slice(0, 10);
 
   // Subscription distribution

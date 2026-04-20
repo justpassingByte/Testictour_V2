@@ -28,7 +28,10 @@ interface AnalyticsData {
     matchActivity: number[]
     topPartners: {
         id: string; username: string; email: string; joinedAt: string
-        totalLobbies: number; activeLobbies: number; plan: string; revenue: number
+        totalLobbies: number; activeLobbies: number; 
+        totalTournaments: number; activeTournaments: number;
+        totalUsage: number;
+        plan: string; revenue: number; isExpired: boolean;
     }[]
     subscriptionBreakdown: {
         FREE: { count: number; revenue: number }
@@ -183,7 +186,7 @@ export default function AdminOverviewTab({ stats }: { stats: AdminStats | null }
                             <Crown className="h-5 w-5 text-yellow-400" />
                             Top Partners
                         </CardTitle>
-                        <CardDescription>Partners ranked by lobby count</CardDescription>
+                        <CardDescription>Partners ranked by platform usage (Lobbies + Tournaments)</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <Table>
@@ -191,8 +194,9 @@ export default function AdminOverviewTab({ stats }: { stats: AdminStats | null }
                                 <TableRow>
                                     <TableHead>Partner</TableHead>
                                     <TableHead>Plan</TableHead>
+                                    <TableHead className="text-center">Usage</TableHead>
+                                    <TableHead className="text-center">Tournaments</TableHead>
                                     <TableHead className="text-center">Lobbies</TableHead>
-                                    <TableHead className="text-center">Active</TableHead>
                                     <TableHead className="text-right">Revenue</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -206,19 +210,29 @@ export default function AdminOverviewTab({ stats }: { stats: AdminStats | null }
                                             </div>
                                         </TableCell>
                                         <TableCell>
-                                            <Badge variant="outline" className={
-                                                partner.plan === 'ENTERPRISE' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
-                                                    partner.plan === 'PRO' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
-                                                        'bg-slate-500/10 text-slate-400 border-slate-500/20'
-                                            }>
-                                                {partner.plan}
-                                            </Badge>
+                                            <div className="flex flex-col gap-1 items-start">
+                                              <Badge variant="outline" className={
+                                                  partner.plan === 'ENTERPRISE' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
+                                                      partner.plan === 'PRO' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
+                                                          'bg-slate-500/10 text-slate-400 border-slate-500/20'
+                                              }>
+                                                  {partner.plan}
+                                              </Badge>
+                                              {partner.isExpired && (
+                                                  <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-500/20 text-[9px] px-1 py-0">
+                                                      EXPIRED
+                                                  </Badge>
+                                              )}
+                                            </div>
                                         </TableCell>
-                                        <TableCell className="text-center font-semibold">{partner.totalLobbies}</TableCell>
+                                        <TableCell className="text-center font-bold text-lg text-blue-400">{partner.totalUsage}</TableCell>
                                         <TableCell className="text-center">
-                                            <Badge variant="outline" className="bg-green-500/10 text-green-400 border-green-500/20">
-                                                {partner.activeLobbies}
-                                            </Badge>
+                                            <div className="font-semibold">{partner.totalTournaments}</div>
+                                            {partner.activeTournaments > 0 && <div className="text-[10px] text-green-400">{partner.activeTournaments} active</div>}
+                                        </TableCell>
+                                        <TableCell className="text-center">
+                                            <div className="font-semibold">{partner.totalLobbies}</div>
+                                            {partner.activeLobbies > 0 && <div className="text-[10px] text-green-400">{partner.activeLobbies} active</div>}
                                         </TableCell>
                                         <TableCell className="text-right font-medium text-emerald-400">
                                             ${partner.revenue.toLocaleString()}/mo
