@@ -30,8 +30,8 @@ async function ensurePaidPartner(userId: string, maxPlayers?: number) {
     where: { userId },
     select: { plan: true, status: true },
   });
-  if (!subscription || subscription.status !== 'ACTIVE' || subscription.plan === 'STARTER') {
-    throw new ApiError(403, 'A PRO or ENTERPRISE subscription is required to create tournaments. Please upgrade your plan.');
+  if (!subscription || subscription.status !== 'ACTIVE') {
+    throw new ApiError(403, 'An active Partner subscription is required to create tournaments. Please contact support.');
   }
   
   // Enforce monthly limits
