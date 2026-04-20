@@ -21,6 +21,7 @@ import logger from './utils/logger';
 import path from 'path';
 
 const app = express();
+app.set('trust proxy', 1); // Trust the X-Forwarded-* headers from reverse proxy
 const server = http.createServer(app);
 const allowedOrigins = [
   process.env.FRONTEND_URL || 'http://localhost:3000',

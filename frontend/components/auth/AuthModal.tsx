@@ -102,8 +102,8 @@ export function AuthModal() {
     try {
       const user = await AuthClientService.register({ username, email, password, gameName, tagName, referrer, region });
       setView('login');
-    } catch (error) {
-      setRegisterError(t('auth.registerError') || 'Registration failed.');
+    } catch (error: any) {
+      setRegisterError(error.message || t('auth.registerError') || 'Registration failed.');
     } finally {
       setIsLoading(false);
     }

@@ -30,9 +30,9 @@ export class AuthClientService {
       const response = await api.post('/auth/register', userData);
       const user: IUser = response.data.user;
       return user;
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error during registration:', err);
-      throw new Error('Error during registration');
+      throw new Error(err.response?.data?.message || err.response?.data?.error || err.message || 'Error during registration');
     }
   }
 
