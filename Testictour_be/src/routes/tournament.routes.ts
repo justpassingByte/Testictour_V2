@@ -3,11 +3,16 @@ import TournamentController from '../controllers/TournamentController';
 import auth from '../middlewares/auth';
 import multer from 'multer';
 import path from 'path';
+import fs from 'fs';
 import { prisma } from '../services/prisma';
+
+const UPLOAD_DIR = path.join('public', 'uploads', 'tournaments');
+// Ensure upload directory exists at startup
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'public/uploads/tournaments'); 
+    cb(null, UPLOAD_DIR); 
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);

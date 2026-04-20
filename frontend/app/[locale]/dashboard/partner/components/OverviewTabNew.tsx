@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { useEffect } from "react"
+import { useTranslations } from "next-intl"
 
 export function OverviewTabNew({ 
   partnerData, 
@@ -34,6 +35,7 @@ export function OverviewTabNew({
 
   const useLedger = !!ledger;
   const totalTournaments = tournaments.length;
+  const t = useTranslations("common");
 
   return (
     <div className="space-y-6">
@@ -43,7 +45,7 @@ export function OverviewTabNew({
           <CardHeader>
             <CardTitle className="flex items-center">
               <Star className="mr-2 h-5 w-5 text-primary" />
-              Net Balance
+              {t("net_balance")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -53,7 +55,7 @@ export function OverviewTabNew({
                   {useLedger ? `$${ledger.totals.netPartnerBalance.toLocaleString()}` : `$${partnerData?.totalRevenue?.toLocaleString() || 0}`}
                 </span>
               </div>
-              <p className="text-sm text-green-500 font-medium tracking-tight">Available to withdraw</p>
+              <p className="text-sm text-green-500 font-medium tracking-tight">{t("available_to_withdraw")}</p>
             </div>
           </CardContent>
         </Card>
@@ -61,7 +63,7 @@ export function OverviewTabNew({
           <CardHeader>
             <CardTitle className="flex items-center">
               <TrendingUp className="mr-2 h-5 w-5 text-violet-500" />
-              Platform Fee
+              {t("platform_fee")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -70,10 +72,10 @@ export function OverviewTabNew({
                 <span className="text-3xl font-bold">
                   {useLedger ? `$${ledger.totals.totalPlatformFee.toLocaleString()}` : `$${partnerData?.monthlyRevenue?.toLocaleString() || 0}`}
                 </span>
-                <span className="text-sm text-muted-foreground">all-time</span>
+                <span className="text-sm text-muted-foreground">{t("all_time")}</span>
               </div>
               <div className={`flex items-center text-sm gap-1.5 ${(partnerData?.subscriptionPlan || 'STARTER') === 'STARTER' ? 'text-green-500' : 'text-red-500'}`}>
-                <span>{(partnerData?.subscriptionPlan || 'STARTER') === 'STARTER' ? 'Secured in Escrow' : 'Pending settlement'}</span>
+                <span>{(partnerData?.subscriptionPlan || 'STARTER') === 'STARTER' ? t("secured_in_escrow") : t("pending_settlement")}</span>
               </div>
             </div>
           </CardContent>
@@ -83,7 +85,7 @@ export function OverviewTabNew({
           <CardHeader>
             <CardTitle className="flex items-center">
               <Trophy className="mr-2 h-5 w-5 text-yellow-500" />
-              Tournaments
+              {t("tournaments")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -111,7 +113,7 @@ export function OverviewTabNew({
           <CardHeader>
             <CardTitle className="flex items-center">
               <Users className="mr-2 h-5 w-5 text-green-600" />
-              Players Engaged
+              {t("players_engaged")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -123,7 +125,7 @@ export function OverviewTabNew({
               </div>
               <div className="flex items-center text-sm text-green-600">
                 <TrendingUp className="mr-1 h-4 w-4" />
-                <span>Across all events</span>
+                <span>{t("across_all_events")}</span>
               </div>
             </div>
           </CardContent>
@@ -137,8 +139,8 @@ export function OverviewTabNew({
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-white">Recent Tournaments</CardTitle>
-                <CardDescription className="text-slate-400">Your latest competitive events</CardDescription>
+                <CardTitle className="text-white">{t("recent_tournaments")}</CardTitle>
+                <CardDescription className="text-slate-400">{t("your_latest_competitive_events")}</CardDescription>
               </div>
               <Link href="/dashboard/partner?tab=tournaments">
                 <Button size="sm" variant="outline" className="text-slate-200 border-slate-700 hover:bg-slate-700">
@@ -189,7 +191,7 @@ export function OverviewTabNew({
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
                   <Trophy className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg font-medium">No tournaments yet</p>
+                  <p className="text-lg font-medium">{t("no_tournaments_yet")}</p>
                 </div>
               )}
             </div>
@@ -201,8 +203,8 @@ export function OverviewTabNew({
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-white">Recent Match Results</CardTitle>
-                <CardDescription className="text-slate-400">Latest completed tournament matches</CardDescription>
+                <CardTitle className="text-white">{t("recent_match_results")}</CardTitle>
+                <CardDescription className="text-slate-400">{t("latest_completed_tournament_matches")}</CardDescription>
               </div>
               <History className="h-5 w-5 text-slate-400" />
             </div>
@@ -222,7 +224,7 @@ export function OverviewTabNew({
                   return (
                     <div className="text-center py-8 text-slate-500">
                       <History className="h-12 w-12 mx-auto mb-4 opacity-20" />
-                      <p>No completed matches yet</p>
+                      <p>{t("no_completed_matches_yet")}</p>
                     </div>
                   );
                 }

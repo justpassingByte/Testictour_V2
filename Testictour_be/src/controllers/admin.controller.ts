@@ -429,6 +429,8 @@ export const getAdminStats = asyncHandler(async (req: Request, res: Response) =>
     waitingLobbies,
     inProgressLobbies,
     completedLobbies,
+    totalRevQuery,
+    monthlyRevQuery
   ] = await Promise.all([
     prisma.user.count(),
     prisma.user.count({ where: { role: 'partner' } }),
@@ -444,13 +446,19 @@ export const getAdminStats = asyncHandler(async (req: Request, res: Response) =>
     prisma.miniTourLobby.count({ where: { status: 'WAITING' } }),
     prisma.miniTourLobby.count({ where: { status: 'IN_PROGRESS' } }),
     prisma.miniTourLobby.count({ where: { status: 'COMPLETED' } }),
+    prisma.transaction.aggregate({
+      _sum: { amount: true },
+      where: { type: { in: ['subscription_payment', 'platform_fee'] }, status: 'success' }
+    }),
+    prisma.transaction.aggregate({
+      _sum: { amount: true },
+      where: { type: { in: ['subscription_payment', 'platform_fee'] }, status: 'success', createdAt: { gte: startOfMonth } }
+    })
   ]);
 
-  // Calculate revenue from active subscriptions
-  const totalRevenue = subscriptions.reduce((sum, s) => sum + (s.monthlyPrice || 0), 0);
-  const monthlyRevenue = subscriptions
-    .filter(s => s.createdAt >= startOfMonth)
-    .reduce((sum, s) => sum + (s.monthlyPrice || 0), 0) || totalRevenue;
+  // Calculate actual revenue from successful transactions (both subs and platform fees)
+  const totalRevenue = Number(totalRevQuery._sum.amount || 0);
+  const monthlyRevenue = Number(monthlyRevQuery._sum.amount || 0);
 
   // Count subscription plans
   const subscriptionPlans = { STARTER: 0, PRO: 0, ENTERPRISE: 0 };
@@ -683,7 +691,25 @@ export const getAdminAnalytics = asyncHandler(async (req: Request, res: Response
     })
   );
 
-  // Top partners by lobby count and tournament count combined (or keep tracking logic separate)
+  // Revenue growth per month (based on subscription payments)
+  const revenueGrowth = await Promise.all(
+    monthStarts.map(async (start, idx) => {
+      const end = idx < monthStarts.length - 1
+        ? monthStarts[idx + 1]
+        : new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const res = await prisma.transaction.aggregate({
+        _sum: { amount: true },
+        where: {
+          type: { in: ['subscription_payment', 'platform_fee'] },
+          status: 'success',
+          createdAt: { gte: start, lt: end },
+        },
+      });
+      return res._sum.amount || 0;
+    })
+  );
+
+  // Top partners by lobby count and tournament count combined
   const topPartners = await prisma.user.findMany({
     where: { role: 'partner' },
     select: {
@@ -753,6 +779,7 @@ export const getAdminAnalytics = asyncHandler(async (req: Request, res: Response
       partnerGrowth,
       lobbyGrowth,
       matchActivity,
+      revenueGrowth,
       topPartners: topPartnersData,
       subscriptionBreakdown,
     },

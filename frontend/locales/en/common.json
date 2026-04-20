@@ -2060,5 +2060,17 @@
     "note_1_desc": "Ensure your Secret Key is correct. Sepay uses this Webhook to automatically update funding and entry payments 24/7.",
     "note_2": "Note 2:",
     "note_2_desc": "You must configure this URL in Sepay. Never share your Webhook URL or Secret Key."
-  }
+  },
+  "finance_analytics": "Finance & Analytics",
+  "wallet": "Wallet",
+  "engagement_settings": "Engagement & Settings",
+  "rewards": "Rewards",
+  "net_balance": "Net Balance",
+  "available_to_withdraw": "Available to withdraw",
+  "platform_fee": "Platform Fee",
+  "secured_in_escrow": "Secured in Escrow",
+  "pending_settlement": "Pending settlement",
+  "players_engaged": "Players Engaged",
+  "across_all_events": "Across all events",
+  "your_latest_competitive_events": "Your latest competitive events"
 }

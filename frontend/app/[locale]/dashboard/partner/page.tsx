@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SyncStatus } from "@/components/sync-status"
+import { useTranslations } from "next-intl"
 
 import SubscriptionTab from "./components/SubscriptionTab"
 import PartnerTournamentTab from "./components/PartnerTournamentTab"
@@ -56,6 +57,7 @@ function TabContentSkeleton() {
 }
 
 export default function PartnerDashboardPage() {
+  const t = useTranslations("common");
   const [partnerData, setPartnerData] = useState<PartnerData | null>(null);
   const [lobbies, setLobbies] = useState<MiniTourLobby[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -177,58 +179,58 @@ export default function PartnerDashboardPage() {
             {isSidebarOpen && (
               <div className="flex flex-row items-center gap-2 mt-4 mb-1 px-3 w-full">
                 <div className="shrink-0 w-1.5 h-1.5 rounded-full bg-orange-500/80 shadow-[0_0_5px_rgba(249,115,22,0.5)]"></div>
-                <span className="text-[10px] uppercase font-bold tracking-[0.15em] text-slate-400 shrink-0">Manage</span>
+                <span className="text-[10px] uppercase font-bold tracking-[0.15em] text-slate-400 shrink-0">{t("manage")}</span>
                 <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent"></div>
               </div>
             )}
             <TabsTrigger value="overview" className={`w-full ${isSidebarOpen ? "justify-start" : "justify-center"} gap-3 data-[state=active]:bg-primary/20`}>
-              <BarChart3 className="h-4 w-4 shrink-0" /> {isSidebarOpen && "Overview"}
+              <BarChart3 className="h-4 w-4 shrink-0" /> {isSidebarOpen && t("overview")}
             </TabsTrigger>
             <TabsTrigger value="tournaments" className={`w-full ${isSidebarOpen ? "justify-start" : "justify-center"} gap-3 data-[state=active]:bg-primary/20`}>
-              <Trophy className="h-4 w-4 shrink-0" /> {isSidebarOpen && "Tournaments"}
+              <Trophy className="h-4 w-4 shrink-0" /> {isSidebarOpen && t("tournaments")}
             </TabsTrigger>
             <TabsTrigger value="lobbies" className={`w-full ${isSidebarOpen ? "justify-start" : "justify-center"} gap-3 data-[state=active]:bg-primary/20`}>
-              <Users className="h-4 w-4 shrink-0" /> {isSidebarOpen && "Lobbies"}
+              <Users className="h-4 w-4 shrink-0" /> {isSidebarOpen && t("lobbies")}
             </TabsTrigger>
             <TabsTrigger value="team" className={`w-full ${isSidebarOpen ? "justify-start" : "justify-center"} gap-3 data-[state=active]:bg-primary/20`}>
-              <Plus className="h-4 w-4 shrink-0" /> {isSidebarOpen && "Players"}
+              <Plus className="h-4 w-4 shrink-0" /> {isSidebarOpen && t("players")}
             </TabsTrigger>
             
             {isSidebarOpen && (
               <div className="flex flex-row items-center gap-2 mt-4 mb-1 px-3 w-full">
                 <div className="shrink-0 w-1.5 h-1.5 rounded-full bg-green-500/80 shadow-[0_0_5px_rgba(34,197,94,0.5)]"></div>
-                <span className="text-[10px] uppercase font-bold tracking-[0.15em] text-slate-400 shrink-0">Finance & Analytics</span>
+                <span className="text-[10px] uppercase font-bold tracking-[0.15em] text-slate-400 shrink-0">{t("finance_analytics")}</span>
                 <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent"></div>
               </div>
             )}
             <TabsTrigger value="revenue" className={`w-full ${isSidebarOpen ? "justify-start" : "justify-center"} gap-3 data-[state=active]:bg-primary/20`}>
-              <HandCoins className="h-4 w-4 shrink-0" /> {isSidebarOpen && "Revenue"}
+              <HandCoins className="h-4 w-4 shrink-0" /> {isSidebarOpen && t("revenue")}
             </TabsTrigger>
             <TabsTrigger value="wallet" className={`w-full ${isSidebarOpen ? "justify-start" : "justify-center"} gap-3 data-[state=active]:bg-primary/20`}>
-              <DollarSign className="h-4 w-4 shrink-0" /> {isSidebarOpen && "Wallet"}
+              <DollarSign className="h-4 w-4 shrink-0" /> {isSidebarOpen && t("wallet")}
             </TabsTrigger>
             <TabsTrigger value="analytics" className={`w-full ${isSidebarOpen ? "justify-start" : "justify-center"} gap-3 data-[state=active]:bg-primary/20`}>
-              <BarChart3 className="h-4 w-4 shrink-0" /> {isSidebarOpen && "Analytics"}
+              <BarChart3 className="h-4 w-4 shrink-0" /> {isSidebarOpen && t("analytics")}
             </TabsTrigger>
             <TabsTrigger value="plans" className={`w-full ${isSidebarOpen ? "justify-start" : "justify-center"} gap-3 data-[state=active]:bg-primary/20`}>
-              <Crown className="h-4 w-4 shrink-0" /> {isSidebarOpen && "Plans"}
+              <Crown className="h-4 w-4 shrink-0" /> {isSidebarOpen && t("plans")}
             </TabsTrigger>
 
             {isSidebarOpen && (
               <div className="flex flex-row items-center gap-2 mt-4 mb-1 px-3 w-full">
                 <div className="shrink-0 w-1.5 h-1.5 rounded-full bg-cyan-500/80 shadow-[0_0_5px_rgba(6,182,212,0.5)]"></div>
-                <span className="text-[10px] uppercase font-bold tracking-[0.15em] text-slate-400 shrink-0">Engagement & Settings</span>
+                <span className="text-[10px] uppercase font-bold tracking-[0.15em] text-slate-400 shrink-0">{t("engagement_settings")}</span>
                 <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent"></div>
               </div>
             )}
             <TabsTrigger value="rewards" className={`w-full ${isSidebarOpen ? "justify-start" : "justify-center"} gap-3 data-[state=active]:bg-primary/20`}>
-              <Gift className="h-4 w-4 shrink-0" /> {isSidebarOpen && "Rewards"}
+              <Gift className="h-4 w-4 shrink-0" /> {isSidebarOpen && t("rewards")}
             </TabsTrigger>
             <TabsTrigger value="achievements" className={`w-full ${isSidebarOpen ? "justify-start" : "justify-center"} gap-3 data-[state=active]:bg-primary/20`}>
-              <Star className="h-4 w-4 shrink-0" /> {isSidebarOpen && "Achievements"}
+              <Star className="h-4 w-4 shrink-0" /> {isSidebarOpen && t("achievements")}
             </TabsTrigger>
             <TabsTrigger value="settings" className={`w-full ${isSidebarOpen ? "justify-start" : "justify-center"} gap-3 data-[state=active]:bg-primary/20`}>
-              <Settings className="h-4 w-4 shrink-0" /> {isSidebarOpen && "Settings"}
+              <Settings className="h-4 w-4 shrink-0" /> {isSidebarOpen && t("settings")}
             </TabsTrigger>
           </TabsList>
         </div>

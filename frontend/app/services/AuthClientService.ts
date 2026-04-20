@@ -47,6 +47,15 @@ export class AuthClientService {
     } catch (err: any) {
       console.error("[AuthClientService] Error during login API call:", err);
 
+      // Handle rate-limiting (429) with retryAfter metadata
+      if (err.response?.status === 429) {
+        const data = err.response.data;
+        const error = new Error(data?.message || 'Too many login attempts. Please try again later.') as any;
+        error.retryAfter = data?.retryAfter || 900;
+        error.code = data?.code || 'LOGIN_RATE_LIMITED';
+        throw error;
+      }
+
       throw new Error(err.response?.data?.message || err.message || 'Error during login');
     }
   }

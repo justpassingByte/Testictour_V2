@@ -39,9 +39,9 @@ function BarChart({
 }: { data: number[]; labels: string[]; color?: string; height?: number }) {
   const max = Math.max(...data, 1)
   return (
-    <div className="flex items-end gap-1" style={{ height }}>
+    <div className="flex items-end justify-between xl:justify-center xl:gap-8 gap-2" style={{ height }}>
       {data.map((val, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center gap-1 group cursor-default">
+        <div key={i} className="max-w-[48px] w-full flex flex-col items-center gap-1 group cursor-default">
           <div className="relative w-full">
             <div
               className="w-full rounded-t-sm transition-all duration-300 group-hover:opacity-80"
@@ -55,7 +55,7 @@ function BarChart({
               {val.toLocaleString()}
             </div>
           </div>
-          <span className="text-[9px] text-muted-foreground">{labels[i]}</span>
+          <span className="text-[9px] text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis max-w-full">{labels[i]}</span>
         </div>
       ))}
     </div>

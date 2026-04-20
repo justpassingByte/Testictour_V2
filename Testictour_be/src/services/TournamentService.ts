@@ -367,10 +367,13 @@ export default class TournamentService {
 
     const { phases, customPrizePool, ...restOfData } = data;
 
+    const DEFAULT_TOURNAMENT_IMAGE = '/images/default-tournament-banner.png';
+
     return prisma.tournament.create({
       data: {
         ...restOfData,
         ...templateData,
+        image: restOfData.image || DEFAULT_TOURNAMENT_IMAGE,
         startTime: finalStartTime,
         status: (templateData as any).status || 'pending',
         registrationDeadline: data.registrationDeadline || (templateData as any).registrationDeadline || new Date(),

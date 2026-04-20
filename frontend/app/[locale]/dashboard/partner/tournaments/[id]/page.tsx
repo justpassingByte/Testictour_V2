@@ -964,16 +964,25 @@ export default function TournamentManagePage() {
 
         {/* ─── SETTINGS TAB ─── */}
         <TabsContent value="settings">
+          {(() => {
+            const isLocked = tournament.status === 'in_progress' || tournament.status === 'COMPLETED';
+            return (
           <Card className="bg-card/60 border-white/10">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
                 <Settings2 className="h-4 w-4 text-muted-foreground" />{t("tournament_settings")}</CardTitle>
+              {isLocked && (
+                <div className="flex items-center gap-2 mt-2 px-3 py-2 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-400 text-sm">
+                  <Lock className="h-4 w-4 shrink-0" />
+                  <span>{t("settings_locked_tournament_started", { defaultValue: "Settings are locked because the tournament has started or is completed. Only status changes are allowed." })}</span>
+                </div>
+              )}
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>{t("tournament_name")}</Label>
-                  <Input value={editForm.name} onChange={(e) => setEditForm(p => ({ ...p, name: e.target.value }))} />
+                  <Input value={editForm.name} onChange={(e) => setEditForm(p => ({ ...p, name: e.target.value }))} disabled={isLocked} />
                 </div>
                 <div className="space-y-2">
                   <Label>{t("status")}</Label>
@@ -992,24 +1001,24 @@ export default function TournamentManagePage() {
               </div>
               <div className="space-y-2">
                 <Label>{t("description")}</Label>
-                <Textarea value={editForm.description} onChange={(e) => setEditForm(p => ({ ...p, description: e.target.value }))} rows={3} />
+                <Textarea value={editForm.description} onChange={(e) => setEditForm(p => ({ ...p, description: e.target.value }))} rows={3} disabled={isLocked} />
               </div>
               <div className="grid gap-4 md:grid-cols-4">
                 <div className="space-y-2">
                   <Label>{t("max_players")}</Label>
-                  <Input type="number" value={editForm.maxPlayers} onChange={(e) => setEditForm(p => ({ ...p, maxPlayers: parseInt(e.target.value) }))} />
+                  <Input type="number" value={editForm.maxPlayers} onChange={(e) => setEditForm(p => ({ ...p, maxPlayers: parseInt(e.target.value) }))} disabled={isLocked} />
                 </div>
                 <div className="space-y-2">
                   <Label>{t("registration_fee")}</Label>
-                  <Input type="number" value={editForm.entryFee} onChange={(e) => setEditForm(p => ({ ...p, entryFee: parseFloat(e.target.value) }))} />
+                  <Input type="number" value={editForm.entryFee} onChange={(e) => setEditForm(p => ({ ...p, entryFee: parseFloat(e.target.value) }))} disabled={isLocked} />
                 </div>
                 <div className="space-y-2">
                   <Label>{t("prize_pool_budget")}</Label>
-                  <Input type="number" value={editForm.budget} onChange={(e) => setEditForm(p => ({ ...p, budget: parseFloat(e.target.value) }))} placeholder="Auto calc if 0" />
+                  <Input type="number" value={editForm.budget} onChange={(e) => setEditForm(p => ({ ...p, budget: parseFloat(e.target.value) }))} placeholder="Auto calc if 0" disabled={isLocked} />
                 </div>
                 <div className="space-y-2">
                   <Label>{t("host_fee")}</Label>
-                  <Input type="number" step="0.01" min="0" max="1" value={editForm.hostFeePercent} onChange={(e) => setEditForm(p => ({ ...p, hostFeePercent: parseFloat(e.target.value) }))} />
+                  <Input type="number" step="0.01" min="0" max="1" value={editForm.hostFeePercent} onChange={(e) => setEditForm(p => ({ ...p, hostFeePercent: parseFloat(e.target.value) }))} disabled={isLocked} />
                 </div>
               </div>
 
@@ -1036,6 +1045,7 @@ export default function TournamentManagePage() {
                       accept="image/*" 
                       onChange={(e) => e.target.files && setSelectedImage(e.target.files[0])} 
                       className="cursor-pointer file:cursor-pointer"
+                      disabled={isLocked}
                     />
                     <p className="text-[10px] text-muted-foreground mt-1">{t("recommended_size_1920x1080px_16_9_ratio")}</p>
                   </div>
@@ -1144,14 +1154,18 @@ export default function TournamentManagePage() {
                     {syncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                     {t("sync")}
                   </Button>
-                  <Button onClick={handleSave} disabled={saving} className="bg-gradient-to-r from-violet-600 to-cyan-600">
-                    {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                    {t("save")}
-                  </Button>
+                  {!isLocked && (
+                    <Button onClick={handleSave} disabled={saving} className="bg-gradient-to-r from-violet-600 to-cyan-600">
+                      {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                      {t("save")}
+                    </Button>
+                  )}
                 </div>
               </div>
             </CardContent>
           </Card>
+            );
+          })()}
         </TabsContent>
 
         {/* ─── RESULTS & PRIZE DISTRIBUTION TAB ─── */}

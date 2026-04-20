@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -9,7 +9,7 @@ import { useAuthModalStore } from '@/app/stores/authModalStore';
 import { useTranslations } from 'next-intl';
 import { AuthClientService } from '@/app/services/AuthClientService';
 import { useUserStore } from '@/app/stores/userStore';
-import { Coins, Loader2, Sparkles } from "lucide-react"
+import { Coins, Loader2, ShieldAlert, Sparkles } from "lucide-react"
 import { SubRegionSelector } from "@/components/ui/SubRegionSelector"
 
 export function AuthModal() {
@@ -31,16 +31,62 @@ export function AuthModal() {
   
   const [loginError, setLoginError] = useState('');
   const [registerError, setRegisterError] = useState('');
+  
+  // Login lockout countdown state
+  const [lockoutSeconds, setLockoutSeconds] = useState(0);
+  const lockoutTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isLockedOut = lockoutSeconds > 0;
+
+  // Cleanup lockout timer on unmount
+  useEffect(() => {
+    return () => {
+      if (lockoutTimerRef.current) clearInterval(lockoutTimerRef.current);
+    };
+  }, []);
+
+  // Start countdown timer
+  const startLockoutTimer = (seconds: number) => {
+    if (lockoutTimerRef.current) clearInterval(lockoutTimerRef.current);
+    setLockoutSeconds(seconds);
+    lockoutTimerRef.current = setInterval(() => {
+      setLockoutSeconds((prev) => {
+        if (prev <= 1) {
+          clearInterval(lockoutTimerRef.current!);
+          lockoutTimerRef.current = null;
+          setLoginError('');
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  // Format seconds to mm:ss
+  const formatCountdown = (s: number) => {
+    const mins = Math.floor(s / 60);
+    const secs = s % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   const handleLogin = async () => {
+    if (isLockedOut) return;
     setLoginError('');
     setIsLoading(true);
     try {
       const { user } = await AuthClientService.login({ login: loginIdentifier, password });
       setCurrentUser(user);
+      // Clear lockout on success
+      setLockoutSeconds(0);
+      if (lockoutTimerRef.current) clearInterval(lockoutTimerRef.current);
       closeModal();
     } catch (error: any) {
-      setLoginError(t('auth.loginError') || 'Login failed.');
+      if (error.retryAfter) {
+        // Rate-limited — start countdown
+        startLockoutTimer(Number(error.retryAfter));
+        setLoginError(error.message);
+      } else {
+        setLoginError(t('auth.loginError') || 'Login failed.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -132,10 +178,11 @@ export function AuthModal() {
                   <Input
                     id="login-identifier"
                     type="text"
-                    className="bg-zinc-900/50 border-zinc-700 text-white placeholder:text-zinc-600 focus-visible:ring-indigo-500"
+                    className="bg-zinc-900/50 border-zinc-700 text-white placeholder:text-zinc-600 focus-visible:ring-indigo-500 disabled:opacity-50"
                     placeholder="player_one"
                     value={loginIdentifier}
                     onChange={(e) => setLoginIdentifier(e.target.value)}
+                    disabled={isLockedOut}
                   />
                 </div>
                 <div className="grid gap-2">
@@ -146,22 +193,50 @@ export function AuthModal() {
                   <Input
                     id="password-login"
                     type="password"
-                    className="bg-zinc-900/50 border-zinc-700 text-white focus-visible:ring-indigo-500"
+                    className="bg-zinc-900/50 border-zinc-700 text-white focus-visible:ring-indigo-500 disabled:opacity-50"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    disabled={isLockedOut}
                   />
                 </div>
               </div>
 
-              {loginError && <div className="p-3 bg-red-950/50 border border-red-900/50 rounded-lg text-red-400 text-sm">{loginError}</div>}
+              {/* Lockout countdown alert */}
+              {isLockedOut && (
+                <div className="p-4 bg-red-950/60 border border-red-800/60 rounded-xl text-red-300 text-sm flex items-start gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <ShieldAlert className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-red-200 mb-1">Account Temporarily Locked</p>
+                    <p className="text-red-400 text-xs">{loginError}</p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <div className="px-3 py-1.5 bg-red-900/40 rounded-lg border border-red-700/40 font-mono text-lg font-bold text-red-200 tabular-nums">
+                        {formatCountdown(lockoutSeconds)}
+                      </div>
+                      <span className="text-red-400/80 text-xs">until you can try again</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Regular error (non-lockout) */}
+              {loginError && !isLockedOut && <div className="p-3 bg-red-950/50 border border-red-900/50 rounded-lg text-red-400 text-sm">{loginError}</div>}
               
               <Button 
                 type="submit" 
-                className="w-full mt-4 h-12 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl shadow-[0_0_20px_rgba(79,70,229,0.3)] transition-all hover:shadow-[0_0_25px_rgba(79,70,229,0.5)]"
+                className={`w-full mt-4 h-12 font-semibold rounded-xl transition-all ${
+                  isLockedOut
+                    ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed shadow-none'
+                    : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_20px_rgba(79,70,229,0.3)] hover:shadow-[0_0_25px_rgba(79,70,229,0.5)]'
+                }`}
                 onClick={handleLogin}
-                disabled={isLoading}
+                disabled={isLoading || isLockedOut}
               >
-                {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Sign In"}
+                {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : isLockedOut ? (
+                  <span className="flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4" />
+                    Locked — {formatCountdown(lockoutSeconds)}
+                  </span>
+                ) : "Sign In"}
               </Button>
             </TabsContent>
 

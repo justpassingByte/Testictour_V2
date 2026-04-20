@@ -2060,5 +2060,17 @@
     "note_1_desc": "Đảm bảo bạn đã điền đúng Secret Key bên trên. Sepay sẽ dùng Webhook này để tự động cập nhật thanh toán nạp quỹ hoặc đăng ký giải đấu từ người chơi của bạn liên tục 24/7.",
     "note_2": "Lưu ý 2:",
     "note_2_desc": "Bạn phải cấu hình URL Webhook này trong trang Quản trị Sepay. Tuyệt đối không chia sẻ Webhook URL và Secret Key cho bên thứ ba."
-  }
+  },
+  "finance_analytics": "Tài Chính & Phân Tích",
+  "wallet": "Ví Tiền",
+  "engagement_settings": "Tương Tác & Cài Đặt",
+  "rewards": "Phần Thưởng",
+  "net_balance": "Số Dư Thực Tế",
+  "available_to_withdraw": "Có thể rút",
+  "platform_fee": "Phí Nền Tảng",
+  "secured_in_escrow": "Đã bảo chứng trong Escrow",
+  "pending_settlement": "Chờ quyết toán",
+  "players_engaged": "Người chơi tham gia",
+  "across_all_events": "Trên tất cả sự kiện",
+  "your_latest_competitive_events": "Các sự kiện cạnh tranh mới nhất của bạn"
 }
