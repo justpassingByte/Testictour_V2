@@ -106,15 +106,10 @@ export function TournamentCard({ tournament, index }: { tournament: ITournament;
             <ArrowRight className="ml-1 h-4 w-4" />
           </Button>
         </Link>
-        {tournament.status === "UPCOMING" && !tournament.registered && (
+        {(tournament.status === "UPCOMING" || tournament.status === "REGISTRATION") && (
           <Link href={`/tournaments/${tournament.id}/register`}>
             <Button>{t('register_now')}</Button>
           </Link>
-        )}
-        {tournament.registered && (
-          <Badge variant="outline" className="bg-transparent">
-            {t('registration')}
-          </Badge>
         )}
       </CardFooter>
     </Card>

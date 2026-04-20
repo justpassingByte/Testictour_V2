@@ -19,7 +19,7 @@ export default class ParticipantService {
 
       console.log(`[JOIN DEBUG] Tournament: ${tournament.name}, entryFee: ${tournament.entryFee}, type: ${typeof tournament.entryFee}, status: ${tournament.status}`);
 
-      if (tournament.status !== 'UPCOMING' && tournament.status !== 'pending') {
+      if (tournament.status !== 'UPCOMING' && tournament.status !== 'pending' && tournament.status !== 'REGISTRATION') {
         throw new ApiError(400, 'Tournament is no longer accepting registrations');
       }
 
@@ -73,7 +73,7 @@ export default class ParticipantService {
         const slotReserved = await tx.tournament.updateMany({
           where: {
             id: tournamentId,
-            status: { in: ['UPCOMING', 'pending'] },
+            status: { in: ['UPCOMING', 'pending', 'REGISTRATION'] },
             actualParticipantsCount: tournament.actualParticipantsCount,
           },
           data: { actualParticipantsCount: currentCount + 1 },
