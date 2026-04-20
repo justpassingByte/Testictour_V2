@@ -186,15 +186,23 @@ export default class SepayPgController {
         return res.status(404).json({ error: 'No pending payment found' });
       }
 
-      // Already confirmed
       if (transaction.status === 'paid' || transaction.status === 'success') {
         return res.status(200).json({ success: true, message: 'Already confirmed' });
+      }
+
+      // Security check: Only allow frontend to confirm payment automatically in non-production environments.
+      // In production, the ONLY trusted source of payment success is the Sepay IPN Webhook.
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(400).json({ 
+          error: 'Payment verification pending', 
+          message: 'Hệ thống đang chờ phản hồi từ Sepay. Nếu bạn đã chuyển khoản, vui lòng đợi trong giây lát để hệ thống cập nhật.' 
+        });
       }
 
       const providerEventId = `sepaypg_confirm_${transaction.id}_${Date.now()}`;
       await ParticipantPaymentService.confirmEntryFeePayment(transaction.id, providerEventId);
 
-      console.log(`[SepayPG ConfirmPending] Confirmed transaction ${transaction.id} for user ${userId}`);
+      console.log(`[SepayPG ConfirmPending] DEV MODE ONLY: Confirmed transaction ${transaction.id} for user ${userId}`);
       return res.status(200).json({ success: true, transactionId: transaction.id });
     } catch (err: any) {
       logger.error(`[SepayPG ConfirmPending] Error: ${err.message}`);
