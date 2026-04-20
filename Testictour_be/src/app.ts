@@ -25,6 +25,7 @@ const server = http.createServer(app);
 const allowedOrigins = [
   process.env.FRONTEND_URL || 'http://localhost:3000',
   'https://www.testictour.com',
+  'https://testictour.com',
   'http://localhost:3000',
 ].filter(Boolean);
 
@@ -241,7 +242,7 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
 
 app.use(cookieParser());
 app.use(cors({
-  origin: [process.env.FRONTEND_URL || 'http://localhost:3000', 'https://www.testictour.com', 'http://localhost:3000'],
+  origin: [process.env.FRONTEND_URL || 'http://localhost:3000', 'https://www.testictour.com', 'https://testictour.com', 'http://localhost:3000'],
   credentials: true,
 }));
 app.use('/api/webhooks/payments/stripe', express.raw({ type: 'application/json' }));
