@@ -152,8 +152,8 @@ export default function PartnerDashboardPage() {
     return (
       <div className="container py-8 max-w-full">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-red-600">No Partner Data Found</h1>
-          <p className="text-muted-foreground mt-2">Please login to access partner dashboard.</p>
+          <h1 className="text-2xl font-bold text-red-600">{t("no_partner_data_found")}</h1>
+          <p className="text-muted-foreground mt-2">{t("please_login_partner")}</p>
         </div>
       </div>
     );
@@ -170,7 +170,7 @@ export default function PartnerDashboardPage() {
         {/* Sidebar */}
         <div className={`transition-all duration-300 border-r border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-lg flex flex-col ${isSidebarOpen ? 'w-64' : 'w-16'} shrink-0`}>
           <div className="p-4 flex items-center justify-between border-b border-white/5">
-            {isSidebarOpen && <span className="font-bold tracking-tight">Partner Panel</span>}
+            {isSidebarOpen && <span className="font-bold tracking-tight">{t("partner_panel")}</span>}
             <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(!isSidebarOpen)} className={!isSidebarOpen ? "mx-auto" : ""}>
               {isSidebarOpen ? <PanelLeftClose className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </Button>
@@ -239,8 +239,8 @@ export default function PartnerDashboardPage() {
         <div className="flex-1 p-4 md:p-8 space-y-6 w-full max-w-full overflow-x-hidden">
           <div className="flex flex-col space-y-2 md:flex-row md:items-center md:justify-between md:space-y-0">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">Partner Dashboard</h1>
-              <p className="text-muted-foreground text-sm">Manage your partnership, lobbies, players, and earnings.</p>
+              <h1 className="text-3xl font-bold tracking-tight">{t("partner_dashboard_title")}</h1>
+              <p className="text-muted-foreground text-sm">{t("partner_dashboard_desc")}</p>
             </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="icon" className="md:hidden" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>

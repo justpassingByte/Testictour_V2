@@ -92,17 +92,17 @@ export function OverviewTabNew({
             <div className="space-y-2">
               <div className="flex items-baseline justify-between">
                 <span className="text-3xl font-bold">{totalTournaments}</span>
-                <span className="text-sm text-muted-foreground tracking-tight">/ {partnerData.totalLobbies} Lobbies</span>
+                <span className="text-sm text-muted-foreground tracking-tight">/ {partnerData.totalLobbies} {t("lobbies_count")}</span>
               </div>
               <div className="flex flex-wrap items-center gap-1.5 mt-2">
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-yellow-500/10 text-yellow-500 border-yellow-500/20">
-                  {tournaments.filter((t:any) => t.status === 'upcoming').length} Upcoming
+                  {tournaments.filter((t:any) => t.status === 'upcoming').length} {t("upcoming_badge")}
                 </Badge>
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-green-500/10 text-green-500 border-green-500/20">
-                  {tournaments.filter((t:any) => t.status === 'in_progress').length} Active
+                  {tournaments.filter((t:any) => t.status === 'in_progress').length} {t("active_badge")}
                 </Badge>
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-slate-500/10 text-slate-400 border-slate-500/20">
-                  {tournaments.filter((t:any) => t.status === 'completed').length} Done
+                  {tournaments.filter((t:any) => t.status === 'completed').length} {t("done_badge")}
                 </Badge>
               </div>
             </div>
@@ -144,7 +144,7 @@ export function OverviewTabNew({
               </div>
               <Link href="/dashboard/partner?tab=tournaments">
                 <Button size="sm" variant="outline" className="text-slate-200 border-slate-700 hover:bg-slate-700">
-                  View All
+                  {t("view_all")}
                 </Button>
               </Link>
             </div>
@@ -233,7 +233,7 @@ export function OverviewTabNew({
                   <div key={match.id} className="flex items-center justify-between rounded-lg border border-slate-700 p-4 hover:bg-slate-700/30 transition-colors">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <p className="font-semibold text-white text-sm">Match {match.id.substring(0, 8)}</p>
+                        <p className="font-semibold text-white text-sm">{t("match_prefix")} {match.id.substring(0, 8)}</p>
                         <span className="text-[10px] text-slate-500">•</span>
                         <p className="text-xs text-slate-300">{match.lobbyName}</p>
                       </div>
@@ -247,19 +247,19 @@ export function OverviewTabNew({
                                 #{res.placement}
                               </span>
                               <span className="text-slate-300 truncate max-w-[60px]">
-                                {res.user?.username || 'Player'}
+                                {res.user?.username || t("player_default")}
                               </span>
                             </div>
                           ))}
                         {match.miniTourMatchResults?.length > 3 && (
-                          <span className="text-[10px] text-slate-500">+{match.miniTourMatchResults.length - 3} more</span>
+                          <span className="text-[10px] text-slate-500">+{match.miniTourMatchResults.length - 3} {t("more_suffix")}</span>
                         )}
                       </div>
                     </div>
                     <div className="text-right px-2">
                       <div className="flex items-center justify-end text-emerald-400 text-xs font-bold mb-1">
                         <Trophy className="h-3 w-3 mr-1" />
-                        <span>{match.miniTourMatchResults?.length} Participated</span>
+                        <span>{match.miniTourMatchResults?.length} {t("participated")}</span>
                       </div>
                       <p className="text-[10px] text-slate-500">{new Date(match.fetchedAt!).toLocaleDateString()}</p>
                     </div>

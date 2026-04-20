@@ -82,6 +82,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     tournamentsPlayed: 0,
     tournamentsWon: 0,
     completedTournaments: 0,
+    totalPrizeWon: 0,
     matchesPlayed: 0,
     averagePlacement: 0,
     topFourRate: 0,

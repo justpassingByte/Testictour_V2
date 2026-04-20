@@ -119,7 +119,7 @@ export default function PartnerAchievementTab() {
         toast({ title: t("achievement_updated", { defaultValue: "Achievement Updated" }) })
       } else {
         // const res = await api.post('/partner/achievements', form).catch(() => null)
-        const res = null;
+        const res: any = null;
         const newAch: Achievement = res?.data?.achievement || { ...form, id: Date.now().toString(), earnedCount: 0, createdAt: new Date().toISOString() }
         setAchievements(prev => [newAch, ...prev])
         toast({ title: t("achievement_created", { defaultValue: "Achievement Created" }) })

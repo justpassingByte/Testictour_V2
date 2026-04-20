@@ -7,6 +7,7 @@ import {
   Star,
   TrendingUp,
 } from "lucide-react"
+import { useTranslations } from "next-intl"
 import {
   Bar,
   BarChart,
@@ -31,6 +32,8 @@ interface AnalyticsTabNewProps {
 }
 
 export function AnalyticsTabNew({ partnerData, lobbies }: AnalyticsTabNewProps) {
+  const t = useTranslations("common");
+
   // Consolidate metrics
   const metrics = partnerData?.metrics || {
     totalPlayers: partnerData?.totalPlayers || 0,
@@ -129,9 +132,9 @@ export function AnalyticsTabNew({ partnerData, lobbies }: AnalyticsTabNewProps) 
           <CardHeader>
             <CardTitle className="flex items-center">
               <Users className="mr-2 h-5 w-5 text-blue-500" />
-              New Players
+              {t("new_players")}
             </CardTitle>
-            <CardDescription>New players joined over the last 6 months</CardDescription>
+            <CardDescription>{t("new_players_joined_6m")}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="h-[250px] w-full">
@@ -168,10 +171,10 @@ export function AnalyticsTabNew({ partnerData, lobbies }: AnalyticsTabNewProps) 
               </ResponsiveContainer>
             </div>
             <div className="mt-4 flex justify-between text-sm">
-              <span className="text-muted-foreground">Trend (6m)</span>
+              <span className="text-muted-foreground">{t("trend_6m")}</span>
               <span className={`flex items-center font-medium ${totalPlayerGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 <TrendingUp className={`mr-1 h-4 w-4 ${totalPlayerGrowth < 0 ? 'rotate-180' : ''}`} />
-                {totalPlayerGrowth >= 0 ? '+' : ''}{totalPlayerGrowth} players
+                {totalPlayerGrowth >= 0 ? '+' : ''}{totalPlayerGrowth} {t("players_count_suffix")}
               </span>
             </div>
           </CardContent>
@@ -181,9 +184,9 @@ export function AnalyticsTabNew({ partnerData, lobbies }: AnalyticsTabNewProps) 
           <CardHeader>
             <CardTitle className="flex items-center">
               <DollarSign className="mr-2 h-5 w-5 text-green-500" />
-              Estimated Revenue
+              {t("estimated_revenue")}
             </CardTitle>
-            <CardDescription>Estimated revenue over the last 6 months</CardDescription>
+            <CardDescription>{t("estimated_revenue_6m")}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="h-[250px] w-full">
@@ -219,7 +222,7 @@ export function AnalyticsTabNew({ partnerData, lobbies }: AnalyticsTabNewProps) 
               </ResponsiveContainer>
             </div>
             <div className="mt-4 flex justify-between text-sm">
-              <span className="text-muted-foreground">Trend (6m)</span>
+              <span className="text-muted-foreground">{t("trend_6m")}</span>
               <span className={`flex items-center font-medium ${totalRevenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 <TrendingUp className={`mr-1 h-4 w-4 ${totalRevenueGrowth < 0 ? 'rotate-180' : ''}`} />
                 {totalRevenueGrowth >= 0 ? '+' : ''}${totalRevenueGrowth.toLocaleString()}
@@ -235,18 +238,18 @@ export function AnalyticsTabNew({ partnerData, lobbies }: AnalyticsTabNewProps) 
           <CardHeader>
             <CardTitle className="flex items-center">
               <Users className="mr-2 h-5 w-5 text-blue-600" />
-              Total Players
+              {t("total_players")}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
               <div className="flex items-baseline justify-between">
                 <span className="text-3xl font-bold">{metrics.totalPlayers}</span>
-                <span className="text-sm text-muted-foreground">players</span>
+                <span className="text-sm text-muted-foreground">{t("players_count_suffix")}</span>
               </div>
               <div className="flex items-center text-sm">
                 <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
-                <span className="text-green-600">Active</span>
+                <span className="text-green-600">{t("active_status")}</span>
               </div>
             </div>
           </CardContent>
@@ -256,18 +259,18 @@ export function AnalyticsTabNew({ partnerData, lobbies }: AnalyticsTabNewProps) 
           <CardHeader>
             <CardTitle className="flex items-center">
               <DollarSign className="mr-2 h-5 w-5 text-green-600" />
-              Monthly Revenue
+              {t("monthly_revenue")}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
               <div className="flex items-baseline justify-between">
                 <span className="text-3xl font-bold">${(metrics?.monthlyRevenue || 0).toLocaleString()}</span>
-                <span className="text-sm text-muted-foreground">USD</span>
+                <span className="text-sm text-muted-foreground">{t("usd_currency")}</span>
               </div>
               <div className="flex items-center text-sm">
                 <TrendingUp className="mr-1 h-4 w-4 text-green-500" />
-                <span className="text-green-600">Current Month</span>
+                <span className="text-green-600">{t("current_month")}</span>
               </div>
             </div>
           </CardContent>
@@ -277,7 +280,7 @@ export function AnalyticsTabNew({ partnerData, lobbies }: AnalyticsTabNewProps) 
           <CardHeader>
             <CardTitle className="flex items-center">
               <Star className="mr-2 h-5 w-5 text-yellow-600" />
-              Partner Rating
+              {t("partner_rating")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -288,7 +291,7 @@ export function AnalyticsTabNew({ partnerData, lobbies }: AnalyticsTabNewProps) 
               </div>
               <div className="flex items-center text-sm">
                 <Star className="mr-1 h-4 w-4 text-yellow-500 fill-current" />
-                <span className="text-yellow-600">Excellent performance</span>
+                <span className="text-yellow-600">{t("excellent_performance")}</span>
               </div>
             </div>
           </CardContent>
@@ -299,20 +302,20 @@ export function AnalyticsTabNew({ partnerData, lobbies }: AnalyticsTabNewProps) 
         {/* Additional Insights */}
         <Card>
           <CardHeader>
-            <CardTitle>Performance Insights</CardTitle>
-            <CardDescription>Key metrics and trends for your partnership</CardDescription>
+            <CardTitle>{t("performance_insights")}</CardTitle>
+            <CardDescription>{t("key_metrics_trends")}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-3">
-                <h4 className="font-medium text-sm text-muted-foreground">Lobby Performance</h4>
+                <h4 className="font-medium text-sm text-muted-foreground">{t("lobby_performance")}</h4>
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span>Total Lobbies</span>
+                    <span>{t("total_lobbies")}</span>
                     <span className="font-medium">{metrics?.totalLobbies || 0}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span>Active Rate</span>
+                    <span>{t("active_rate")}</span>
                     <span className="font-medium text-green-600">
                       {(metrics?.totalLobbies || 0) > 0 ? Math.round(((metrics?.activeLobbies || 0) / (metrics?.totalLobbies || 0)) * 100) : 0}%
                     </span>
@@ -320,18 +323,18 @@ export function AnalyticsTabNew({ partnerData, lobbies }: AnalyticsTabNewProps) 
                 </div>
               </div>
               <div className="space-y-3">
-                <h4 className="font-medium text-sm text-muted-foreground">Financial Summary</h4>
+                <h4 className="font-medium text-sm text-muted-foreground">{t("financial_summary")}</h4>
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span>Total Revenue</span>
+                    <span>{t("total_revenue")}</span>
                     <span className="font-medium">${(metrics?.totalRevenue || 0).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span>Current Balance</span>
+                    <span>{t("current_balance")}</span>
                     <span className="font-medium">${(metrics?.balance || 0).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span>Avg Monthly</span>
+                    <span>{t("avg_monthly")}</span>
                     <span className="font-medium">${Math.round((metrics?.totalRevenue || 0) / 6).toLocaleString()}</span>
                   </div>
                 </div>
@@ -345,9 +348,9 @@ export function AnalyticsTabNew({ partnerData, lobbies }: AnalyticsTabNewProps) 
           <CardHeader>
             <CardTitle className="flex items-center">
               <Users className="mr-2 h-5 w-5 text-purple-500" />
-              Player Acquisition Sources
+              {t("player_acquisition_sources")}
             </CardTitle>
-            <CardDescription>Where your players discovered your tournaments</CardDescription>
+            <CardDescription>{t("where_players_discovered")}</CardDescription>
           </CardHeader>
           <CardContent className="flex justify-center items-center h-[200px]">
             {partnerData?.referralStats && partnerData.referralStats.length > 0 ? (
@@ -382,7 +385,7 @@ export function AnalyticsTabNew({ partnerData, lobbies }: AnalyticsTabNewProps) 
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                 <Users className="h-8 w-8 mb-2 opacity-20" />
-                <p className="text-sm">No acquisition data available yet</p>
+                <p className="text-sm">{t("no_acquisition_data")}</p>
               </div>
             )}
           </CardContent>

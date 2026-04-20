@@ -83,6 +83,8 @@ export default function TournamentManagePage() {
     budget: 0,
     hostFeePercent: 0.1,
     status: "",
+    startTime: "",
+    registrationDeadline: "",
   })
   const [editPhases, setEditPhases] = useState<any[]>([])
   const [deletedPhaseIds, setDeletedPhaseIds] = useState<string[]>([])
@@ -119,6 +121,8 @@ export default function TournamentManagePage() {
         budget: (t as any).escrowRequiredAmount > 0 ? (t as any).escrowRequiredAmount : t.budget || 0,
         hostFeePercent: t.hostFeePercent || 0.1,
         status: t.status,
+        startTime: t.startTime ? new Date(t.startTime).toISOString().slice(0, 16) : "",
+        registrationDeadline: (t as any).registrationDeadline ? new Date((t as any).registrationDeadline).toISOString().slice(0, 16) : "",
       })
       setEditPhases(t.phases?.map((p: any) => ({
         id: p.id,
@@ -194,15 +198,13 @@ export default function TournamentManagePage() {
         })
       }
       
-      const minPrizePool = editForm.maxPlayers * editForm.entryFee;
-      if (editForm.budget > 0 && editForm.budget < minPrizePool) {
-        toast({ title: "Validation Error", description: `Prize pool cannot be less than $${minPrizePool}`, variant: "destructive" });
-        setSaving(false);
-        return;
+      const { budget, startTime, registrationDeadline, ...restForm } = editForm
+      const payload: any = { 
+        ...restForm, 
+        customPrizePool: budget,
+        startTime: startTime ? new Date(startTime).toISOString() : undefined,
+        registrationDeadline: registrationDeadline ? new Date(registrationDeadline).toISOString() : undefined,
       }
-      
-      const { budget, ...restForm } = editForm
-      const payload: any = { ...restForm, customPrizePool: budget }
       const phasePayload: any = {}
       
       if (editPhases.length > 0) {
@@ -1002,6 +1004,16 @@ export default function TournamentManagePage() {
               <div className="space-y-2">
                 <Label>{t("description")}</Label>
                 <Textarea value={editForm.description} onChange={(e) => setEditForm(p => ({ ...p, description: e.target.value }))} rows={3} disabled={isLocked} />
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>{t("start_time", { defaultValue: "Start Time" })}</Label>
+                  <Input type="datetime-local" value={editForm.startTime} onChange={(e) => setEditForm(p => ({ ...p, startTime: e.target.value }))} disabled={isLocked} />
+                </div>
+                <div className="space-y-2">
+                  <Label>{t("registration_deadline", { defaultValue: "Registration Deadline" })}</Label>
+                  <Input type="datetime-local" value={editForm.registrationDeadline} onChange={(e) => setEditForm(p => ({ ...p, registrationDeadline: e.target.value }))} disabled={isLocked} />
+                </div>
               </div>
               <div className="grid gap-4 md:grid-cols-4">
                 <div className="space-y-2">

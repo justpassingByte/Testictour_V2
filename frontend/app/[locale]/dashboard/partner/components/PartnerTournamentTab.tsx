@@ -21,6 +21,7 @@ import api from "@/app/lib/apiConfig"
 import { ITournament } from "@/app/types/tournament"
 import { useUserStore } from "@/app/stores/userStore"
 import { useCurrencyRate } from "@/app/hooks/useCurrencyRate"
+import { useTranslations } from "next-intl"
 
 interface PartnerTournamentTabProps {
   subscriptionPlan?: string
@@ -29,6 +30,7 @@ interface PartnerTournamentTabProps {
 export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTournamentTabProps) {
   const { currentUser } = useUserStore()
   const { formatVndText } = useCurrencyRate()
+  const t = useTranslations("common")
   const [tournaments, setTournaments] = useState<ITournament[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
@@ -192,7 +194,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
 
       toast({ title: "Tournament Created!", description: `${form.name} has been created successfully.` })
       setCreateOpen(false)
-      setForm({ name: "", description: "", region: "APAC", maxPlayers: 32, reservePlayersLimit: 0, entryFee: 0, hostFeePercent: 0.1, startTime: "", registrationDeadline: "", image: "", isCommunityMode: false, discordUrl: "" })
+      setForm({ name: "", description: "", region: "APAC", maxPlayers: 32, reservePlayersLimit: 0, entryFee: 0, hostFeePercent: 0.1, customPrizePool: 0, startTime: "", registrationDeadline: "", image: "", isCommunityMode: false, discordUrl: "" })
       setSponsors([])
       setPhases([{ name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "top_n_scores", advancementValue: 4, matchesPerRound: 1, carryOverScores: false }])
       setImageFile(null)
@@ -235,24 +237,24 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold">My Tournaments</h2>
-          <p className="text-sm text-muted-foreground">Create and manage your own tournaments.</p>
+          <h2 className="text-2xl font-bold">{t("my_tournaments")}</h2>
+          <p className="text-sm text-muted-foreground">{t("create_manage_tournaments")}</p>
         </div>
         {canCreate ? (
           <Button onClick={() => setCreateOpen(true)} className="bg-gradient-to-r from-violet-600 to-cyan-600">
-            <Plus className="mr-2 h-4 w-4" /> Create Tournament
+            <Plus className="mr-2 h-4 w-4" /> {t("create_tournament")}
           </Button>
         ) : (
           <div className="flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg px-4 py-2">
             <Lock className="h-4 w-4 text-yellow-500" />
-            <span className="text-sm text-yellow-500">Upgrade to PRO to create tournaments</span>
+            <span className="text-sm text-yellow-500">{t("upgrade_to_pro")}</span>
           </div>
         )}
       </div>
 
       {/* Search */}
       <div className="relative max-w-sm">
-        <Input placeholder="Search your tournaments..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
+        <Input placeholder={t("search_tournaments")} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
         <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
       </div>
 
@@ -266,21 +268,21 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
           ) : filteredTournaments.length === 0 ? (
             <div className="text-center py-16 text-muted-foreground">
               <Trophy className="h-12 w-12 mx-auto mb-3 opacity-30" />
-              <p className="font-medium">No tournaments yet</p>
+              <p className="font-medium">{t("no_tournaments_yet")}</p>
               <p className="text-sm mt-1">
-                {canCreate ? "Create your first tournament to get started." : "Upgrade your subscription to create tournaments."}
+                {canCreate ? t("create_first_tournament") : t("upgrade_to_create")}
               </p>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Tournament</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Players</TableHead>
-                  <TableHead>Prize Pool</TableHead>
-                  <TableHead>Start Date</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t("tournament")}</TableHead>
+                  <TableHead>{t("status")}</TableHead>
+                  <TableHead>{t("players")}</TableHead>
+                  <TableHead>{t("prize_pool")}</TableHead>
+                  <TableHead>{t("start_date")}</TableHead>
+                  <TableHead className="text-right">{t("actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -328,17 +330,17 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="outline" size="sm" className="h-8 border-primary/30 bg-primary/10 hover:bg-primary/20 text-primary px-3">
-                              Manage <MoreVertical className="ml-2 h-3.5 w-3.5 opacity-70" />
+                              {t("manage")} <MoreVertical className="ml-2 h-3.5 w-3.5 opacity-70" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem asChild>
                               <Link href={`/dashboard/partner/tournaments/${tournament.id}`}>
-                                <Settings className="mr-2 h-4 w-4" /> Manage
+                                <Settings className="mr-2 h-4 w-4" /> {t("manage")}
                               </Link>
                             </DropdownMenuItem>
                             <DropdownMenuItem className="text-red-500 hover:text-red-600 focus:text-red-600 focus:bg-red-500/10" onClick={() => handleDeleteTournament(tournament.id)}>
-                              <Trash2 className="mr-2 h-4 w-4" /> Delete
+                              <Trash2 className="mr-2 h-4 w-4" /> {t("delete")}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -356,8 +358,8 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
       <Dialog open={createOpen} onOpenChange={setCreateOpen} modal={false}>
         <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Create Tournament</DialogTitle>
-            <DialogDescription>Advanced tournament configuration for Partner.</DialogDescription>
+            <DialogTitle>{t("create_tournament")}</DialogTitle>
+            <DialogDescription>{t("advanced_config")}</DialogDescription>
           </DialogHeader>
           
           <div className="space-y-6 py-2">

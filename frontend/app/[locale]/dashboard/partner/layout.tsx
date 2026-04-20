@@ -4,11 +4,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { Plus, Settings, DollarSign, Users, Trophy, BarChart3, Crown, Menu, PanelLeftClose, HandCoins, Gift, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useTranslations } from "next-intl";
 
 export default function PartnerLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const t = useTranslations("common");
 
   // If we are on the main partner page, the SPA handles its own sidebar via Tabs.
   // We don't render a double layout here to avoid breaking the existing SPA state.
@@ -34,7 +36,7 @@ export default function PartnerLayout({ children }: { children: React.ReactNode 
       {/* Standalone Sidebar */}
       <div className={`transition-all duration-300 border-r border-white/10 bg-card/60 dark:bg-card/40 backdrop-blur-lg flex flex-col ${isSidebarOpen ? 'w-64' : 'w-16'} shrink-0`}>
         <div className="p-4 flex items-center justify-between border-b border-white/5">
-          {isSidebarOpen && <span className="font-bold tracking-tight">Partner Panel</span>}
+          {isSidebarOpen && <span className="font-bold tracking-tight">{t("partner_panel")}</span>}
           <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(!isSidebarOpen)} className={!isSidebarOpen ? "mx-auto" : ""}>
             {isSidebarOpen ? <PanelLeftClose className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </Button>
@@ -43,15 +45,15 @@ export default function PartnerLayout({ children }: { children: React.ReactNode 
           {isSidebarOpen && (
             <div className="flex flex-row items-center gap-2 mt-4 mb-1 px-3 w-full">
               <div className="shrink-0 w-1.5 h-1.5 rounded-full bg-orange-500/80 shadow-[0_0_5px_rgba(249,115,22,0.5)]"></div>
-              <span className="text-[10px] uppercase font-bold tracking-[0.15em] text-slate-400 shrink-0">Manage</span>
+              <span className="text-[10px] uppercase font-bold tracking-[0.15em] text-slate-400 shrink-0">{t("manage")}</span>
               <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent"></div>
             </div>
           )}
           {[
-            { id: 'overview', icon: BarChart3, label: 'Overview' },
-            { id: 'tournaments', icon: Trophy, label: 'Tournaments' },
-            { id: 'lobbies', icon: Users, label: 'Lobbies' },
-            { id: 'team', icon: Plus, label: 'Players' }
+            { id: 'overview', icon: BarChart3, label: t("overview") },
+            { id: 'tournaments', icon: Trophy, label: t("tournaments") },
+            { id: 'lobbies', icon: Users, label: t("lobbies") },
+            { id: 'team', icon: Plus, label: t("players") }
           ].map(tab => {
             const Icon = tab.icon;
             return (
@@ -69,15 +71,15 @@ export default function PartnerLayout({ children }: { children: React.ReactNode 
           {isSidebarOpen && (
             <div className="flex flex-row items-center gap-2 mt-4 mb-1 px-3 w-full">
               <div className="shrink-0 w-1.5 h-1.5 rounded-full bg-green-500/80 shadow-[0_0_5px_rgba(34,197,94,0.5)]"></div>
-              <span className="text-[10px] uppercase font-bold tracking-[0.15em] text-slate-400 shrink-0">Finance & Analytics</span>
+              <span className="text-[10px] uppercase font-bold tracking-[0.15em] text-slate-400 shrink-0">{t("finance_analytics")}</span>
               <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent"></div>
             </div>
           )}
           {[
-            { id: 'revenue', icon: HandCoins, label: 'Revenue' },
-            { id: 'wallet', icon: DollarSign, label: 'Wallet' },
-            { id: 'analytics', icon: BarChart3, label: 'Analytics' },
-            { id: 'plans', icon: Crown, label: 'Plans' }
+            { id: 'revenue', icon: HandCoins, label: t("revenue") },
+            { id: 'wallet', icon: DollarSign, label: t("wallet") },
+            { id: 'analytics', icon: BarChart3, label: t("analytics") },
+            { id: 'plans', icon: Crown, label: t("plans") }
           ].map(tab => {
             const Icon = tab.icon;
             return (
@@ -95,14 +97,14 @@ export default function PartnerLayout({ children }: { children: React.ReactNode 
           {isSidebarOpen && (
             <div className="flex flex-row items-center gap-2 mt-4 mb-1 px-3 w-full">
               <div className="shrink-0 w-1.5 h-1.5 rounded-full bg-cyan-500/80 shadow-[0_0_5px_rgba(6,182,212,0.5)]"></div>
-              <span className="text-[10px] uppercase font-bold tracking-[0.15em] text-slate-400 shrink-0">Engagement & Settings</span>
+              <span className="text-[10px] uppercase font-bold tracking-[0.15em] text-slate-400 shrink-0">{t("engagement_settings")}</span>
               <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent"></div>
             </div>
           )}
           {[
-            { id: 'rewards', icon: Gift, label: 'Rewards' },
-            { id: 'achievements', icon: Star, label: 'Achievements' },
-            { id: 'settings', icon: Settings, label: 'Settings' }
+            { id: 'rewards', icon: Gift, label: t("rewards") },
+            { id: 'achievements', icon: Star, label: t("achievements") },
+            { id: 'settings', icon: Settings, label: t("settings") }
           ].map(tab => {
             const Icon = tab.icon;
             return (

@@ -15,8 +15,8 @@ export function TournamentScheduleCard({ tournament }: TournamentScheduleCardPro
   const t = useTranslations("common")
   const startDate = new Date(tournament.startTime)
   const endDate = tournament.endTime ? new Date(tournament.endTime) : null
-  const registrationDeadlineDate = tournament.endTime && !isNaN(new Date(tournament.endTime).getTime()) 
-    ? new Date(tournament.endTime) 
+  const registrationDeadlineDate = tournament.registrationDeadline && !isNaN(new Date(tournament.registrationDeadline).getTime()) 
+    ? new Date(tournament.registrationDeadline) 
     : null
   
   const [now, setNow] = useState(new Date())

@@ -43,11 +43,12 @@ export default function TournamentSidebarClient({ initialTournament }: Tournamen
   const tournament = currentTournament?.id === initialTournament.id ? currentTournament : initialTournament
 
   const statusMapping: Record<string, { text: string; color: string }> = {
-    pending:     { text: t("upcoming"),   color: "bg-yellow-500/20 text-yellow-500" },
-    UPCOMING:    { text: t("upcoming"),   color: "bg-yellow-500/20 text-yellow-500" },
-    in_progress: { text: t("ongoing"),    color: "bg-primary/20 text-primary animate-pulse-subtle" },
-    completed:   { text: t("finished"),   color: "bg-muted text-muted-foreground" },
-    COMPLETED:   { text: t("finished"),   color: "bg-muted text-muted-foreground" },
+    pending:      { text: t("upcoming"),           color: "bg-yellow-500/20 text-yellow-500" },
+    UPCOMING:     { text: t("upcoming"),           color: "bg-yellow-500/20 text-yellow-500" },
+    REGISTRATION: { text: t("registration_open"),  color: "bg-emerald-500/20 text-emerald-500" },
+    in_progress:  { text: t("ongoing"),            color: "bg-primary/20 text-primary animate-pulse-subtle" },
+    completed:    { text: t("finished"),           color: "bg-muted text-muted-foreground" },
+    COMPLETED:    { text: t("finished"),           color: "bg-muted text-muted-foreground" },
   }
   const currentStatus = statusMapping[tournament.status] || { text: tournament.status, color: "" }
 
@@ -270,7 +271,7 @@ export default function TournamentSidebarClient({ initialTournament }: Tournamen
                 </Button>
               </>
             )}
-            {(tournament.status === "UPCOMING" || tournament.status === "pending") && (
+            {(tournament.status === "UPCOMING" || tournament.status === "pending" || tournament.status === "REGISTRATION") && (
               isUserRegistered ? (
                 <Button disabled className="w-full bg-green-600/20 text-green-500 border-green-500/30 hover:bg-green-600/20">
                   <CheckCircle2 className="mr-2 h-4 w-4" />

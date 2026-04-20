@@ -347,8 +347,8 @@ export function RevenueTab({
                 <p className="text-2xl font-bold">
                   {useLedger ? `$${ledger.totals.netPartnerBalance.toLocaleString()}` : `$${partnerData.totalRevenue?.toLocaleString() || 0}`}
                 </p>
-                <p className="text-xs text-muted-foreground">Net Partner Balance</p>
-                <p className="text-xs text-green-600">Actual profit from entries</p>
+                <p className="text-xs text-muted-foreground">{t("net_partner_balance")}</p>
+                <p className="text-xs text-green-600">{t("actual_profit")}</p>
               </div>
             </div>
           </CardContent>
@@ -359,8 +359,8 @@ export function RevenueTab({
               <Trophy className="mr-3 h-8 w-8 text-indigo-500" />
               <div>
                 <p className="text-2xl font-bold">{totalTournaments}</p>
-                <p className="text-xs text-muted-foreground">Total Tournaments</p>
-                <p className="text-xs text-indigo-600">All time tournaments</p>
+                <p className="text-xs text-muted-foreground">{t("total_tournaments")}</p>
+                <p className="text-xs text-indigo-600">{t("all_time_tournaments")}</p>
               </div>
             </div>
           </CardContent>
@@ -373,8 +373,8 @@ export function RevenueTab({
                 <p className="text-2xl font-bold">
                   {useLedger ? `$${ledger.totals.totalPlatformFee.toLocaleString()}` : `$${partnerData.monthlyRevenue?.toLocaleString() || 0}`}
                 </p>
-                <p className="text-xs text-muted-foreground">Platform Fee Paid</p>
-                <p className="text-xs text-orange-600">To TesTicTour</p>
+                <p className="text-xs text-muted-foreground">{t("platform_fee_paid")}</p>
+                <p className="text-xs text-orange-600">{t("to_testictour")}</p>
               </div>
             </div>
           </CardContent>
@@ -387,8 +387,8 @@ export function RevenueTab({
                 <p className="text-2xl font-bold">
                   {useLedger ? `$${ledger.totals.outgoingPayouts.toLocaleString()}` : partnerData.totalMatches?.toLocaleString() || 0}
                 </p>
-                <p className="text-xs text-muted-foreground">{useLedger ? "Total Payouts" : "Matches Played"}</p>
-                <p className="text-xs text-purple-600">Disbursed to players</p>
+                <p className="text-xs text-muted-foreground">{useLedger ? t("total_payouts") : t("matches_played")}</p>
+                <p className="text-xs text-purple-600">{t("disbursed_to_players")}</p>
               </div>
             </div>
           </CardContent>
@@ -398,24 +398,24 @@ export function RevenueTab({
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Cash Flow Summary</CardTitle>
-            <CardDescription>Income and expenditures</CardDescription>
+            <CardTitle>{t("cash_flow_summary")}</CardTitle>
+            <CardDescription>{t("income_expenditures")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-between">
-              <span className="text-sm">Incoming (Players Entry Fee)</span>
+              <span className="text-sm">{t("incoming_players")}</span>
               <span className="text-sm font-medium text-green-600">${useLedger ? ledger.totals.incomingPlayers.toLocaleString() : "0"}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-sm">Incoming (Host Escrow Funding)</span>
+              <span className="text-sm">{t("incoming_host")}</span>
               <span className="text-sm font-medium text-green-600">${useLedger ? ledger.totals.incomingSponsors.toLocaleString() : "0"}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-sm">Outgoing (Payouts)</span>
+              <span className="text-sm">{t("outgoing_payouts")}</span>
               <span className="text-sm font-medium text-red-500">-${useLedger ? ledger.totals.outgoingPayouts.toLocaleString() : "0"}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-sm">Outgoing (Refunds)</span>
+              <span className="text-sm">{t("outgoing_refunds")}</span>
               <span className="text-sm font-medium text-red-500">-${useLedger ? ledger.totals.outgoingRefunds.toLocaleString() : "0"}</span>
             </div>
           </CardContent>
@@ -423,27 +423,27 @@ export function RevenueTab({
 
         <Card>
           <CardHeader>
-            <CardTitle>Tournament Usage</CardTitle>
-            <CardDescription>Based on plan limits</CardDescription>
+            <CardTitle>{t("tournament_usage")}</CardTitle>
+            <CardDescription>{t("based_on_plan")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {tournaments.length > 0 ? (
               <div className="space-y-3">
                  <div className="flex justify-between">
-                  <span className="text-sm">Total Tournaments Created</span>
+                  <span className="text-sm">{t("total_tournaments_created")}</span>
                   <span className="text-sm font-medium">{totalTournaments}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm">Completed Tournaments</span>
+                  <span className="text-sm">{t("completed_tournaments")}</span>
                   <span className="text-sm font-medium text-blue-600">{tournaments.filter(t => t.status === 'completed').length}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm">Total Participants Engaged</span>
+                  <span className="text-sm">{t("total_participants_engaged")}</span>
                   <span className="text-sm font-medium">{tournaments.reduce((sum, t) => sum + (t._count?.participants || 0), 0)}</span>
                 </div>
               </div>
             ) : (
-              <div className="text-center text-sm text-muted-foreground pt-4">Data tracking active</div>
+              <div className="text-center text-sm text-muted-foreground pt-4">{t("data_tracking_active")}</div>
             )}
             
           </CardContent>
@@ -452,25 +452,25 @@ export function RevenueTab({
 
       <Card>
         <CardHeader>
-          <CardTitle>Tournaments / Lobbies Revenue</CardTitle>
-          <CardDescription>Detailed breakdown per event</CardDescription>
+          <CardTitle>{t("tournaments_lobbies_revenue")}</CardTitle>
+          <CardDescription>{t("detailed_breakdown")}</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Event Name</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Participants</TableHead>
-                <TableHead>Entry Fee</TableHead>
+                <TableHead>{t("event_name")}</TableHead>
+                <TableHead>{t("event_type")}</TableHead>
+                <TableHead>{t("event_status")}</TableHead>
+                <TableHead>{t("event_participants")}</TableHead>
+                <TableHead>{t("entry_fee")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {tournaments.slice(0, 10).map((t) => (
                  <TableRow key={t.id}>
                  <TableCell className="font-medium">{t.name}</TableCell>
-                 <TableCell><Badge className="bg-indigo-500/10 text-indigo-500 border-indigo-500/20">Tournament</Badge></TableCell>
+                 <TableCell><Badge className="bg-indigo-500/10 text-indigo-500 border-indigo-500/20">{t("tournament_badge")}</Badge></TableCell>
                  <TableCell>
                    <Badge variant="outline">
                      {t.status}
@@ -486,7 +486,7 @@ export function RevenueTab({
                 return (
                   <TableRow key={`lobby-${lobby.id}`}>
                     <TableCell className="font-medium">{lobby.name}</TableCell>
-                    <TableCell><Badge className="bg-slate-500/10 text-slate-500 border-slate-500/20">Legacy Lobby</Badge></TableCell>
+                    <TableCell><Badge className="bg-slate-500/10 text-slate-500 border-slate-500/20">{t("legacy_lobby")}</Badge></TableCell>
                     <TableCell>
                       <Badge variant={lobby.status === 'COMPLETED' ? 'default' : 'secondary'}>
                         {lobby.status}
@@ -561,10 +561,10 @@ export function SettingsTab({ partnerData }: { partnerData?: PartnerData }) {
 
       <Tabs defaultValue="general" className="w-full">
         <TabsList className="mb-6 bg-card/60 border border-white/5 p-1 w-full flex overflow-x-auto justify-start h-auto flex-wrap">
-          <TabsTrigger value="general" className="flex-1 rounded-md py-2">General Profile</TabsTrigger>
-          <TabsTrigger value="payments" className="flex-1 rounded-md py-2">Gateways & Fees</TabsTrigger>
-          <TabsTrigger value="plans" className="flex-1 rounded-md py-2">Plans & Billing</TabsTrigger>
-          <TabsTrigger value="notifications" className="flex-1 rounded-md py-2">Notifications</TabsTrigger>
+          <TabsTrigger value="general" className="flex-1 rounded-md py-2">{t("general_profile")}</TabsTrigger>
+          <TabsTrigger value="payments" className="flex-1 rounded-md py-2">{t("gateways_fees")}</TabsTrigger>
+          <TabsTrigger value="plans" className="flex-1 rounded-md py-2">{t("plans_billing")}</TabsTrigger>
+          <TabsTrigger value="notifications" className="flex-1 rounded-md py-2">{t("notifications")}</TabsTrigger>
         </TabsList>
         
         <form onSubmit={handleSaveSettings}>
@@ -577,7 +577,7 @@ export function SettingsTab({ partnerData }: { partnerData?: PartnerData }) {
                   <Input id="partnerName" name="partnerName" defaultValue={partnerSettings.partnerName} />
                 </div>
                 <div>
-                  <Label htmlFor="contactEmail">Contact Email</Label>
+                  <Label htmlFor="contactEmail">{t("contact_email")}</Label>
                   <Input id="contactEmail" name="contactEmail" type="email" defaultValue={partnerSettings.contactEmail} />
                 </div>
               </CardContent>
@@ -585,7 +585,7 @@ export function SettingsTab({ partnerData }: { partnerData?: PartnerData }) {
             
             <div className="flex justify-end pt-4">
               <Button type="submit" size="lg" className="shadow-xl shadow-primary/20">
-                <Save className="mr-2 h-4 w-4" /> Save General Settings
+                <Save className="mr-2 h-4 w-4" /> {t("save_general_settings")}
               </Button>
             </div>
           </TabsContent>
@@ -595,14 +595,14 @@ export function SettingsTab({ partnerData }: { partnerData?: PartnerData }) {
               <CardHeader>
                 <CardTitle className="flex items-center text-xl">
                   <Star className="mr-2 h-5 w-5 text-primary" />
-                  Global Host Fee Config
+                  {t("global_host_fee_config")}
                 </CardTitle>
-                <CardDescription>Set the default revenue share you receive from tournament entry fees. Maximum allowed is 10%.</CardDescription>
+                <CardDescription>{t("set_default_revenue_share")}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="hostFeePercent" className="text-base">Host Fee Percentage</Label>
+                    <Label htmlFor="hostFeePercent" className="text-base">{t("host_fee_percentage")}</Label>
                     <div className="flex items-center gap-2">
                       <Input 
                         id="hostFeePercent" 
@@ -617,7 +617,7 @@ export function SettingsTab({ partnerData }: { partnerData?: PartnerData }) {
                     </div>
                   </div>
                   <p className="text-sm text-yellow-500 bg-yellow-500/10 p-3 rounded-md border border-yellow-500/20">
-                    Lưu ý: Partner chỉ được cấu hình Host Fee tối đa 10%. Thiết lập này sẽ tự động áp dụng cho mọi giải đấu bạn tạo.
+                    {t("host_fee_warning")}
                   </p>
                 </div>
               </CardContent>
@@ -625,8 +625,8 @@ export function SettingsTab({ partnerData }: { partnerData?: PartnerData }) {
 
             <Card className="bg-card/40 backdrop-blur-md border border-white/10 shadow-xl overflow-hidden relative">
               <CardHeader>
-                <CardTitle className="text-xl">Payout & Gateways</CardTitle>
-                <CardDescription>Configure how you receive payouts from tournament revenue securely.</CardDescription>
+                <CardTitle className="text-xl">{t("payout_gateways")}</CardTitle>
+                <CardDescription>{t("configure_how_you_receive")}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -638,11 +638,11 @@ export function SettingsTab({ partnerData }: { partnerData?: PartnerData }) {
                       </div>
                       <div>
                         <h4 className="font-semibold text-lg">Stripe Connect</h4>
-                        <p className="text-sm text-muted-foreground w-full break-words">International & USD Payouts</p>
+                        <p className="text-sm text-muted-foreground w-full break-words">{t("international_usd_payouts")}</p>
                       </div>
                     </div>
                     <Button type="button" onClick={() => alert('Redirecting to Stripe Connect onboarding...')} className="bg-blue-600 hover:bg-blue-700 text-white w-full shadow-lg shadow-blue-500/20 mt-2">
-                      Connect Stripe
+                      {t("connect_stripe")}
                     </Button>
                   </div>
 
@@ -654,11 +654,11 @@ export function SettingsTab({ partnerData }: { partnerData?: PartnerData }) {
                       </div>
                       <div>
                         <h4 className="font-semibold text-lg">MoMo Wallet</h4>
-                        <p className="text-sm text-muted-foreground w-full break-words">VND Local Payouts</p>
+                        <p className="text-sm text-muted-foreground w-full break-words">{t("vnd_local_payouts")}</p>
                       </div>
                     </div>
                     <Button type="button" variant="outline" className="border-pink-500/30 text-pink-500 hover:bg-pink-500 hover:text-white w-full transition select-none mt-2">
-                      Link MoMo (Coming Soon)
+                      {t("link_momo")}
                     </Button>
                   </div>
                 </div>
@@ -667,7 +667,7 @@ export function SettingsTab({ partnerData }: { partnerData?: PartnerData }) {
 
             <div className="flex justify-end pt-4">
               <Button type="submit" size="lg" className="shadow-xl shadow-primary/20">
-                <Save className="mr-2 h-4 w-4" /> Save Fee Settings
+                <Save className="mr-2 h-4 w-4" /> {t("save_fee_settings")}
               </Button>
             </div>
           </TabsContent>
@@ -696,7 +696,7 @@ export function SettingsTab({ partnerData }: { partnerData?: PartnerData }) {
             
             <div className="flex justify-end pt-4">
               <Button type="submit" size="lg" className="shadow-xl shadow-primary/20">
-                <Save className="mr-2 h-4 w-4" /> Save Notifications
+                <Save className="mr-2 h-4 w-4" /> {t("save_notifications")}
               </Button>
             </div>
           </TabsContent>
