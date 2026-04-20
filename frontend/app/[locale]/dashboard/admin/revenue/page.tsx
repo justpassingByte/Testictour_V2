@@ -14,7 +14,7 @@ import { useTranslations } from "next-intl"
 interface RevenueStats {
   totalRevenue: number
   monthlyRevenue: number
-  subscriptionPlans: { FREE: number; PRO: number; ENTERPRISE: number }
+  subscriptionPlans: { STARTER: number; PRO: number; ENTERPRISE: number }
 }
 
 interface AnalyticsData {
@@ -27,7 +27,7 @@ interface AnalyticsData {
     totalLobbies: number; activeLobbies: number; revenue: number
   }[]
   subscriptionBreakdown: {
-    FREE: { count: number; revenue: number }
+    STARTER: { count: number; revenue: number }
     PRO: { count: number; revenue: number }
     ENTERPRISE: { count: number; revenue: number }
   }
@@ -112,9 +112,9 @@ function DonutChart({ segments, noDataText = "No data", partnersText = "partners
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────
-const PLAN_PRICES: Record<string, number> = { FREE: 0, PRO: 29, ENTERPRISE: 99 }
+const PLAN_PRICES: Record<string, number> = { STARTER: 0, PRO: 29, ENTERPRISE: 99 }
 const PLAN_COLORS: Record<string, string> = {
-  FREE: "#64748b", PRO: "#eab308", ENTERPRISE: "#a855f7"
+  STARTER: "#64748b", PRO: "#eab308", ENTERPRISE: "#a855f7"
 }
 const MONTHS_FILTER = ["All", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
@@ -165,16 +165,16 @@ export default function AdminRevenuePage() {
 
   const breakdown = analytics?.subscriptionBreakdown
   const planRevenue = breakdown ? {
-    FREE: (breakdown.FREE.count * PLAN_PRICES.FREE),
+    STARTER: (breakdown.STARTER.count * PLAN_PRICES.STARTER),
     PRO: (breakdown.PRO.count * PLAN_PRICES.PRO),
     ENTERPRISE: (breakdown.ENTERPRISE.count * PLAN_PRICES.ENTERPRISE),
-  } : { FREE: 0, PRO: 0, ENTERPRISE: 0 }
+  } : { STARTER: 0, PRO: 0, ENTERPRISE: 0 }
   const totalMRR = Object.values(planRevenue).reduce((a, b) => a + b, 0)
 
   const donutSegments = breakdown ? [
     { label: "Enterprise", value: breakdown.ENTERPRISE.count, color: PLAN_COLORS.ENTERPRISE },
     { label: "Pro",        value: breakdown.PRO.count,        color: PLAN_COLORS.PRO },
-    { label: "Free",       value: breakdown.FREE.count,       color: PLAN_COLORS.FREE },
+    { label: "Starter",    value: breakdown.STARTER.count,    color: PLAN_COLORS.STARTER },
   ] : []
 
   // Filter top partners by plan
@@ -212,7 +212,7 @@ export default function AdminRevenuePage() {
           },
           {
             label: t("paid_partners", { defaultValue: "Paid Partners" }), value: (breakdown ? breakdown.PRO.count + breakdown.ENTERPRISE.count : 0),
-            sub: t("on_free_count", { count: breakdown?.FREE.count || 0, defaultValue: `${breakdown?.FREE.count || 0} on Free` }), icon: Users, color: "blue", trend: "+5%"
+            sub: t("on_free_count", { count: breakdown?.STARTER.count || 0, defaultValue: `${breakdown?.STARTER.count || 0} on Starter` }), icon: Users, color: "blue", trend: "+5%"
           },
           {
             label: t("arpu", { defaultValue: "ARPU" }), value: `$${breakdown && (breakdown.PRO.count + breakdown.ENTERPRISE.count) > 0
@@ -338,7 +338,7 @@ export default function AdminRevenuePage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(["ENTERPRISE", "PRO", "FREE"] as const).map((plan) => {
+              {(["ENTERPRISE", "PRO", "STARTER"] as const).map((plan) => {
                 const count = breakdown?.[plan]?.count || 0
                 const mrr = planRevenue[plan]
                 const pct = totalMRR > 0 ? Math.round((mrr / totalMRR) * 100) : 0
@@ -365,7 +365,7 @@ export default function AdminRevenuePage() {
               })}
               <TableRow className="border-t-2 border-white/20 font-bold">
                 <TableCell>{t("total", { defaultValue: "Total" })}</TableCell>
-                <TableCell className="text-center">{(breakdown?.FREE.count || 0) + (breakdown?.PRO.count || 0) + (breakdown?.ENTERPRISE.count || 0)}</TableCell>
+                <TableCell className="text-center">{(breakdown?.STARTER.count || 0) + (breakdown?.PRO.count || 0) + (breakdown?.ENTERPRISE.count || 0)}</TableCell>
                 <TableCell></TableCell>
                 <TableCell className="text-center text-emerald-400">${totalMRR.toLocaleString()}</TableCell>
                 <TableCell className="text-right">100%</TableCell>
@@ -391,7 +391,7 @@ export default function AdminRevenuePage() {
               <SelectItem value="All">{t("all_plans", { defaultValue: "All Plans" })}</SelectItem>
               <SelectItem value="ENTERPRISE">Enterprise</SelectItem>
               <SelectItem value="PRO">Pro</SelectItem>
-              <SelectItem value="FREE">Free</SelectItem>
+              <SelectItem value="STARTER">Starter</SelectItem>
             </SelectContent>
           </Select>
         </CardHeader>

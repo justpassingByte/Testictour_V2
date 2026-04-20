@@ -188,7 +188,10 @@ export const createUser = asyncHandler(async (req: Request, res: Response, next:
 
 export const updateUser = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
   const { id } = req.params;
-  const { username, email, role, riotGameName, riotGameTag, region } = req.body;
+  const { 
+    username, email, role, riotGameName, riotGameTag, region,
+    totalMatchesPlayed, averagePlacement, topFourRate, firstPlaceRate, tournamentsPlayed, tournamentsWon
+  } = req.body;
 
   const user = await prisma.user.findUnique({ where: { id } });
   if (!user) {
@@ -204,6 +207,12 @@ export const updateUser = asyncHandler(async (req: Request, res: Response, next:
       riotGameName: riotGameName || user.riotGameName,
       riotGameTag: riotGameTag || user.riotGameTag,
       region: region || user.region,
+      totalMatchesPlayed: totalMatchesPlayed !== undefined ? Number(totalMatchesPlayed) : user.totalMatchesPlayed,
+      averagePlacement: averagePlacement !== undefined ? Number(averagePlacement) : user.averagePlacement,
+      topFourRate: topFourRate !== undefined ? Number(topFourRate) : user.topFourRate,
+      firstPlaceRate: firstPlaceRate !== undefined ? Number(firstPlaceRate) : user.firstPlaceRate,
+      tournamentsPlayed: tournamentsPlayed !== undefined ? Number(tournamentsPlayed) : user.tournamentsPlayed,
+      tournamentsWon: tournamentsWon !== undefined ? Number(tournamentsWon) : user.tournamentsWon,
     },
     select: {
       id: true,
@@ -252,15 +261,17 @@ export const banUser = asyncHandler(async (req: Request, res: Response, next: Ne
     return next(new ApiError(404, 'User not found'));
   }
 
-  // Implement actual ban logic (e.g., set a 'banned' flag, change role, etc.)
-  // For now, let's just update the role to a 'banned' state or add a flag
+  // Toggle isActive status
   const updatedUser = await prisma.user.update({
     where: { id },
-    data: { role: 'banned' }, // Or set a 'isBanned: true' field if it exists
-    select: { id: true, username: true, email: true, role: true },
+    data: { isActive: !user.isActive }, 
+    select: { id: true, username: true, email: true, role: true, isActive: true },
   });
 
-  res.status(200).json({ message: `User ${user.username} has been banned`, user: updatedUser });
+  res.status(200).json({ 
+    message: `User ${user.username} has been ${updatedUser.isActive ? 'unbanned' : 'banned'}`, 
+    user: updatedUser 
+  });
 });
 export const deleteUser = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
   const { id } = req.params;

@@ -41,6 +41,7 @@ export default function AdminPlayersPage() {
   const loading = useAdminUserStore((s) => s.loading)
   const setRoleFilter = useAdminUserStore((s) => s.setRoleFilter)
   const banUser = useAdminUserStore((s) => s.banUser)
+  const updateUser = useAdminUserStore((s) => s.updateUser)
 
   const [searchQuery, setSearchQuery] = useState("")
   const [sortBy, setSortBy] = useState("username")
@@ -50,6 +51,8 @@ export default function AdminPlayersPage() {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editForm, setEditForm] = useState<any>({})
 
   useEffect(() => {
     setRoleFilter("")
@@ -58,14 +61,35 @@ export default function AdminPlayersPage() {
   const handlePlayerClick = async (id: string) => {
     setSheetOpen(true)
     setSelectedPlayer(null)
+    setIsEditing(false)
     setDetailLoading(true)
     try {
       const res = await api.get(`/admin/users/${id}`)
       setSelectedPlayer(res.data)
+      setEditForm(res.data)
     } catch (error) {
       console.error('Failed to fetch player detail:', error)
     } finally {
       setDetailLoading(false)
+    }
+  }
+
+  const handleSaveBasicInfo = async () => {
+    if (!selectedPlayer) return;
+    try {
+      await updateUser(selectedPlayer.id, {
+        username: editForm.username,
+        email: editForm.email,
+        role: editForm.role,
+        riotGameName: editForm.riotGameName,
+        riotGameTag: editForm.riotGameTag,
+        region: editForm.region,
+      });
+      const res = await api.get(`/admin/users/${selectedPlayer.id}`);
+      setSelectedPlayer(res.data);
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Failed to update basic info:', error);
     }
   }
 
@@ -249,8 +273,51 @@ export default function AdminPlayersPage() {
                   </div>
                 </SheetHeader>
 
-                {/* Status badges */}
-                <div className="flex items-center gap-2 flex-wrap">
+                {isEditing ? (
+                  <div className="space-y-4 pt-4 border-t border-white/10">
+                    <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Sửa thông tin cơ bản</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-muted-foreground">Username</label>
+                        <Input value={editForm.username || ''} onChange={e => setEditForm({...editForm, username: e.target.value})} />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-muted-foreground">Email</label>
+                        <Input value={editForm.email || ''} onChange={e => setEditForm({...editForm, email: e.target.value})} />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-muted-foreground">Riot Name</label>
+                        <Input value={editForm.riotGameName || ''} onChange={e => setEditForm({...editForm, riotGameName: e.target.value})} />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-muted-foreground">Riot Tag</label>
+                        <Input value={editForm.riotGameTag || ''} onChange={e => setEditForm({...editForm, riotGameTag: e.target.value})} />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-muted-foreground">Region</label>
+                        <Input value={editForm.region || ''} onChange={e => setEditForm({...editForm, region: e.target.value})} />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-muted-foreground">Role</label>
+                        <Select value={editForm.role} onValueChange={v => setEditForm({...editForm, role: v})}>
+                          <SelectTrigger className="w-full text-left"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="user">Player</SelectItem>
+                            <SelectItem value="partner">Partner</SelectItem>
+                            <SelectItem value="admin">Admin</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 pt-2">
+                      <Button className="flex-1" onClick={handleSaveBasicInfo}>Lưu thay đổi</Button>
+                      <Button variant="outline" className="flex-1" onClick={() => { setIsEditing(false); setEditForm(selectedPlayer); }}>Hủy bỏ</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Status badges */}
+                    <div className="flex items-center gap-2 flex-wrap">
                   <Badge variant="outline" className={
                     selectedPlayer.role === 'admin' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
                       selectedPlayer.role === 'partner' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
@@ -332,7 +399,10 @@ export default function AdminPlayersPage() {
 
                 {/* Admin Actions */}
                 <div className="pt-2 border-t border-white/10">
-                  <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">{t("admin_actions", { defaultValue: "Admin Actions" })}</h4>
+                  <div className="flex justify-between items-center mb-3">
+                    <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{t("admin_actions", { defaultValue: "Admin Actions" })}</h4>
+                    <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>Sửa thông tin cơ bản</Button>
+                  </div>
                   <div className="flex gap-2">
                     <Button
                       variant="destructive" size="sm" className="w-full"
@@ -342,6 +412,8 @@ export default function AdminPlayersPage() {
                     </Button>
                   </div>
                 </div>
+              </>
+              )}
               </div>
             </ScrollArea>
           ) : (
