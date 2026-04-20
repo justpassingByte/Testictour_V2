@@ -25,6 +25,9 @@ import { LobbiesTab, RevenueTab } from "../../partner/components/PartnerServerCo
 import { AnalyticsTabNew } from "../../partner/components/AnalyticsTabNew"
 import AdminPartnerSubscriptionTab from "../components/AdminPartnerSubscriptionTab"
 import PartnerTransactionsTab from "../components/PartnerTransactionsTab"
+import EditUserModal from "@/components/dashboard/admin/EditUserModal"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Trash2, Edit, MoreVertical, Ban, CheckCircle } from "lucide-react"
 
 export default function AdminPartnersPage() {
   const t = useTranslations("common")
@@ -37,10 +40,21 @@ export default function AdminPartnersPage() {
   const fetchPartnerDetail = useAdminUserStore((state) => state.fetchPartnerDetail)
   const selectedPartnerDetail = useAdminUserStore((state) => state.selectedPartnerDetail)
 
+  const deleteUser = useAdminUserStore((state) => state.deleteUser)
+  const updateUser = useAdminUserStore((state) => state.updateUser)
+
   const [searchQuery, setSearchQuery] = useState("")
   const [sortBy, setSortBy] = useState<string>("username")
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
+  
+  const [planFilter, setPlanFilter] = useState("all")
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [debtFilter, setDebtFilter] = useState("all")
+
   const [openAddUser, setOpenAddUser] = useState(false)
+  const [openEditUser, setOpenEditUser] = useState(false)
+  const [selectedUserToEdit, setSelectedUserToEdit] = useState<any>(null)
+  
   const [sheetOpen, setSheetOpen] = useState(false)
   const [sheetPartnerId, setSheetPartnerId] = useState<string | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -70,7 +84,16 @@ export default function AdminPartnersPage() {
       const matchesSearch =
         user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
         user.email.toLowerCase().includes(searchQuery.toLowerCase())
-      return matchesSearch && user.role === 'partner'
+      
+      const pPlan = user.subscriptionPlan || "STARTER"
+      const matchesPlan = planFilter === "all" || pPlan === planFilter
+      
+      const userBanned = user.isActive === false || user.role === 'banned'
+      const matchesStatus = statusFilter === "all" || (statusFilter === "banned" ? userBanned : !userBanned)
+      
+      const matchesDebt = debtFilter === "all" || (debtFilter === "in_debt" ? (user.balance || 0) < 0 : true)
+
+      return matchesSearch && (user.role === 'partner' || user.role === 'banned') && matchesPlan && matchesStatus && matchesDebt
     })
     .sort((a, b) => {
       let comparison = 0
@@ -111,11 +134,39 @@ export default function AdminPartnersPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex flex-col flex-wrap lg:flex-row gap-3">
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Input placeholder={t("search_partners", { defaultValue: "Search partners..." })} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
         </div>
+        
+        <Select value={planFilter} onValueChange={setPlanFilter}>
+          <SelectTrigger className="w-[140px]"><SelectValue placeholder="All Plans" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Plans</SelectItem>
+            <SelectItem value="STARTER">Starter</SelectItem>
+            <SelectItem value="PRO">Pro</SelectItem>
+            <SelectItem value="ENTERPRISE">Enterprise</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[120px]"><SelectValue placeholder="All Status" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="banned">Banned</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={debtFilter} onValueChange={setDebtFilter}>
+          <SelectTrigger className="w-[130px]"><SelectValue placeholder="All Debt" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Any Balance</SelectItem>
+            <SelectItem value="in_debt">In Debt (&lt;0)</SelectItem>
+          </SelectContent>
+        </Select>
+
         <div className="flex items-center border rounded-md">
           <Select value={sortBy} onValueChange={setSortBy}>
             <SelectTrigger className="w-[140px] border-none shadow-none focus:ring-0">
@@ -186,10 +237,36 @@ export default function AdminPartnersPage() {
                       {user.balance?.toLocaleString()} đ
                     </TableCell>
                     <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                      <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 hover:bg-red-500/10"
-                        onClick={() => banUser(user.id)}>
-                        {user.isActive === false ? t("unban", { defaultValue: "Unban" }) : t("ban", { defaultValue: "Ban" })}
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" className="h-8 w-8 p-0">
+                            <span className="sr-only">Open menu</span>
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => {
+                            setSelectedUserToEdit(user)
+                            setOpenEditUser(true)
+                          }}>
+                            <Edit className="mr-2 h-4 w-4" />
+                            {t("edit", { defaultValue: "Edit Info" })}
+                          </DropdownMenuItem>
+                          
+                          <DropdownMenuItem onClick={() => banUser(user.id)}>
+                            {user.isActive === false || user.role === 'banned' ? (
+                              <><CheckCircle className="mr-2 h-4 w-4 text-green-500" /> {t("unban", { defaultValue: "Unban" })}</>
+                            ) : (
+                              <><Ban className="mr-2 h-4 w-4 text-yellow-500" /> {t("ban", { defaultValue: "Ban" })}</>
+                            )}
+                          </DropdownMenuItem>
+                          
+                          <DropdownMenuItem onClick={() => deleteUser(user.id)} className="text-red-500 focus:text-red-500">
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            {t("delete", { defaultValue: "Delete" })}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -277,6 +354,12 @@ export default function AdminPartnersPage() {
       </Sheet>
 
       <AddUserModal open={openAddUser} onClose={() => setOpenAddUser(false)} onCreate={handleCreateUser} />
+      <EditUserModal 
+        open={openEditUser} 
+        onClose={() => setOpenEditUser(false)} 
+        user={selectedUserToEdit} 
+        onUpdate={(id, data) => updateUser(id, data)}
+      />
     </div>
   )
 }

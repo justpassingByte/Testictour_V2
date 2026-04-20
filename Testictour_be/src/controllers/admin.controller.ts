@@ -258,6 +258,19 @@ export const banUser = asyncHandler(async (req: Request, res: Response, next: Ne
 
   res.status(200).json({ message: `User ${user.username} has been banned`, user: updatedUser });
 });
+export const deleteUser = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  const { id } = req.params;
+
+  const user = await prisma.user.findUnique({ where: { id } });
+  if (!user) {
+    return next(new ApiError(404, 'User not found'));
+  }
+
+  // Soft delete or hard delete? Depending on schema, let's just delete
+  await prisma.user.delete({ where: { id } });
+
+  res.status(200).json({ message: `User ${user.username} has been deleted successfully` });
+});
 
 export const depositToUser = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
   const { id } = req.params;
@@ -376,16 +389,17 @@ export const getAdminStats = asyncHandler(async (req: Request, res: Response) =>
     .reduce((sum, s) => sum + (s.monthlyPrice || 0), 0) || totalRevenue;
 
   // Count subscription plans
-  const subscriptionPlans = { FREE: 0, PRO: 0, ENTERPRISE: 0 };
+  const subscriptionPlans = { STARTER: 0, PRO: 0, ENTERPRISE: 0 };
   subscriptions.forEach(s => {
-    if (s.plan === 'STARTER') subscriptionPlans.FREE++;
+    if (s.plan === 'STARTER') subscriptionPlans.STARTER++;
     else if (s.plan === 'PRO') subscriptionPlans.PRO++;
     else if (s.plan === 'ENTERPRISE') subscriptionPlans.ENTERPRISE++;
+    else subscriptionPlans.STARTER++; // Fallback
   });
 
-  // Also count partners without subscriptions as FREE
+  // Also count partners without subscriptions as STARTER
   const partnersWithSubs = subscriptions.length;
-  subscriptionPlans.FREE += Math.max(0, totalPartners - partnersWithSubs);
+  subscriptionPlans.STARTER += Math.max(0, totalPartners - partnersWithSubs);
 
   res.status(200).json({
     data: {
@@ -640,13 +654,15 @@ export const getAdminAnalytics = asyncHandler(async (req: Request, res: Response
   });
 
   const subscriptionBreakdown = {
-    FREE: { count: 0, revenue: 0 },
+    STARTER: { count: 0, revenue: 0 },
     PRO: { count: 0, revenue: 0 },
     ENTERPRISE: { count: 0, revenue: 0 },
   };
 
   allSubs.forEach(s => {
-    const key = s.plan as keyof typeof subscriptionBreakdown;
+    let key = s.plan as keyof typeof subscriptionBreakdown;
+    // Map legacy 'FREE' or anything else to STARTER
+    if (key !== 'PRO' && key !== 'ENTERPRISE') key = 'STARTER';
     if (subscriptionBreakdown[key]) {
       subscriptionBreakdown[key].count++;
       if (s.status === 'ACTIVE') {
@@ -655,9 +671,9 @@ export const getAdminAnalytics = asyncHandler(async (req: Request, res: Response
     }
   });
 
-  // Count partners without subscriptions as FREE
+  // Count partners without subscriptions as STARTER
   const totalPartners = await prisma.user.count({ where: { role: 'partner' } });
-  subscriptionBreakdown.FREE.count += Math.max(0, totalPartners - allSubs.length);
+  subscriptionBreakdown.STARTER.count += Math.max(0, totalPartners - allSubs.length);
 
   res.status(200).json({
     data: {

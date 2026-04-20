@@ -109,6 +109,7 @@ interface AdminUserState {
   createUser: (data: { username: string; email: string; password: string; role: string }) => Promise<void>;
   updateUser: (id: string, data: Partial<AdminUserDetail>) => Promise<void>;
   banUser: (id: string) => Promise<void>;
+  deleteUser: (id: string) => Promise<void>;
   deposit: (userId: string, amount: number) => Promise<void>;
 }
 
@@ -197,6 +198,12 @@ export const useAdminUserStore = create<AdminUserState>((set, get) => ({
   banUser: async (id) => {
     await api.post(`/admin/users/${id}/ban`);
     await get().fetchUsers();
+  },
+  deleteUser: async (id) => {
+    if (confirm("Are you sure you want to delete this user? This action cannot be undone.")) {
+      await api.delete(`/admin/users/${id}`);
+      await get().fetchUsers();
+    }
   },
   deposit: async (userId, amount) => {
     set({ loading: true });

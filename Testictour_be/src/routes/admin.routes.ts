@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import auth from '../middlewares/auth';
 import {
-    getAllUsers, getUserDetail, createUser, updateUser, banUser,
+    getAllUsers, getUserDetail, createUser, updateUser, banUser, deleteUser,
     depositToUser, importUsers, getUsersByReferrer,
     getAdminStats, getSubscriptions, updateSubscription, deleteSubscription,
     getAdminAnalytics, getPartnerDetailForAdmin,
@@ -31,5 +31,6 @@ router.get('/users/:id', auth('admin'), getUserDetail);
 router.post('/users', auth('admin'), createUser);
 router.put('/users/:id', auth('admin'), updateUser);
 router.post('/users/:id/ban', auth('admin'), banUser);
+router.delete('/users/:id', auth('admin'), deleteUser);
 router.post('/users/:id/deposit', auth('admin'), depositToUser);
 export default router;
