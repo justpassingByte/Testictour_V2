@@ -39,8 +39,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   // SocketProvider and NotificationProvider are now provided by GlobalProviders
   // in the root layout, so we don't need them here anymore.
   return (
-    <div className="flex min-h-screen flex-col">
-      <main className="flex-1 p-8 bg-muted/40">
+    <div className="flex min-h-screen flex-col bg-muted/40">
+      <main className="flex-1">
         {children}
       </main>
     </div>

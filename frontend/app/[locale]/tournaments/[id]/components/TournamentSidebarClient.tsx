@@ -85,7 +85,7 @@ export default function TournamentSidebarClient({ initialTournament }: Tournamen
     setLoadingExportBracket(true)
     try {
       window.dispatchEvent(new CustomEvent('export_bracket_start', { detail: { tournament } }))
-      await new Promise(resolve => setTimeout(resolve, 300)) // Wait for DOM re-render
+      await new Promise(resolve => setTimeout(resolve, 800)) // Wait for DOM re-render with all lobbies expanded
       const el = document.getElementById('bracket-export-target')
       if (!el) {
         toast.error(t("bracket") + " " + t("not_found") + " - " + t("please_navigate_to_bracket_tab"))
@@ -95,7 +95,8 @@ export default function TournamentSidebarClient({ initialTournament }: Tournamen
       const dataUrl = await htmlToImage.toPng(el, { 
         backgroundColor: '#0f172a',
         skipFonts: true,
-        pixelRatio: 2
+        pixelRatio: 2,
+        cacheBust: true,
       })
       const link = document.createElement('a')
       link.download = `bracket_${tournament.id}.png`

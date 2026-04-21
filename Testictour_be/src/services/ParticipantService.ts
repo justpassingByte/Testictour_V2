@@ -235,8 +235,10 @@ export default class ParticipantService {
   }
 
   static async leaderboard(tournamentId: string) {
+    // Include ALL paid participants (not just non-eliminated) so the final
+    // leaderboard shows everyone's ranking and prizes are assigned correctly.
     const participants = await prisma.participant.findMany({
-      where: { tournamentId, eliminated: false, paid: true },
+      where: { tournamentId, paid: true },
       include: { 
         user: { select: { id: true, username: true, riotGameName: true, riotGameTag: true, rank: true, topFourRate: true, firstPlaceRate: true, region: true } },
         rewards: true 
@@ -282,11 +284,13 @@ export default class ParticipantService {
       const statsA = playerStatsMap.get(aUserId) || { matches: 0, placements: [], computedScore: 0 };
       const statsB = playerStatsMap.get(bUserId) || { matches: 0, placements: [], computedScore: 0 };
 
-      // DO NOT OVERWRITE scoreTotal with globally computedScore! 
-      // This ensures we respect the carryOverScores=false logic when DB resets scoreTotal to 0.
+      // Use scoreTotal from DB, but fall back to computedScore when scoreTotal
+      // is 0 (can happen when carryOverScores=false resets it between phases).
+      const scoreA = (a.scoreTotal || 0) > 0 ? (a.scoreTotal || 0) : statsA.computedScore;
+      const scoreB = (b.scoreTotal || 0) > 0 ? (b.scoreTotal || 0) : statsB.computedScore;
       return RoundService.tiebreakComparator(
-        { score: a.scoreTotal || 0, placements: statsA.placements, userId: aUserId },
-        { score: b.scoreTotal || 0, placements: statsB.placements, userId: bUserId }
+        { score: scoreA, placements: statsA.placements, userId: aUserId },
+        { score: scoreB, placements: statsB.placements, userId: bUserId }
       );
     });
 
@@ -369,11 +373,16 @@ export default class ParticipantService {
         }
       }
 
+      const stats = p.user?.id ? playerStatsMap.get(p.user.id) : null;
+      // Use the same effective score we used for sorting
+      const effectiveScore = (p.scoreTotal || 0) > 0 ? (p.scoreTotal || 0) : (stats?.computedScore || 0);
+
       return {
         ...p,
+        scoreTotal: effectiveScore,
         rewards,
-        matchesPlayed: p.user?.id ? (playerStatsMap.get(p.user.id)?.matches || 0) : 0,
-        placements: p.user?.id ? (playerStatsMap.get(p.user.id)?.placements || []) : []
+        matchesPlayed: stats?.matches || 0,
+        placements: stats?.placements || []
       };
     });
   }
@@ -387,7 +396,7 @@ export default class ParticipantService {
 
     const [data, total] = await Promise.all([
       prisma.participant.findMany({
-        where: { tournamentId, eliminated: false },
+        where: { tournamentId },
         include: {
           user: { select: { id: true, username: true, riotGameName: true, riotGameTag: true, rank: true, region: true } },
           rewards: true,
@@ -396,7 +405,7 @@ export default class ParticipantService {
         skip,
         take: limit,
       }),
-      prisma.participant.count({ where: { tournamentId, eliminated: false } }),
+      prisma.participant.count({ where: { tournamentId } }),
     ]);
 
     return { data, total, page, limit };

@@ -787,8 +787,35 @@ export default class RoundService {
         id: true, name: true, status: true, entryFee: true, maxPlayers: true,
         prizeStructure: true, image: true,
         hostFeePercent: true, isCommunityMode: true,
-      }
+        organizerId: true, escrowRequiredAmount: true, absentFeePolicy: true,
+        expectedParticipants: true,
+      },
+      // Note: no `include` allowed alongside `select` at same level in Prisma,
+      // so we fetch escrow and counts separately below.
     });
+
+    // Compute net prize pool (budget) — this is a virtual field, not in the DB
+    let computedBudget = 0;
+    if (tournament) {
+      const [escrow, counts] = await Promise.all([
+        prisma.escrow.findUnique({ where: { tournamentId } }),
+        prisma.participant.groupBy({
+          by: ['isReserve'],
+          where: { tournamentId, paid: true },
+          _count: true,
+        }),
+      ]);
+
+      const registered = counts.find(c => !c.isReserve)?._count || 0;
+      const reserve = counts.find(c => c.isReserve)?._count || 0;
+      const absent = await prisma.participant.count({ where: { tournamentId, paid: true, isAbsent: true } });
+
+      computedBudget = await (await import('./TournamentService')).default.calculateNetPrizePool(
+        tournament,
+        { registered, reserve, absent },
+        escrow ?? undefined
+      );
+    }
 
     // Build lightweight round object for FE (compatible with IRound type)
     const roundForFE = {
@@ -825,7 +852,7 @@ export default class RoundService {
 
     const result = {
       success: true,
-      tournament: tournament || { id: tournamentId, name: 'Unknown' },
+      tournament: tournament ? { ...tournament, budget: computedBudget } : { id: tournamentId, name: 'Unknown' },
       round: roundForFE,
       phase: {
         id: phase.id,
@@ -2771,17 +2798,24 @@ export default class RoundService {
       const participants = await tx.participant.findMany({ where: { tournamentId } });
       const phaseMatchResults = await tx.matchResult.findMany({
         where: { match: { lobby: { round: { phase: { tournamentId } } } } },
-        select: { userId: true, placement: true },
+        select: { userId: true, placement: true, points: true },
+        orderBy: { id: 'asc' },
       });
       const phasePlacementsMap = new Map<string, number[]>();
+      const phaseScoreMap = new Map<string, number>();
       for (const r of phaseMatchResults) {
         const arr = phasePlacementsMap.get(r.userId) || [];
         arr.push(r.placement);
         phasePlacementsMap.set(r.userId, arr);
+        phaseScoreMap.set(r.userId, (phaseScoreMap.get(r.userId) || 0) + (r.points || 0));
       }
       
       winners = participants
-        .map(p => ({ ...p, score: p.scoreTotal || 0, placements: phasePlacementsMap.get(p.userId) || [] }))
+        .map(p => {
+          const computedScore = phaseScoreMap.get(p.userId) || 0;
+          const effectiveScore = (p.scoreTotal || 0) > 0 ? (p.scoreTotal || 0) : computedScore;
+          return { ...p, score: effectiveScore, placements: phasePlacementsMap.get(p.userId) || [] };
+        })
         .sort(RoundService.tiebreakComparator);
     }
 

@@ -140,7 +140,7 @@ export function MainNav({
           {currentUser ? (
             <Button
               variant="ghost"
-              className="text-lg font-bold mr-4"
+              className="text-sm md:text-base font-bold mr-2 md:mr-4 hidden md:flex"
               onClick={async () => await clearUser()}
             >
               {t("header.logout")}
@@ -148,7 +148,7 @@ export function MainNav({
           ) : (
             <Button
               variant="ghost"
-              className="text-lg font-bold mr-4"
+              className="text-sm md:text-base font-bold mr-2 md:mr-4 hidden md:flex"
               onClick={() => openModal('login')}
             >
               {t("header.login")}
@@ -176,6 +176,31 @@ export function MainNav({
             </Link>
           )
         })}
+        <div className="pt-4 mt-2 border-t border-border">
+          {currentUser ? (
+            <Button
+              variant="outline"
+              className="w-full font-bold justify-center"
+              onClick={async () => {
+                setIsOpen(false);
+                await clearUser();
+              }}
+            >
+              {t("header.logout")}
+            </Button>
+          ) : (
+            <Button
+              variant="default"
+              className="w-full font-bold justify-center"
+              onClick={() => {
+                setIsOpen(false);
+                openModal('login');
+              }}
+            >
+              {t("header.login")}
+            </Button>
+          )}
+        </div>
       </div>
 
       <AuthModal />

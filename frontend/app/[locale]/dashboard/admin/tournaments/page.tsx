@@ -162,7 +162,7 @@ export default function AdminTournamentsPage() {
               </TableHeader>
               <TableBody>
                 {filteredTournaments.map((tournament) => {
-                  const prizePool = (tournament.budget || 0) * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)))
+                  const prizePool = (tournament.budget || 0);
                   return (
                     <TableRow key={tournament.id} className="hover:bg-white/5">
                       <TableCell>

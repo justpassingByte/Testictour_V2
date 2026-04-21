@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useMemo, memo } from "react"
+import { useState, useCallback, useMemo, memo, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
@@ -116,6 +116,24 @@ export function TournamentBracketTab({ tournamentId }: TournamentBracketTabProps
   // For exporting all content
   const [exportMode, setExportMode] = useState(false)
   const [exportTournament, setExportTournament] = useState<any>(null)
+
+  // Listen for export events dispatched from the sidebar
+  useEffect(() => {
+    const handleExportStart = (e: Event) => {
+      const detail = (e as CustomEvent).detail
+      setExportTournament(detail?.tournament || null)
+      setExportMode(true)
+    }
+    const handleExportEnd = () => {
+      setExportMode(false)
+    }
+    window.addEventListener('export_bracket_start', handleExportStart)
+    window.addEventListener('export_bracket_end', handleExportEnd)
+    return () => {
+      window.removeEventListener('export_bracket_start', handleExportStart)
+      window.removeEventListener('export_bracket_end', handleExportEnd)
+    }
+  }, [])
 
   const getStateLabel = useCallback((state?: string) => {
     const s = (state || '').toUpperCase()
@@ -330,6 +348,81 @@ function MultiMatchView({
   const groupKey = `${phase.id}_m${matchIdx}`
   const selectedGroupLetter = activeGroup[groupKey] ?? null
 
+  // In export mode, render ALL matches with ALL groups expanded
+  if (exportMode) {
+    return (
+      <div className="space-y-8">
+        {phase.groups.map((match, mIdx) => {
+          const mGroupsMap = getGroupsFromLobbies(match.lobbies)
+          const mGroupLetters = Object.keys(mGroupsMap).sort()
+          const totalPlayers = match.lobbies.reduce((s, l) => s + l.players.length, 0)
+
+          return (
+            <div key={`${match.id}_${mIdx}`} className="space-y-4">
+              {/* Match Header */}
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-primary/10 border border-primary/20">
+                <Swords className="h-4 w-4 text-primary" />
+                <span className="font-bold text-base">Match {mIdx + 1}</span>
+                <Badge variant="outline" className={`${getStateColor(match.status)} text-[10px] uppercase font-bold ml-2`}>
+                  {getStateLabel(match.status)}
+                </Badge>
+                <span className="text-xs text-muted-foreground ml-auto">{totalPlayers} players</span>
+              </div>
+
+              {/* All groups for this match */}
+              {mGroupLetters.map(letter => {
+                const groupData = mGroupsMap[letter]
+                const lobbies = groupData.lobbies
+                const anyPlaying = lobbies.some(l => l.state === 'PLAYING' || l.state === 'IN_PROGRESS')
+                const allFinished = lobbies.every(l => l.state === 'FINISHED' || l.state === 'COMPLETED')
+                const status = allFinished ? 'completed' : anyPlaying ? 'in_progress' : 'pending'
+
+                return (
+                  <div key={letter} className="m-0 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg bg-muted/20 border border-white/5 gap-4">
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center gap-2 text-sm">
+                          <ShieldCheck className="h-4 w-4 text-primary" />
+                          <span className="font-medium text-base">{t('group_n', { letter })}</span>
+                          <Badge variant="outline" className={`${getStateColor(status)} text-[10px] uppercase font-bold ml-2`}>
+                            {getStateLabel(status)}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                          <Users className="h-3.5 w-3.5" />
+                          <span>{t('players_count_in_group', { count: lobbies.reduce((s, l) => s + l.players.length, 0) })}</span>
+                          <span className="opacity-50">•</span>
+                          <span>{t("lobbies")}: {lobbies.length}</span>
+                        </div>
+                      </div>
+                    </div>
+                    {lobbies.length === 0 ? (
+                      <p className="text-muted-foreground text-center py-6 text-sm">{t('no_lobbies_in_group')}</p>
+                    ) : (
+                      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+                        {lobbies.map((lobby, idx) => (
+                          <LobbyCard
+                            key={lobby.id}
+                            lobby={lobby}
+                            lobbyIndex={idx}
+                            tournamentId={tournamentId}
+                            getStateLabel={getStateLabel}
+                            stripGroupPrefix
+                            exportMode={exportMode}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-5">
       {/* ── Match Flow Bar ── */}
@@ -377,60 +470,6 @@ function MultiMatchView({
         <div className="space-y-4">
           {/* ── Group Tabs ── */}
           {groupLetters.length > 0 && (
-            exportMode ? (
-              <div className="w-full space-y-8">
-                {groupLetters.map(letter => {
-                  const groupData = groupsMap[letter]
-                  const lobbies = groupData.lobbies
-                  const roundId = groupData.roundId
-                  const anyPlaying = lobbies.some(l => l.state === 'PLAYING' || l.state === 'IN_PROGRESS')
-                  const allFinished = lobbies.every(l => l.state === 'FINISHED' || l.state === 'COMPLETED')
-                  const status = allFinished ? 'completed' : anyPlaying ? 'in_progress' : 'pending'
-  
-                  return (
-                    <div key={letter} className="m-0 space-y-4">
-                      {/* Header Action Bar */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg bg-muted/20 border border-white/5 gap-4">
-                        <div className="flex flex-col gap-1.5">
-                          <div className="flex items-center gap-2 text-sm">
-                            <ShieldCheck className="h-4 w-4 text-primary" />
-                            <span className="font-medium text-base">{t('group_n', { letter })}</span>
-                            <Badge variant="outline" className={`${getStateColor(status)} text-[10px] uppercase font-bold ml-2`}>
-                              {getStateLabel(status)}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-                            <Users className="h-3.5 w-3.5" />
-                            <span>{t('players_count_in_group', { count: lobbies.reduce((s, l) => s + l.players.length, 0) })}</span>
-                            <span className="opacity-50">•</span>
-                            <span>{t("lobbies")}: {lobbies.length}</span>
-                          </div>
-                        </div>
-                      </div>
-  
-                      {/* Lobbies Grid */}
-                      {lobbies.length === 0 ? (
-                        <p className="text-muted-foreground text-center py-6 text-sm">{t('no_lobbies_in_group')}</p>
-                      ) : (
-                        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-                          {lobbies.map((lobby, idx) => (
-                            <LobbyCard
-                              key={lobby.id}
-                              lobby={lobby}
-                              lobbyIndex={idx}
-                              tournamentId={tournamentId}
-                              getStateLabel={getStateLabel}
-                              stripGroupPrefix
-                              exportMode={exportMode}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            ) : (
               <Tabs 
                 value={selectedGroupLetter || groupLetters[0]} 
                 onValueChange={(val) => {
@@ -470,7 +509,7 @@ function MultiMatchView({
                     : undefined
 
                   return (
-                    <TabsContent key={letter} value={letter} className={`m-0 space-y-4 ${exportMode ? '' : 'animate-fade-in-up'}`}>
+                    <TabsContent key={letter} value={letter} className="m-0 space-y-4 animate-fade-in-up">
                       {/* Header Action Bar */}
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg bg-muted/20 border border-white/5 gap-4">
                         <div className="flex flex-col gap-1.5">
@@ -522,7 +561,6 @@ function MultiMatchView({
                   )
                 })}
               </Tabs>
-            )
           )}
         </div>
       )}

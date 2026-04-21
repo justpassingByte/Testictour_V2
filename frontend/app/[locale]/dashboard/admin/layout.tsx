@@ -128,16 +128,7 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
         <SidebarContent isCollapsed={!isExpanded} />
       </aside>
 
-      {/* Mobile toggle */}
-      <div className="lg:hidden fixed bottom-4 right-4 z-50">
-        <Button
-          size="icon" variant="default"
-          className="rounded-full h-12 w-12 shadow-xl bg-violet-600 hover:bg-violet-700"
-          onClick={() => setMobileOpen(!mobileOpen)}
-        >
-          {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </Button>
-      </div>
+      {/* Mobile toggle - moved to header below */}
 
       {/* Mobile sidebar */}
       {mobileOpen && (
@@ -149,8 +140,17 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
         </div>
       )}
 
-      <main className="flex-1 min-w-0">
-        {children}
+      <main className="flex-1 min-w-0 flex flex-col">
+        {/* Mobile Header Toggle */}
+        <div className="lg:hidden flex items-center justify-between p-4 border-b border-white/10 bg-card/95 backdrop-blur-xl shrink-0 sticky top-0 z-30">
+          <span className="font-bold tracking-tight bg-gradient-to-r from-violet-400 to-cyan-400 bg-clip-text text-transparent">Admin Panel</span>
+          <Button variant="ghost" size="icon" onClick={() => setMobileOpen(true)}>
+            <Menu className="h-5 w-5" />
+          </Button>
+        </div>
+        <div className="flex-1 w-full max-w-full overflow-x-hidden">
+          {children}
+        </div>
       </main>
     </div>
   );
