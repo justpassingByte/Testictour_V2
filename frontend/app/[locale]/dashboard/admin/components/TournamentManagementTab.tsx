@@ -89,7 +89,7 @@ const TournamentManagementTab = observer(() => {
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {tournaments.map((tournament) => {
         const roundInfo = getCurrentRoundInfo(tournament);
-        const prizePool = (tournament.budget || 0));
+        const prizePool = (tournament.budget || 0);
         
         return (
           <Card key={tournament.id} className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1 animate-fade-in-up">
