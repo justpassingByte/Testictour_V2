@@ -2007,7 +2007,7 @@
   "view_scoreboard": "View Scoreboard",
   "projected": "Projected",
   "tiebreak_rules": "Tiebreak Rules",
-  "tiebreak_rules_desc": "Priority order: 1. Total Points > 2. Total Placements (lower is better) > 3. Top 1 Count > 4. Best Single Rank.",
+  "tiebreak_rules_desc": "Priority order: 1. Total Points > 2. Total Placements (lower is better) > 3. Top 1 Count > 4. Best Single Rank > 5. Most Recent Placement.",
   "prize_eligibility": "Prize Eligibility",
   "prize_eligibility_desc": "Prizes are distributed based on the tournament's prize pool structure and final rankings after tiebreakers.",
   "top4_rate": "% Top 4",

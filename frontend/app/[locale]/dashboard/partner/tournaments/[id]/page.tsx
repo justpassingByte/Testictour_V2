@@ -382,7 +382,7 @@ export default function TournamentManagePage() {
   const StatusIcon = statusCfg.icon
   const registeredCount = tournament.registered || totalParticipants
   const fillPercent = tournament.maxPlayers > 0 ? (registeredCount / tournament.maxPlayers) * 100 : 0
-  const prizePool = Math.max(tournament.budget || 0, tournament.entryFee * registeredCount * (1 - (tournament.hostFeePercent || 0.1)))
+  const prizePool = (tournament.budget || 0)))
 
   return (
     <div className="p-6 lg:p-8 space-y-6">
@@ -506,7 +506,7 @@ export default function TournamentManagePage() {
       {tournament.status === 'COMPLETED' && (() => {
         const winner = topPlayers[0];
         const prizeStructure = tournament.prizeStructure as number[] | null;
-        const totalPot = Math.max(tournament.budget || 0, totalParticipants * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)));
+        const totalPot = (tournament.budget || 0)));
         const winnerPrize = prizeStructure && prizeStructure.length > 0 ? ((prizeStructure[0] / 100) * totalPot) : null;
         return winner ? (
           <div className="relative overflow-hidden rounded-xl border border-yellow-500/30 bg-gradient-to-r from-yellow-500/10 via-amber-500/5 to-yellow-500/10 p-5">
@@ -1188,7 +1188,7 @@ export default function TournamentManagePage() {
               {(() => {
                 const sorted = topPlayers; // Already sorted by scoreTotal desc from API
                 const prizeStructure = tournament.prizeStructure as number[] | null;
-                const totalPot = Math.max(tournament.budget || 0, totalParticipants * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)));
+                const totalPot = (tournament.budget || 0)));
                 const getPrize = (rank: number) => prizeStructure && prizeStructure[rank] ? ((prizeStructure[rank] / 100) * totalPot) : 0;
                 const podium = [sorted[1], sorted[0], sorted[2]];
                 const podiumHeights = ['h-20', 'h-28', 'h-16'];
@@ -1259,7 +1259,7 @@ export default function TournamentManagePage() {
                         .map((p, i) => {
                           const rank = i + 1;
                           const prizeStructure = tournament.prizeStructure as number[] | null;
-                          const totalPot = Math.max(tournament.budget || 0, totalParticipants * tournament.entryFee * (1 - (tournament.hostFeePercent || 0.1)));
+                          const totalPot = (tournament.budget || 0)));
                           const prizePercent = prizeStructure && prizeStructure[i] ? prizeStructure[i] : 0;
                           const prizeAmount = (prizePercent / 100) * totalPot;
                           const hasPrize = prizeAmount > 0;

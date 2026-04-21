@@ -48,7 +48,7 @@ export default function AdminPartnerSubscriptionTab({
     const { toast } = useToast()
     const [loading, setLoading] = useState(false)
     const [depositLoading, setDepositLoading] = useState(false)
-    const [selectedPlan, setSelectedPlan] = useState<string>(currentSubscription?.plan || 'STARTER')
+    const [selectedPlan, setSelectedPlan] = useState<string>(currentSubscription?.plan || 'FREE')
     const [depositAmount, setDepositAmount] = useState<string>('')
 
     const handleUpdatePlan = async () => {
@@ -56,6 +56,7 @@ export default function AdminPartnerSubscriptionTab({
             setLoading(true)
 
             const priceMap: Record<string, number> = {
+                'FREE': 0,
                 'STARTER': 0,
                 'PRO': 29.99,
                 'ENTERPRISE': 99.99
@@ -139,12 +140,13 @@ export default function AdminPartnerSubscriptionTab({
     }
 
     const planColors: Record<string, string> = {
+        'FREE': 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
         'STARTER': 'bg-slate-500/10 text-slate-400 border-slate-500/20',
         'PRO': 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
         'ENTERPRISE': 'bg-purple-500/10 text-purple-500 border-purple-500/20'
     }
 
-    const currentPlan = currentSubscription?.plan || 'STARTER'
+    const currentPlan = currentSubscription?.plan || 'FREE'
 
     return (
         <div className="space-y-6">
@@ -266,6 +268,7 @@ export default function AdminPartnerSubscriptionTab({
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="FREE">FREE</SelectItem>
+                                    <SelectItem value="STARTER">STARTER</SelectItem>
                                     <SelectItem value="PRO">PRO</SelectItem>
                                     <SelectItem value="ENTERPRISE">ENTERPRISE</SelectItem>
                                 </SelectContent>
@@ -286,7 +289,7 @@ export default function AdminPartnerSubscriptionTab({
                         <CheckCircle2 className="h-3 w-3" />
                         Changes take effect immediately across the platform.
                     </p>
-                    {currentSubscription && currentPlan !== 'STARTER' && (
+                    {currentSubscription && currentPlan !== 'FREE' && (
                         <Button variant="ghost" size="sm" onClick={handleDeleteSub} className="text-red-500 hover:text-red-400 hover:bg-red-500/10">
                             Reset to Free
                         </Button>

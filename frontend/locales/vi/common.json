@@ -2007,7 +2007,7 @@
   "view_scoreboard": "Xem bảng điểm",
   "projected": "Dự tính",
   "tiebreak_rules": "Quy định Tiebreak",
-  "tiebreak_rules_desc": "Thứ tự ưu tiên: 1. Tổng điểm > 2. Tổng hạng (thấp hơn tốt hơn) > 3. Số lần đạt Top 1 > 4. Hạng đơn tốt nhất.",
+  "tiebreak_rules_desc": "Thứ tự ưu tiên: 1. Tổng điểm > 2. Tổng hạng (thấp hơn tốt hơn) > 3. Số lần đạt Top 1 > 4. Hạng đơn tốt nhất > 5. Thành tích vòng gần nhất.",
   "prize_eligibility": "Điều kiện nhận thưởng",
   "prize_eligibility_desc": "Giải thưởng được tính dựa trên cơ cấu giải của giải đấu và thứ hạng cuối cùng sau khi đã áp dụng mọi chỉ số phụ.",
   "top4_rate": "% Top 4",

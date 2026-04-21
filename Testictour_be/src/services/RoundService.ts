@@ -2445,7 +2445,11 @@ export default class RoundService {
     const bestA = a.placements.length > 0 ? Math.min(...a.placements.map(p => Number(p) || 999)) : 999;
     const bestB = b.placements.length > 0 ? Math.min(...b.placements.map(p => Number(p) || 999)) : 999;
     if (bestA !== bestB) return bestA - bestB;
-    // 5. Deterministic string fallback (prevents sort instability between runs)
+    // 5. Most recent placement (lower = better — rewards strong finish)
+    const recentA = a.placements.length > 0 ? (Number(a.placements[a.placements.length - 1]) || 999) : 999;
+    const recentB = b.placements.length > 0 ? (Number(b.placements[b.placements.length - 1]) || 999) : 999;
+    if (recentA !== recentB) return recentA - recentB;
+    // 6. Deterministic string fallback (prevents sort instability between runs)
     return String(a.userId).localeCompare(String(b.userId));
   }
 

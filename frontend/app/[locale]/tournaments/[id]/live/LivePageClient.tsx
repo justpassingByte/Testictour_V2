@@ -144,7 +144,7 @@ export default function LivePageClient({ tournament: initialTournament, liveStat
   const isLive = statusUpper === 'IN_PROGRESS'
   const isCompleted = statusUpper === 'COMPLETED'
 
-  const calculatedPrizePool = tournament.budget || (tournament.entryFee * (tournament.registered || 0) * (1 - (tournament.hostFeePercent || 0.1)))
+  const calculatedPrizePool = tournament.budget || 0
 
   return (
     <div className="container py-8">

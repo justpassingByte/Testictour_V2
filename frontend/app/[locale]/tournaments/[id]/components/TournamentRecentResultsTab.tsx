@@ -52,6 +52,14 @@ export function TournamentRecentResultsTab({ tournamentId, tournament }: { tourn
       const winsB = placementsB.filter((p: any) => Number(p) === 1).length;
       if (winsB !== winsA) return winsB - winsA;
 
+      const bestA = placementsA.length > 0 ? Math.min(...placementsA.map((p: any) => Number(p) || 999)) : 999;
+      const bestB = placementsB.length > 0 ? Math.min(...placementsB.map((p: any) => Number(p) || 999)) : 999;
+      if (bestA !== bestB) return bestA - bestB;
+
+      const recentA = placementsA.length > 0 ? (Number(placementsA[placementsA.length - 1]) || 999) : 999;
+      const recentB = placementsB.length > 0 ? (Number(placementsB[placementsB.length - 1]) || 999) : 999;
+      if (recentA !== recentB) return recentA - recentB;
+
       return (a.id || "").localeCompare(b.id || "");
     });
   }, [rawLeaderboard]);
@@ -266,7 +274,7 @@ const LeaderboardRow = React.memo(function LeaderboardRow({
       <TableCell className="text-center">
         <div className="flex flex-col items-center gap-1">
           <div className="flex gap-1">
-            {participant.placements?.slice(0, 5).map((p: number, i: number) => (
+            {participant.placements?.map((p: number, i: number) => (
               <div key={i} className={`w-4 h-4 rounded-sm flex items-center justify-center text-[8px] font-bold ${p === 1 ? 'bg-yellow-500 text-black' : p <= 4 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-muted/40 text-muted-foreground'}`}>
                 {p}
               </div>

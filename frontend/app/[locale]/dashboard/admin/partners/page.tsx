@@ -85,7 +85,7 @@ export default function AdminPartnersPage() {
         user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
         user.email.toLowerCase().includes(searchQuery.toLowerCase())
       
-      const pPlan = user.subscriptionPlan || "STARTER"
+      const pPlan = user.subscriptionPlan || "FREE"
       const matchesPlan = planFilter === "all" || pPlan === planFilter
       
       const userBanned = user.isActive === false || user.role === 'banned'
@@ -144,6 +144,7 @@ export default function AdminPartnersPage() {
           <SelectTrigger className="w-[140px]"><SelectValue placeholder="All Plans" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Plans</SelectItem>
+            <SelectItem value="FREE">Free</SelectItem>
             <SelectItem value="STARTER">Starter</SelectItem>
             <SelectItem value="PRO">Pro</SelectItem>
             <SelectItem value="ENTERPRISE">Enterprise</SelectItem>
@@ -223,15 +224,14 @@ export default function AdminPartnersPage() {
                     </TableCell>
                     <TableCell className="text-sm">{user.email}</TableCell>
                     <TableCell>
-                      {user.subscriptionPlan ? (
-                        <Badge variant="outline" className={`text-xs ${
-                          user.subscriptionPlan === 'PRO' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' :
-                          user.subscriptionPlan === 'ENTERPRISE' ? 'bg-purple-500/10 text-purple-500 border-purple-500/20' :
-                          'bg-slate-500/10 text-slate-400 border-slate-500/20'
-                        }`}>
-                          {user.subscriptionPlan}
-                        </Badge>
-                      ) : <span className="text-xs text-muted-foreground">—</span>}
+                      <Badge variant="outline" className={`text-xs ${
+                        user.subscriptionPlan === 'PRO' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' :
+                        user.subscriptionPlan === 'ENTERPRISE' ? 'bg-purple-500/10 text-purple-500 border-purple-500/20' :
+                        user.subscriptionPlan === 'STARTER' ? 'bg-slate-500/10 text-slate-400 border-slate-500/20' :
+                        'bg-zinc-500/10 text-zinc-400 border-zinc-500/20'
+                      }`}>
+                        {user.subscriptionPlan || "FREE"}
+                      </Badge>
                     </TableCell>
                     <TableCell className="text-right font-medium text-green-500">
                       {user.balance?.toLocaleString()} đ

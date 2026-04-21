@@ -256,7 +256,8 @@ export default class ParticipantService {
             }
           }
         },
-        select: { userId: true, placement: true, points: true }
+        select: { userId: true, placement: true, points: true },
+        orderBy: { id: 'asc' }
       }),
       prisma.tournament.findUnique({
         where: { id: tournamentId },

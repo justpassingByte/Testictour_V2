@@ -64,7 +64,12 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
     // TB3: Best single placement (ascending)
     const bestA = a.placements.length > 0 ? Math.min(...a.placements) : Infinity;
     const bestB = b.placements.length > 0 ? Math.min(...b.placements) : Infinity;
-    return bestA - bestB;
+    if (bestA !== bestB) return bestA - bestB;
+
+    // TB4: Most recent placement (ascending)
+    const recentA = a.placements.length > 0 ? a.placements[a.placements.length - 1] : Infinity;
+    const recentB = b.placements.length > 0 ? b.placements[b.placements.length - 1] : Infinity;
+    return recentA - recentB;
   };
 
   const sortedPlayers = [...filteredPlayers].sort((a, b) => {
@@ -238,7 +243,7 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
                       </Badge>
                       {hasPrize && prizeStructure && (
                         <span className="text-xs font-bold text-amber-400">
-                          🏆 ${((prizeStructure[rank - 1] / 100) * (tournament.budget || tournament.entryFee * (tournament.registered || tournament.maxPlayers))).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                          🏆 ${((prizeStructure[rank - 1] / 100) * (tournament.budget || 0)).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                         </span>
                       )}
                     </div>
