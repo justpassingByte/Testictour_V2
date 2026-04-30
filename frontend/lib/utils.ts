@@ -5,12 +5,23 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export const formatCurrency = (amount: number, currency = 'USD') => {
-  return new Intl.NumberFormat('en-US', {
+export const formatCurrency = (amount: number, currency?: "USD" | "VND") => {
+  // Mặc định luôn là VND
+  let resolvedCurrency: "USD" | "VND" = currency ?? "VND";
+  if (!currency && typeof window !== "undefined") {
+    const storedCurrency = window.localStorage.getItem("testictour.displayCurrency");
+    if (storedCurrency === "USD" || storedCurrency === "VND") {
+      resolvedCurrency = storedCurrency;
+    }
+  }
+  const locale = resolvedCurrency === "VND" ? "vi-VN" : "en-US";
+  const fractionDigits = resolvedCurrency === "VND" ? 0 : 2;
+
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
-    currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    currency: resolvedCurrency,
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
   }).format(amount);
 };
 
@@ -31,3 +42,4 @@ export const getTournamentStatusVariant = (status: string): "default" | "seconda
       return 'outline';
   }
 };
+

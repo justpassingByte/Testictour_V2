@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect, Suspense } from "react"
 import { useTranslations } from "next-intl"
-import { useCurrencyRate } from "@/app/hooks/useCurrencyRate"
+import { useCurrency } from "@/app/contexts/currency-context"
 import { useParams, useRouter } from "next/navigation"
 import { Link } from "@/i18n/navigation"
 import {
@@ -38,7 +38,9 @@ import { useTournamentSocket } from '@/app/hooks/useTournamentSocket'
 import { useQueryClient } from '@tanstack/react-query'
 import ReserveManagementTab from '@/components/ReserveManagementTab'
 import LobbyInterventionModal from '@/components/LobbyInterventionModal'
+import { MatchDetailModal } from '@/components/match/MatchDetailModal'
 import { ReservePlayerAPI } from '@/app/services/ParticipantService'
+import { Swords, ChevronDown } from 'lucide-react'
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   pending: { label: "pending", color: "slate", icon: Clock },
@@ -51,7 +53,11 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.
 
 export default function TournamentManagePage() {
   const t = useTranslations("common");
-  const { formatVndText } = useCurrencyRate()
+  const { currency, usdToVndRate } = useCurrency()
+  const displayMoneyFromUsd = (amountUsd: number) => {
+    const displayAmount = currency === "VND" ? amountUsd * usdToVndRate : amountUsd;
+    return formatCurrency(displayAmount, currency);
+  };
   const params = useParams()
   const router = useRouter()
   const tournamentId = params.id as string
@@ -71,9 +77,11 @@ export default function TournamentManagePage() {
   const [removeDialog, setRemoveDialog] = useState<{ open: boolean; participant: IParticipant | null }>({ open: false, participant: null })
   const [roundControlLoading, setRoundControlLoading] = useState<Record<string, boolean>>({})
 
-  // Lobby Intervention Modal state
+    // Lobby Intervention Modal state
   const [interventionModal, setInterventionModal] = useState<{ open: boolean; lobby: any | null }>({ open: false, lobby: null })
   const [reserves, setReserves] = useState<any[]>([])
+  // Match Detail Modal state
+  const [matchDetailModal, setMatchDetailModal] = useState<{ open: boolean; matchId: string | null }>({ open: false, matchId: null })
 
   const [editForm, setEditForm] = useState({
     name: "",
@@ -470,14 +478,12 @@ export default function TournamentManagePage() {
           <CardContent className="p-4">
             <p className="text-[11px] text-emerald-400 font-semibold uppercase tracking-wide">{t("prize_pool")}</p>
             <div className="flex flex-col mt-1">
-              <p className="text-xl font-bold text-emerald-400">${prizePool.toLocaleString()} <span className="text-xs font-normal text-emerald-400/70">USD</span></p>
-              <p className="text-[10px] text-emerald-400/50 -mt-0.5">{formatVndText(prizePool)}</p>
+              <p className="text-xl font-bold text-emerald-400">{displayMoneyFromUsd(prizePool)}</p>
             </div>
             <p className="text-[10px] text-muted-foreground mt-1.5 flex justify-between items-center">
-              <span>Entry: ${tournament.entryFee.toLocaleString()} <span className="text-[9px]">USD</span></span>
-              <span>{formatVndText(tournament.entryFee)}</span>
+              <span>Entry: {displayMoneyFromUsd(tournament.entryFee)}</span>
             </p>
-          </CardContent>
+  </CardContent>
         </Card>
         <Card className="bg-gradient-to-br from-violet-500/10 to-violet-600/5 border-violet-500/20">
           <CardContent className="p-4">
@@ -910,6 +916,34 @@ export default function TournamentManagePage() {
                                   ))}
                                 </div>
                               </div>
+                                                        )}
+
+                            {/* ── MATCH DETAILS ── */}
+                            {round.lobbies?.some((l: any) => l.matches?.length > 0) && (
+                              <div className="border-t border-white/5 pt-3 mt-3">
+                                <div className="flex flex-wrap gap-1.5">
+                                  {round.lobbies.map((lobby: any) => (
+                                    lobby.matches?.length > 0 && lobby.matches.map((match: any, idx: number) => (
+                                      <Button
+                                        key={match.id}
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => setMatchDetailModal({ open: true, matchId: match.id })}
+                                        className="border-white/10 text-xs hover:border-primary/30 hover:bg-primary/5 gap-1.5 px-2.5 py-1 h-auto min-h-[26px] transition-all"
+                                        title={`View match ${idx + 1} in ${lobby.name}`}
+                                      >
+                                        <Swords className="h-3 w-3 text-primary/60" />
+                                        <span>{lobby.name} M{idx + 1}</span>
+                                        {match.matchResults?.length > 0 && (
+                                          <Badge variant="outline" className="text-[8px] px-1 py-0 h-3.5 bg-green-500/10 text-green-500 border-green-500/30">
+                                            {match.matchResults.length} results
+                                          </Badge>
+                                        )}
+                                      </Button>
+                                    ))
+                                  ))}
+                                </div>
+                              </div>
                             )}
                           </div>
                         );
@@ -1334,7 +1368,15 @@ export default function TournamentManagePage() {
         lobby={interventionModal.lobby}
         reserves={reserves}
         allParticipants={participants}
-        onRefresh={refresh}
+                onRefresh={refresh}
+      />
+
+      {/* Match Detail Modal */}
+      <MatchDetailModal
+        matchId={matchDetailModal.matchId}
+        open={matchDetailModal.open}
+        onOpenChange={(o) => setMatchDetailModal({ open: o, matchId: o ? matchDetailModal.matchId : null })}
+        onSaved={refresh}
       />
     </div>
   )

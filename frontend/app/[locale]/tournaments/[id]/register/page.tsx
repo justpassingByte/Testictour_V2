@@ -25,6 +25,8 @@ import { GLOBAL_REGIONS, getMajorRegion } from "@/app/config/regions"
 import { SubRegionSelector } from "@/components/ui/SubRegionSelector"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useUserStore } from "@/app/stores/userStore"
+import { useCurrency } from "@/app/contexts/currency-context"
+import { formatCurrency } from "@/lib/utils"
 
 // Mock regions
 // const regions = [
@@ -48,7 +50,7 @@ export default function TournamentRegistration({ params }: { params: { id: strin
   const [tournamentError, setTournamentError] = useState("")
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle")
   const [errorMessage, setErrorMessage] = useState("")
-  const [discordId, setDiscordId] = useState("")
+  const [additionalInformation, setAdditionalInformation] = useState("")
   const [referralSource, setReferralSource] = useState("")
   const [origin, setOrigin] = useState("")
   const [joinAsReserve, setJoinAsReserve] = useState(false)
@@ -56,6 +58,7 @@ export default function TournamentRegistration({ params }: { params: { id: strin
     if (typeof window !== "undefined") setOrigin(window.location.origin)
   }, [])
   const { currentUser } = useUserStore()
+  const { currency, usdToVndRate } = useCurrency()
   const [summonerInfo, setSummonerInfo] = useState<{
     name: string
     iconId: number
@@ -80,7 +83,7 @@ export default function TournamentRegistration({ params }: { params: { id: strin
       })
     }
     if (currentUser?.discordId) {
-      setDiscordId(currentUser.discordId)
+      setAdditionalInformation(currentUser.discordId)
     }
   }, [currentUser])
 
@@ -129,8 +132,8 @@ export default function TournamentRegistration({ params }: { params: { id: strin
   }
 
   const handleSubmit = async () => {
-    if (!summonerInfo || !tournament || !discordId.trim()) {
-      setErrorMessage("Please enter your Discord ID before registering.")
+    if (!summonerInfo || !tournament || !additionalInformation.trim()) {
+      setErrorMessage("Please enter your additional contact information before registering.")
       return
     }
 
@@ -138,7 +141,7 @@ export default function TournamentRegistration({ params }: { params: { id: strin
     setErrorMessage("")
 
     try {
-      const result = await ParticipantService.join(tournament.id, discordId.trim(), referralSource, joinAsReserve)
+      const result = await ParticipantService.join(tournament.id, additionalInformation.trim(), referralSource, joinAsReserve)
 
       console.log('[REGISTER DEBUG] join result:', JSON.stringify(result))
 
@@ -253,6 +256,11 @@ export default function TournamentRegistration({ params }: { params: { id: strin
         <p className="mt-4 text-lg">{t("tournament_not_found")}</p>
       </div>
     )
+  }
+
+  const displayMoneyFromUsd = (amountUsd: number) => {
+    const displayAmount = currency === "VND" ? amountUsd * usdToVndRate : amountUsd
+    return formatCurrency(displayAmount, currency)
   }
 
   return (
@@ -374,13 +382,13 @@ export default function TournamentRegistration({ params }: { params: { id: strin
                 </div>
                 <div className="flex items-center gap-1.5 bg-[#18181b]/95 px-2.5 py-1 rounded-md border border-[#3f3f46] shadow-sm">
                   <DollarSign className="h-4 w-4 text-amber-400" />
-                  <span className="text-amber-400 font-bold">{tournament.entryFee.toLocaleString()}</span>
+                  <span className="text-amber-400 font-bold">{displayMoneyFromUsd(tournament.entryFee)}</span>
                 </div>
                 <div className="flex items-center gap-1.5 bg-[#18181b]/95 px-2.5 py-1 rounded-md border border-[#3f3f46] shadow-sm">
                   <Trophy className="h-4 w-4 text-yellow-400" />
                   <span className="text-yellow-400 font-bold">
                     {(tournament.budget && tournament.budget > 0)
-                      ? `${tournament.budget.toLocaleString()} `
+                      ? `${displayMoneyFromUsd(tournament.budget)} `
                       : t("tbd_prize_pool") || "TBD Prize Pool"}
                   </span>
                 </div>
@@ -447,11 +455,18 @@ export default function TournamentRegistration({ params }: { params: { id: strin
                   </Alert>
 
                   <div className="space-y-3">
-                    <Label htmlFor="discord-id" className="text-base font-semibold block">
-                      {t("discord_id")} <span className="text-red-500">*</span>
+                    <Label htmlFor="additional-information" className="text-base font-semibold block">
+                      Additional Information <span className="text-red-500">*</span>
                     </Label>
                     <div className="flex gap-2 w-full">
-                      <Input id="discord-id" value={discordId} onChange={(e) => setDiscordId(e.target.value)} placeholder="Ex: username#1234 or username" className="bg-card w-full" required />
+                      <Input
+                        id="additional-information"
+                        value={additionalInformation}
+                        onChange={(e) => setAdditionalInformation(e.target.value)}
+                        placeholder="Discord / Phone / Facebook profile link"
+                        className="bg-card w-full"
+                        required
+                      />
                       {tournament.discordUrl ? (
                         <Button asChild className="bg-[#5865F2] hover:bg-[#4752C4] text-white px-3 shrink-0">
                           <a href={tournament.discordUrl} target="_blank" rel="noopener noreferrer">
@@ -464,7 +479,7 @@ export default function TournamentRegistration({ params }: { params: { id: strin
                         </Button>
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1.5">We need your Discord ID to contact you for match updates and prizes.</p>
+                    <p className="text-xs text-muted-foreground mt-1.5">Provide at least one contact method (Discord, phone number, or Facebook) so organizers can reach you.</p>
                   </div>
                 </div>
 
@@ -549,7 +564,7 @@ export default function TournamentRegistration({ params }: { params: { id: strin
                       <p className="text-xs text-amber-300/80">
                         This tournament requires an entry fee of{" "}
                         <strong className="text-amber-300">
-                          ${tournament.entryFee.toLocaleString()} USD
+                          {displayMoneyFromUsd(tournament.entryFee)}
                         </strong>.
                         After clicking Register, you will be redirected to the payment gateway to complete your registration.
                       </p>
@@ -610,13 +625,13 @@ export default function TournamentRegistration({ params }: { params: { id: strin
                 <Link href={`/tournaments/${params.id}`}>{t("cancel")}</Link>
               </Button>
               <Button size="lg" onClick={handleSubmit} disabled={
-                !currentUser?.riotGameName || !discordId.trim() || status === "loading" || 
+                !currentUser?.riotGameName || !additionalInformation.trim() || status === "loading" || 
                 ((tournament.registered || 0) >= tournament.maxPlayers && !joinAsReserve && (tournament.reservePlayersLimit || 0) > 0)
               }>
                 {status === "loading" ? (
                   <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{tournament.entryFee > 0 ? "Reserving slot..." : t("registering")}</>
                 ) : tournament.entryFee > 0 ? (
-                  <><DollarSign className="mr-2 h-4 w-4" />Register & Pay ${tournament.entryFee} USD<ArrowRight className="ml-2 h-4 w-4" /></>
+                  <><DollarSign className="mr-2 h-4 w-4" />Register & Pay {displayMoneyFromUsd(tournament.entryFee)}<ArrowRight className="ml-2 h-4 w-4" /></>
                 ) : (
                   <>{t("register")}<ArrowRight className="ml-2 h-4 w-4" /></>
                 )}

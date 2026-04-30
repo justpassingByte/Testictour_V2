@@ -16,6 +16,8 @@ import { SyncStatus } from "@/components/sync-status"
 import { useTranslations } from "next-intl"
 import api from "@/app/lib/apiConfig"
 import { TournamentService } from "@/app/services/TournamentService"
+import { useCurrency } from "@/app/contexts/currency-context"
+import { formatCurrency } from "@/lib/utils"
 
 interface FinalResult {
   rank: number
@@ -45,6 +47,11 @@ interface TournamentInfo {
 
 export default function TournamentResultsPage({ params }: { params: { id: string } }) {
   const t = useTranslations("common")
+  const { currency, usdToVndRate } = useCurrency()
+  const displayMoneyFromUsd = (amountUsd: number) => {
+    const displayAmount = currency === "VND" ? amountUsd * usdToVndRate : amountUsd;
+    return formatCurrency(displayAmount, currency);
+  };
 
   const [tournament, setTournament] = useState<TournamentInfo | null>(null)
   const [finalResults, setFinalResults] = useState<FinalResult[]>([])
@@ -187,8 +194,8 @@ export default function TournamentResultsPage({ params }: { params: { id: string
     )
   }
 
-  const prizeDisplay = typeof tournament?.prizePool === "number"
-    ? `$${tournament.prizePool.toLocaleString()}`
+    const prizeDisplay = typeof tournament?.prizePool === "number"
+    ? displayMoneyFromUsd(tournament.prizePool)
     : String(tournament?.prizePool || "N/A")
 
   return (

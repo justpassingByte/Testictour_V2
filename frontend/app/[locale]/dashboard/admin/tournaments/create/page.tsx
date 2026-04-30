@@ -2,7 +2,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, ImagePlus, Loader2, Plus, Trash2, Trophy, X } from "lucide-react"
+import { ArrowLeft, Coins, DollarSign, ImagePlus, Loader2, Plus, Trash2, Trophy, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -15,6 +15,8 @@ import { TournamentService } from "@/app/services/TournamentService"
 import { useUserStore } from "@/app/stores/userStore"
 import { useTranslations } from "next-intl"
 import { RegionSelector } from "@/components/ui/RegionSelector"
+import { useCurrency } from "@/app/contexts/currency-context"
+import { formatCurrency } from "@/lib/utils"
 
 interface PhaseFormData {
   name: string
@@ -42,6 +44,7 @@ export default function CreateTournamentPage() {
     reservePlayersLimit: 0,
     absentFeePolicy: "prizepool",
     entryFee: 0,
+    entryType: "VND", // "VND" or "USD" - the currency that host/admin enters
     customPrizePool: 0,
     hostFeePercent: 0.1,
     startTime: "",
@@ -51,17 +54,7 @@ export default function CreateTournamentPage() {
   })
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [imageFile, setImageFile] = useState<File | null>(null)
-  const [usdToVndRate, setUsdToVndRate] = useState<number>(25400) // Fallback rate
-
-  // Fetch exchange rate once on mount
-  useState(() => {
-    fetch('https://open.er-api.com/v6/latest/USD')
-      .then(res => res.json())
-      .then(data => {
-        if (data?.rates?.VND) setUsdToVndRate(data.rates.VND)
-      })
-      .catch(console.error)
-  })
+  const { currency, usdToVndRate } = useCurrency()
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -128,6 +121,11 @@ export default function CreateTournamentPage() {
         carryOverScores: p.carryOverScores,
       }))
 
+      // Nếu nhập bằng VND, tự động quy đổi sang USD để gửi lên backend
+      // Backend luôn lưu entryFee dưới dạng USD
+      const entryFeeUsd = form.entryType === "VND" ? form.entryFee / usdToVndRate : form.entryFee
+      const customPrizePoolUsd = form.entryType === "VND" ? form.customPrizePool / usdToVndRate : form.customPrizePool
+
       await TournamentService.create({
         name: form.name,
         description: form.description,
@@ -136,8 +134,9 @@ export default function CreateTournamentPage() {
         maxPlayers: form.maxPlayers,
         organizerId: currentUser?.id || "",
         roundsTotal: phases.reduce((sum, p) => sum + p.numberOfRounds, 0),
-        entryFee: form.entryFee,
-        customPrizePool: form.customPrizePool > 0 ? form.customPrizePool : undefined,
+        entryFee: entryFeeUsd,
+        entryType: "usd",
+        customPrizePool: customPrizePoolUsd > 0 ? customPrizePoolUsd : undefined,
         registrationDeadline: new Date(form.registrationDeadline),
         hostFeePercent: form.hostFeePercent,
         expectedParticipants: form.maxPlayers,
@@ -155,6 +154,13 @@ export default function CreateTournamentPage() {
       setSubmitting(false)
     }
   }
+
+  // Tính estimated prize pool - quy đổi tất ra VND để hiển thị
+  const effectiveEntryFeeVnd = form.entryType === "VND" ? form.entryFee : form.entryFee * usdToVndRate
+  const effectiveCustomPrizeVnd = form.entryType === "VND" ? form.customPrizePool : form.customPrizePool * usdToVndRate
+  const estimatedPrizePoolVnd = form.customPrizePool > 0
+    ? effectiveCustomPrizeVnd
+    : (form.maxPlayers * effectiveEntryFeeVnd * (1 - form.hostFeePercent));
 
   return (
     <div className="p-6 lg:p-8 space-y-6 max-w-4xl">
@@ -285,20 +291,67 @@ export default function CreateTournamentPage() {
                 <p className="text-[10px] text-muted-foreground mt-1">{t("absent_fee_policy_desc")}</p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="entryFee">{t("registration_fee")} (USD)</Label>
+                <div className="flex items-center gap-2">
+                  <Label>Loại tiền nhập</Label>
+                </div>
+                <div className="flex gap-1">
+                  <Button
+                    type="button"
+                    variant={form.entryType === "VND" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      if (form.entryType === "USD" && form.entryFee > 0) {
+                        // Chuyển USD -> VND
+                        updateForm("entryFee", Math.round(form.entryFee * usdToVndRate));
+                      }
+                      updateForm("entryType", "VND");
+                    }}
+                    className={`text-xs ${form.entryType === "VND" ? "bg-green-600 hover:bg-green-700" : ""}`}
+                  >
+                    <Coins className="h-3.5 w-3.5 mr-1" /> VND
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={form.entryType === "USD" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      if (form.entryType === "VND" && form.entryFee > 0) {
+                        // Chuyển VND -> USD
+                        const usdValue = parseFloat((form.entryFee / usdToVndRate).toFixed(2));
+                        updateForm("entryFee", usdValue);
+                      }
+                      updateForm("entryType", "USD");
+                    }}
+                    className={`text-xs ${form.entryType === "USD" ? "bg-blue-600 hover:bg-blue-700" : ""}`}
+                  >
+                    <DollarSign className="h-3.5 w-3.5 mr-1" /> USD
+                  </Button>
+                </div>
+                <p className="text-[10px] text-muted-foreground">Chọn loại tiền để nhập entry fee</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="entryFee">{t("registration_fee")} ({form.entryType})</Label>
                 <div className="flex flex-col gap-1">
                   <Input id="entryFee" type="number" min={0} value={form.entryFee} onChange={(e) => updateForm("entryFee", parseFloat(e.target.value) || 0)} />
                   {form.entryFee > 0 && (
-                    <span className="text-xs text-muted-foreground">≈ {(form.entryFee * usdToVndRate).toLocaleString('vi-VN')} VND</span>
+                    <span className="text-xs text-muted-foreground">
+                      ≈ {form.entryType === "VND"
+                        ? formatCurrency(form.entryFee / usdToVndRate, "USD")
+                        : formatCurrency(form.entryFee * usdToVndRate, "VND")}
+                    </span>
                   )}
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="customPrizePool">Manual Prize Pool (USD)</Label>
+                <Label htmlFor="customPrizePool">Manual Prize Pool ({form.entryType})</Label>
                 <div className="flex flex-col gap-1">
                   <Input id="customPrizePool" type="number" min={0} value={form.customPrizePool} onChange={(e) => updateForm("customPrizePool", parseFloat(e.target.value) || 0)} placeholder="Use entry fees if 0" />
                   {form.customPrizePool > 0 && (
-                    <span className="text-xs text-muted-foreground">≈ {(form.customPrizePool * usdToVndRate).toLocaleString('vi-VN')} VND</span>
+                    <span className="text-xs text-muted-foreground">
+                      ≈ {form.entryType === "VND"
+                        ? formatCurrency(form.customPrizePool / usdToVndRate, "USD")
+                        : formatCurrency(form.customPrizePool * usdToVndRate, "VND")}
+                    </span>
                   )}
                 </div>
               </div>
@@ -310,17 +363,9 @@ export default function CreateTournamentPage() {
             
             <div className="text-sm text-muted-foreground bg-violet-500/5 border border-violet-500/10 rounded-lg p-3">
               Estimated prize pool: <strong className="text-violet-400">
-                ${form.customPrizePool > (form.maxPlayers * form.entryFee * (1 - form.hostFeePercent)) 
-                  ? form.customPrizePool.toLocaleString() 
-                  : (form.maxPlayers * form.entryFee * (1 - form.hostFeePercent)).toLocaleString()} USD
+                {formatCurrency(estimatedPrizePoolVnd, "VND")}
               </strong>
-              {" "}
-              <span className="text-xs opacity-70">
-                (≈ {form.customPrizePool > (form.maxPlayers * form.entryFee * (1 - form.hostFeePercent))
-                  ? (form.customPrizePool * usdToVndRate).toLocaleString('vi-VN')
-                  : ((form.maxPlayers * form.entryFee * (1 - form.hostFeePercent)) * usdToVndRate).toLocaleString('vi-VN')} VND)
-              </span>
-              {" "}(at full registration)
+              {" "}<span className="text-xs opacity-70">({formatCurrency(estimatedPrizePoolVnd / usdToVndRate, "USD")})</span>{" "}(at full registration)
             </div>
             
           </CardContent>

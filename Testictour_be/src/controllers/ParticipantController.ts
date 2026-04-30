@@ -12,8 +12,9 @@ export const ParticipantController = {
     getHistory,
     async join(req: Request, res: Response, next: NextFunction) {
       try {
-        const { discordId, referralSource, joinAsReserve } = req.body || {};
-        const result = await ParticipantService.join(req.params.tournamentId, (req as any).user.id, discordId, referralSource, joinAsReserve);
+        const { discordId, additionalInformation, referralSource, joinAsReserve } = req.body || {};
+        const contactInfo = additionalInformation || discordId;
+        const result = await ParticipantService.join(req.params.tournamentId, (req as any).user.id, contactInfo, referralSource, joinAsReserve);
         res.json(result);
       } catch (err) {
         next(err);

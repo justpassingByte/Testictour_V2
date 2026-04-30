@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SyncStatus } from "@/components/sync-status"
 import { useTranslations } from "next-intl"
-import { useCurrencyRate } from "@/app/hooks/useCurrencyRate"
+import { useCurrency } from "@/app/contexts/currency-context"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { ITournament } from "@/app/types/tournament"
@@ -108,8 +108,20 @@ const LiveDurationTimer = memo(function LiveDurationTimer({
 // ── Main Page Component ──────────────────────────────────────────────────────
 export default function LivePageClient({ tournament: initialTournament, liveStats: initialLiveStats }: LivePageClientProps) {
   const t = useTranslations("common");
-  const { formatVndText } = useCurrencyRate();
+  const { currency, usdToVndRate } = useCurrency();
   const queryClient = useQueryClient();
+
+  const displayMoneyFromUsd = (amountUsd: number) => {
+    const displayAmount = currency === "VND" ? amountUsd * usdToVndRate : amountUsd;
+    const locale = currency === "VND" ? "vi-VN" : "en-US";
+    const fractionDigits = currency === "VND" ? 0 : 2;
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
+    }).format(displayAmount);
+  };
 
   const [activeTab, setActiveTab] = useState("bracket")
 
@@ -224,10 +236,7 @@ export default function LivePageClient({ tournament: initialTournament, liveStat
               </div>
               <div>
                 <div className="flex flex-col">
-                  <p className="text-2xl font-bold text-foreground">
-                    ${calculatedPrizePool.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">USD</span>
-                  </p>
-                  <p className="text-[11px] text-muted-foreground opacity-70 mt-0.5">{formatVndText(calculatedPrizePool)}</p>
+                  <p className="text-2xl font-bold text-foreground">{displayMoneyFromUsd(calculatedPrizePool)}</p>
                 </div>
                 <p className="text-sm font-medium text-muted-foreground mt-1">{t("prize_pool") || "Estimated Prize Pool"} <span className="text-xs text-muted-foreground font-normal ml-1">[{tournament.registered || 0} Players]</span></p>
               </div>

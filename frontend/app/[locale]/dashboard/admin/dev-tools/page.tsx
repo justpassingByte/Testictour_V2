@@ -195,6 +195,7 @@ export default function DevToolsPage() {
   const [simTagLine4, setSimTagLine4] = useState("");
   const [simRegion, setSimRegion] = useState("sea");
   const [simTourPlayers, setSimTourPlayers] = useState("16");
+  const [skipEscrow, setSkipEscrow] = useState(true);
   const [simPhasesConfigRaw, setSimPhasesConfigRaw] = useState(JSON.stringify([
     { name: "Vòng Sơ Loại (BO1)", type: "elimination", matchesPerRound: 1, lobbySize: 8 },
     { name: "Vòng Bảng Tính Điểm (BO2)", type: "points", matchesPerRound: 2, lobbySize: 8 },
@@ -1011,24 +1012,49 @@ export default function DevToolsPage() {
                           placeholder={'[\n  { "type": "elimination", "matchesPerRound": 1 }\n]'}
                         />
                       </div>
-                      <Button size="sm" variant="outline" className="w-full justify-start border-purple-500/40 text-purple-300 bg-purple-500/15 hover:bg-purple-500/25 mt-2"
-                        onClick={() => {
-                          let parsedPhases = undefined;
-                          try {
-                            parsedPhases = JSON.parse(simPhasesConfigRaw);
-                          } catch (e) {
-                            addLog('error', 'Invalid JSON config in Phases Configuration.');
-                            return;
-                          }
-                          handleAutomation('seed-env', { 
-                            type: 'tournament', gameName: simGameName || undefined, tagLine: simTagLine || undefined, 
-                            gameName2: simGameName2 || undefined, tagLine2: simTagLine2 || undefined, 
-                            region: getRiotRegion(simRegion), numPlayers: parseInt(simTourPlayers),
-                            phasesConfig: parsedPhases
-                          });
-                        }}>
-                        1. Seed Configured Tournament (Pending)
-                      </Button>
+                      <div className="flex items-center gap-3 mt-2 mb-2">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={skipEscrow}
+                                onChange={e => setSkipEscrow(e.target.checked)}
+                                className="w-4 h-4 rounded border-white/30 bg-black/30 accent-cyan-500"
+                              />
+                              <span className="text-xs text-cyan-400 font-medium">B&#x1ECF; qua Escrow</span>
+                            </label>
+                            <span className="text-[10px] text-muted-foreground">Khi b&#x1EAD;t, tournament &#x111;&#x1B0;&#x1EE3;c t&#x1EA1;o kh&#x1EDB;ng c&#x1EA7;n escrow</span>
+                          </div>
+                          <div className="flex gap-2 mt-1">
+                          <Button size="sm" variant="outline" className="flex-1 border-amber-500/40 text-amber-300 bg-amber-500/15 hover:bg-amber-500/25"
+                            onClick={() => {
+                              let parsedPhases = undefined;
+                              try { parsedPhases = JSON.parse(simPhasesConfigRaw); } catch (e) { addLog("error", "Invalid JSON config."); return; }
+                              handleAutomation("seed-env", { 
+                                type: "tournament", skipEscrow,
+                                region: getRiotRegion(simRegion), numPlayers: parseInt(simTourPlayers),
+                                phasesConfig: parsedPhases
+                              });
+                            }}>
+                            Seed Dummy ({simTourPlayers}P)
+                          </Button>
+                          <Button size="sm" variant="outline" className="flex-1 border-emerald-500/40 text-emerald-300 bg-emerald-500/15 hover:bg-emerald-500/25"
+                            onClick={() => {
+                              if (!simGameName) { addLog("error", "Nhập Player Name trước"); return; }
+                              let parsedPhases = undefined;
+                              try { parsedPhases = JSON.parse(simPhasesConfigRaw); } catch (e) { addLog("error", "Invalid JSON config."); return; }
+                              handleAutomation("seed-env", { 
+                                type: "tournament", skipEscrow,
+                                gameName: simGameName, tagLine: simTagLine,
+                                gameName2: simGameName2 || undefined, tagLine2: simTagLine2 || undefined,
+                                gameName3: simGameName3 || undefined, tagLine3: simTagLine3 || undefined,
+                                gameName4: simGameName4 || undefined, tagLine4: simTagLine4 || undefined,
+                                region: getRiotRegion(simRegion), numPlayers: parseInt(simTourPlayers),
+                                phasesConfig: parsedPhases
+                              });
+                            }}>
+                            Seed từ Player Name
+                          </Button>
+                          </div>
                     </div>
                     {[
                       { label: "2. Pre-assign Groups (Phase 1)", color: "yellow", onClick: () => handleAutomation('pre-assign-groups', { tournamentId: seededTournamentId }) },

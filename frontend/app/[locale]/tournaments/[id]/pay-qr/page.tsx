@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Loader2, ArrowLeft, CheckCircle, Clock } from "lucide-react";
 import { useTranslations } from "next-intl";
 import api from "@/app/lib/apiConfig";
+import { useCurrency } from "@/app/contexts/currency-context";
+import { formatCurrency } from "@/lib/utils";
 
 export default function VietQRPaymentPage() {
   const searchParams = useSearchParams();
@@ -19,6 +21,7 @@ export default function VietQRPaymentPage() {
   const amount = searchParams?.get("amount") || "0";
 
   const [paymentStatus, setPaymentStatus] = useState("pending");
+  const { currency, usdToVndRate } = useCurrency();
 
   // In a real system, you'd fetch the recipient's bank detail (Platform or Host).
   // Defaulting to a placeholder bin & account for Sepay QR API.
@@ -51,6 +54,12 @@ export default function VietQRPaymentPage() {
 
   if (!ref) return <div className="text-center p-8">Invalid Payment Reference</div>;
 
+  const amountVnd = Number(amount) || 0;
+  const amountDisplay =
+    currency === "USD"
+      ? formatCurrency(amountVnd / usdToVndRate, "USD")
+      : formatCurrency(amountVnd, "VND");
+
   return (
     <div className="container max-w-lg mx-auto py-12 px-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <Button variant="ghost" onClick={() => router.back()} className="mb-4">
@@ -73,7 +82,7 @@ export default function VietQRPaymentPage() {
             <div className="space-y-4 pt-4 border-t border-white/10">
               <div className="flex justify-between items-center text-left">
                 <span className="text-gray-400 text-sm">Amount to Pay</span>
-                <span className="text-xl font-bold text-orange-500">{parseInt(amount).toLocaleString()} VND</span>
+                <span className="text-xl font-bold text-orange-500">{amountDisplay}</span>
               </div>
               <div className="flex justify-between items-center text-left">
                 <span className="text-gray-400 text-sm">Transfer Content <br/><span className="text-xs text-red-400">(Required)</span></span>

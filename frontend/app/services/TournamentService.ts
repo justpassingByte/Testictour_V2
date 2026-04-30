@@ -30,7 +30,7 @@ export const TournamentService = {
     }
   },
 
-  async create(data: {
+    async create(data: {
     name: string;
     description?: string;
     image?: string;
@@ -39,6 +39,7 @@ export const TournamentService = {
     organizerId: string;
     roundsTotal: number;
     entryFee: number;
+    entryType?: string; // "usd" | "vnd" | "coins"
     registrationDeadline: Date;
     prizeStructure?: PrizeStructure;
     hostFeePercent?: number;

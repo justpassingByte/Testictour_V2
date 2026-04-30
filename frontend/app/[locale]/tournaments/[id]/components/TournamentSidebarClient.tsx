@@ -22,7 +22,8 @@ import {
   AlertTriangle, ShieldCheck, Lock, CheckCircle2
 } from "lucide-react"
 import { useTranslations } from "next-intl"
-import { useCurrencyRate } from "@/app/hooks/useCurrencyRate"
+import { useCurrency } from "@/app/contexts/currency-context"
+import { formatCurrency } from "@/lib/utils"
 
 interface TournamentSidebarClientProps {
   initialTournament: ITournament;
@@ -36,7 +37,7 @@ const regionSubRegions: Record<string, string> = {
 
 export default function TournamentSidebarClient({ initialTournament }: TournamentSidebarClientProps) {
   const t = useTranslations("common")
-  const { formatVndText } = useCurrencyRate()
+  const { currency, usdToVndRate } = useCurrency()
   const currentTournament = useTournamentStore(state => state.currentTournament)
   
   // Use the store's current tournament if available, otherwise SSR data
@@ -57,6 +58,10 @@ export default function TournamentSidebarClient({ initialTournament }: Tournamen
   const [loadingExportPlayers, setLoadingExportPlayers] = useState(false)
   const { currentUser } = useUserStore()
   const [isUserRegistered, setIsUserRegistered] = useState(false)
+  const displayMoneyFromUsd = (amountUsd: number) => {
+    const displayAmount = currency === "VND" ? amountUsd * usdToVndRate : amountUsd
+    return formatCurrency(displayAmount, currency)
+  }
 
   useEffect(() => {
     if (!currentUser?.id || !tournament?.id) return
@@ -240,8 +245,7 @@ export default function TournamentSidebarClient({ initialTournament }: Tournamen
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 h-4 w-4"><circle cx="8" cy="8" r="7"/><polyline points="8 4 8 12 11.5 15.5"/><circle cx="16" cy="16" r="7"/><line x1="16" y1="12" x2="16" y2="20"/><line x1="12" y1="16" x2="20" y2="16"/></svg> {t("registration_fee")}:
               </span>
               <div className="text-right">
-                <span className="font-medium text-amber-400 font-mono">${tournament.entryFee.toLocaleString()} USD</span>
-                <div className="text-[10px] text-muted-foreground">{formatVndText(tournament.entryFee)}</div>
+                <span className="font-medium text-amber-400 font-mono">{displayMoneyFromUsd(tournament.entryFee)}</span>
               </div>
             </li>
             <li className="flex items-center justify-between border-t border-white/5 pt-3">

@@ -18,11 +18,15 @@ import { ITournament } from "@/app/types/tournament"
 import { formatCurrency } from "@/lib/utils"
 import { TournamentService } from "@/app/services/TournamentService"
 import { useTranslations } from "next-intl"
-import { useCurrencyRate } from "@/app/hooks/useCurrencyRate"
+import { useCurrency } from "@/app/contexts/currency-context"
 
 export default function AdminTournamentsPage() {
   const t = useTranslations("common")
-  const { formatVndText } = useCurrencyRate()
+  const { currency, usdToVndRate } = useCurrency()
+  const displayMoneyFromUsd = (amountUsd: number) => {
+    const displayAmount = currency === "VND" ? amountUsd * usdToVndRate : amountUsd;
+    return formatCurrency(displayAmount, currency);
+  };
   const [tournaments, setTournaments] = useState<ITournament[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
@@ -194,10 +198,9 @@ export default function AdminTournamentsPage() {
                           <Progress value={((tournament.registered || 0) / tournament.maxPlayers) * 100} className="h-1.5" />
                         </div>
                       </TableCell>
-                      <TableCell className="font-medium">
+                                            <TableCell className="font-medium">
                         <div className="flex flex-col">
-                          <span>${prizePool.toLocaleString()} <span className="text-xs text-muted-foreground font-normal">USD</span></span>
-                          <span className="text-[10px] text-muted-foreground opacity-80">{formatVndText(prizePool)}</span>
+                          <span>{displayMoneyFromUsd(prizePool)}</span>
                         </div>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">

@@ -36,9 +36,9 @@ export class MatchService {
     }
   }
 
-  static async updateResults(matchId: string, data: IMatchResult[]): Promise<{ message: string; matchId: string }> {
+    static async updateResults(matchId: string, data: IMatchResult[]): Promise<{ message: string; matchId: string }> {
     try {
-      const response = await api.put(`/${matchId}/results`, data);
+      const response = await api.post(`/${matchId}/results`, data);
       const result: { message: string; matchId: string } = response.data;
       return result;
     } catch  {

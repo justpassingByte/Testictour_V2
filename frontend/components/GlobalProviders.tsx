@@ -3,6 +3,7 @@ import { SocketProvider } from '@/components/SocketProvider';
 import { NotificationProvider } from '@/components/NotificationProvider';
 import { QueryProvider } from '@/components/QueryProvider';
 import { useUserStore } from '@/app/stores/userStore';
+import { CurrencyProvider } from '@/app/contexts/currency-context';
 
 /**
  * GlobalProviders - wraps the entire app with notification context.
@@ -17,16 +18,18 @@ export function GlobalProviders({ children }: { children: React.ReactNode }) {
     const { currentUser } = useUserStore();
 
     return (
-        <QueryProvider>
-            <SocketProvider
-                role={currentUser?.role}
-                tier={(currentUser as any)?.subscriptionPlan}
-                userId={currentUser?.id}
-            >
-                <NotificationProvider>
-                    {children}
-                </NotificationProvider>
-            </SocketProvider>
-        </QueryProvider>
+        <CurrencyProvider>
+            <QueryProvider>
+                <SocketProvider
+                    role={currentUser?.role}
+                    tier={(currentUser as any)?.subscriptionPlan}
+                    userId={currentUser?.id}
+                >
+                    <NotificationProvider>
+                        {children}
+                    </NotificationProvider>
+                </SocketProvider>
+            </QueryProvider>
+        </CurrencyProvider>
     );
 }

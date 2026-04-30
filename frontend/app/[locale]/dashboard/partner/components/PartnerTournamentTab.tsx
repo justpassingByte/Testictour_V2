@@ -20,7 +20,8 @@ import { toast } from "@/components/ui/use-toast"
 import api from "@/app/lib/apiConfig"
 import { ITournament } from "@/app/types/tournament"
 import { useUserStore } from "@/app/stores/userStore"
-import { useCurrencyRate } from "@/app/hooks/useCurrencyRate"
+import { useCurrency } from "@/app/contexts/currency-context"
+import { formatCurrency } from "@/lib/utils"
 import { useTranslations } from "next-intl"
 
 interface PartnerTournamentTabProps {
@@ -29,7 +30,11 @@ interface PartnerTournamentTabProps {
 
 export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTournamentTabProps) {
   const { currentUser } = useUserStore()
-  const { formatVndText } = useCurrencyRate()
+  const { currency, usdToVndRate } = useCurrency()
+  const displayMoneyFromUsd = (amountUsd: number) => {
+    const displayAmount = currency === "VND" ? amountUsd * usdToVndRate : amountUsd;
+    return formatCurrency(displayAmount, currency);
+  };
   const t = useTranslations("common")
   const [tournaments, setTournaments] = useState<ITournament[]>([])
   const [loading, setLoading] = useState(true)
@@ -317,10 +322,9 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                           <Progress value={((tournament.registered || 0) / tournament.maxPlayers) * 100} className="h-1.5" />
                         </div>
                       </TableCell>
-                      <TableCell className="font-medium">
+                                            <TableCell className="font-medium">
                         <div className="flex flex-col">
-                          <span>${prizePool.toLocaleString()} <span className="text-xs text-muted-foreground font-normal">USD</span></span>
-                          <span className="text-[10px] text-muted-foreground opacity-80">{formatVndText(prizePool)}</span>
+                          <span>{displayMoneyFromUsd(prizePool)}</span>
                         </div>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">

@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { ITournament } from "@/app/types/tournament"
 import { MiniTourLobby } from "@/app/stores/miniTourLobbyStore"
-import { useCurrencyRate } from "@/app/hooks/useCurrencyRate"
+import { useCurrency } from "@/app/contexts/currency-context"
+import { formatCurrency } from "@/lib/utils"
 
 import TournamentDirectoryClient from "./TournamentDirectoryClient"
 import { useTranslations } from 'next-intl';
@@ -62,7 +63,7 @@ export default function HomePageClient({ tournaments, lobbies }: HomePageClientP
               </div>
 
               <div className="relative z-10 space-y-8 animate-fade-in">
-                <h1 className="text-[40px] md:text-[48px] lg:text-[56px] leading-[1.15] font-bold tracking-tight [text-shadow:_0_2px_10px_rgb(0_0_0_/_0.8)] font-['var(--font-cinzel)']">
+                <h1 className="text-[40px] md:text-[48px] lg:text-[56px] leading-[1.15] font-bold tracking-tight [text-shadow:_0_2px_10px_rgb(0_0_0_/_0.8)]">
                   <span className="gradient-text drop-shadow-md">{t('hero_title_part1')}</span> <br />
                   <span className="text-white drop-shadow-xl">{t('hero_title_part2')}</span>
                 </h1>
@@ -281,7 +282,12 @@ function FeaturedTournamentCard({ tournament, index }: { tournament: ITournament
 // MiniTour Lobby Card Component
 function MiniTourLobbyCard({ lobby, index }: { lobby: MiniTourLobby, index: number }) {
   const t = useTranslations('common');
-  const { formatVndText } = useCurrencyRate();
+  const { currency, usdToVndRate } = useCurrency();
+  const displayMoneyFromUsd = (amountUsd: number) => {
+    const displayAmount = currency === "VND" ? amountUsd * usdToVndRate : amountUsd;
+    return formatCurrency(displayAmount, currency);
+  };
+  
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -323,11 +329,8 @@ function MiniTourLobbyCard({ lobby, index }: { lobby: MiniTourLobby, index: numb
               {t('entry_fee', { defaultValue: 'Entry' })}
             </span>
             <div className="text-right">
-              <span className="font-medium">{lobby.entryType !== "coins" && "$"}{lobby.entryFee} {lobby.entryType !== "coins" && <span className="text-[10px] text-muted-foreground">USD</span>}</span>
-              {lobby.entryType !== "coins" && typeof lobby.entryFee === 'number' && lobby.entryFee > 0 && (
-                <div className="text-[10px] text-muted-foreground opacity-80">{formatVndText(lobby.entryFee)}</div>
-              )}
-            </div>
+              <span className="font-medium">{displayMoneyFromUsd(lobby.entryFee)}</span>
+  </div>
           </div>
           <div className="flex items-start justify-between">
             <span className="text-muted-foreground flex items-center gap-1 mt-0.5">
@@ -335,11 +338,8 @@ function MiniTourLobbyCard({ lobby, index }: { lobby: MiniTourLobby, index: numb
               {t('prize_pool', { defaultValue: 'Prize' })}
             </span>
             <div className="text-right">
-              <span className="font-bold text-primary">{lobby.entryType !== "coins" && "$"}{lobby.prizePool} {lobby.entryType !== "coins" && <span className="text-[10px] text-muted-foreground">USD</span>}</span>
-              {lobby.entryType !== "coins" && typeof lobby.prizePool === 'number' && lobby.prizePool > 0 && (
-                <div className="text-[10px] text-muted-foreground opacity-80">{formatVndText(lobby.prizePool)}</div>
-              )}
-            </div>
+              <span className="font-bold text-primary">{displayMoneyFromUsd(lobby.prizePool)}</span>
+              </div>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground flex items-center gap-1">

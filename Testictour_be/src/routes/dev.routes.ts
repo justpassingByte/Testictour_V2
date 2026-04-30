@@ -487,7 +487,7 @@ import RoundService from '../services/RoundService';
  */
 router.post('/automation/seed-env', async (req: Request, res: Response) => {
   try {
-    const { gameName, tagLine, region = 'sea', type = 'minitour' } = req.body;
+    const { gameName, tagLine, region = 'sea', type = 'minitour', skipEscrow = false } = req.body;
 
     let riotPlayers: any[] = [];
     if (gameName && tagLine) {
@@ -527,7 +527,13 @@ router.post('/automation/seed-env', async (req: Request, res: Response) => {
     }
 
     let numPlayers = req.body.numPlayers || (type === 'minitour' ? 8 : 16);
-    let uniqueParticipants = Array.from(new Map(allRealParticipants.map(item => [item.puuid, item])).values());
+        let uniqueParticipants = Array.from(new Map(allRealParticipants.map(item => [item.puuid, item])).values());
+
+    // Nếu skipEscrow và có Riot data, dùng đúng số lượng real participants, không pad dummy
+    if (skipEscrow && uniqueParticipants.length > 0) {
+      numPlayers = uniqueParticipants.length;
+    }
+
     allMatchIds = Array.from(new Set(allMatchIds)); // Unique queue of older matches
     let matchIdx = 0;
 
@@ -597,7 +603,7 @@ router.post('/automation/seed-env', async (req: Request, res: Response) => {
       return res.json({ success: true, message: `Realistic MiniTour seeded with history from ${gameName}`, lobbyId: lobby.id });
     } else {
       // Tournament mode realistic seed
-      numPlayers = req.body.numPlayers || 8;
+      numPlayers = req.body.numPlayers || (skipEscrow && dbUsers.length > 0 ? dbUsers.length : 8);
       const numberOfGroups = req.body.numberOfGroups || Math.ceil(numPlayers / 32);
 
       const admin = await prisma.user.findFirst({ where: { role: 'admin' } });
@@ -616,8 +622,12 @@ router.post('/automation/seed-env', async (req: Request, res: Response) => {
       });
 
       // Bắt buộc khởi tạo Escrow cho giải được tạo từ DevTools để test luồng
-      const EscrowService = require('../services/EscrowService').default;
-      await EscrowService.recalculateTournamentEscrow(tour.id, {});
+            if (!skipEscrow) {
+        const EscrowService = require('../services/EscrowService').default;
+        await EscrowService.recalculateTournamentEscrow(tour.id, {});
+      } else {
+        console.log(`[DevTools] skipEscrow=true — bỏ qua Escrow cho tournament ${tour.id}`);
+      }
 
       // Seed requested number of players (use real dbUsers first, pad with dummy users)
       const allUsers = [];

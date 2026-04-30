@@ -1527,6 +1527,7 @@
   "register": "Register",
   "register_for_tournament": "Register for Tournament",
   "register_now": "Register Now",
+  "already_registered": "You are already registered for this tournament",
   "registered": "Registered",
   "registered_participants": "Registered Participants",
   "registered_players": "Registered Players",

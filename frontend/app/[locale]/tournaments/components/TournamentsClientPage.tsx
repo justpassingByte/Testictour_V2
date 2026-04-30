@@ -25,6 +25,8 @@ import {
 
 import { ITournament } from '@/app/types/tournament'
 import { useTournamentStore } from '@/app/stores/tournamentStore'
+import { useCurrency } from "@/app/contexts/currency-context";
+import { formatCurrency } from "@/lib/utils";
 
 interface TournamentsClientPageProps {
   initialTournaments: ITournament[]
@@ -270,6 +272,7 @@ export default function TournamentsClientPage({ initialTournaments }: Tournament
 
 function TournamentCard({ tournament, index }: { tournament: ITournament; index: number }) {
   const t = useTranslations('common');
+  const { currency, usdToVndRate } = useCurrency();
   const statusColors = {
     in_progress: "bg-primary/20 text-primary border-primary/20 animate-pulse-subtle",
     UPCOMING: "bg-yellow-500/20 text-yellow-500 border-yellow-500/20",
@@ -284,7 +287,11 @@ function TournamentCard({ tournament, index }: { tournament: ITournament; index:
 
   const formattedDate = new Date(tournament.startTime).toLocaleDateString();
   const formattedTime = new Date(tournament.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const registrationFeeDisplay = tournament.entryFee === 0 ? '0' : `$${tournament.entryFee}`;
+  const displayMoneyFromUsd = (amountUsd: number) => {
+    const displayAmount = currency === "VND" ? amountUsd * usdToVndRate : amountUsd;
+    return formatCurrency(displayAmount, currency);
+  };
+  const registrationFeeDisplay = tournament.entryFee === 0 ? formatCurrency(0, currency) : displayMoneyFromUsd(tournament.entryFee);
 
   // Helper to safely translate status
   const getStatusTranslation = (status: string) => {
@@ -354,7 +361,7 @@ function TournamentCard({ tournament, index }: { tournament: ITournament; index:
           <div className="flex items-center justify-between text-sm">
             <span>{t('prize_pool', { fallback: 'Prize Pool' })}:</span>
             <span className="font-bold text-emerald-400">
-              ${(tournament.budget || 0).toLocaleString()} <span className="text-[10px] text-muted-foreground font-normal">USD</span>
+              {displayMoneyFromUsd(tournament.budget || 0)}
             </span>
           </div>
         </div>

@@ -16,6 +16,8 @@ import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { toast } from "@/components/ui/use-toast"
 import api from "@/app/lib/apiConfig"
+import { useCurrency } from "@/app/contexts/currency-context"
+import { formatCurrency } from "@/lib/utils"
 
 interface PartnerReward {
   id: string
@@ -43,6 +45,7 @@ const TYPE_CONFIG: Record<string, { label: string; icon: any; color: string }> =
 }
 
 export default function PartnerRewardTab() {
+  const { currency: displayCurrency, usdToVndRate } = useCurrency()
   const [rewards, setRewards] = useState<PartnerReward[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
@@ -52,7 +55,7 @@ export default function PartnerRewardTab() {
   const [saving, setSaving] = useState(false)
 
   const emptyForm = {
-    title: "", description: "", type: "custom", value: 0, currency: "coins",
+    title: "", description: "", type: "custom", value: 0, currency: displayCurrency.toLowerCase(),
     imageUrl: "", maxRedemptions: "", validFrom: "", validUntil: "",
   }
   const [form, setForm] = useState(emptyForm)
@@ -144,6 +147,19 @@ export default function PartnerRewardTab() {
 
   const activeRewards = rewards.filter(r => r.isActive).length
   const totalRedemptions = rewards.reduce((s, r) => s + r.currentRedemptions, 0)
+
+  const formatRewardValue = (value: number, rewardCurrency: string) => {
+    const normalizedCurrency = rewardCurrency.toUpperCase()
+    if (normalizedCurrency === "USD") {
+      const displayValue = displayCurrency === "VND" ? value * usdToVndRate : value
+      return formatCurrency(displayValue, displayCurrency)
+    }
+    if (normalizedCurrency === "VND") {
+      const displayValue = displayCurrency === "USD" ? value / usdToVndRate : value
+      return formatCurrency(displayValue, displayCurrency)
+    }
+    return `${value} ${rewardCurrency}`
+  }
 
   if (loading) {
     return (
@@ -250,7 +266,7 @@ export default function PartnerRewardTab() {
                   <div className="flex items-center justify-between text-xs">
                     <div className="flex items-center gap-1 text-amber-400 font-semibold">
                       {reward.currency === 'usd' ? <DollarSign className="h-3 w-3" /> : <Coins className="h-3 w-3" />}
-                      {reward.value} {reward.currency}
+                      {formatRewardValue(reward.value, reward.currency)}
                     </div>
                     <span className="text-muted-foreground">
                       {reward.currentRedemptions}{reward.maxRedemptions ? `/${reward.maxRedemptions}` : ''} redeemed
@@ -308,6 +324,7 @@ export default function PartnerRewardTab() {
                   <SelectContent>
                     <SelectItem value="coins">Coins</SelectItem>
                     <SelectItem value="usd">USD</SelectItem>
+                    <SelectItem value="vnd">VND</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

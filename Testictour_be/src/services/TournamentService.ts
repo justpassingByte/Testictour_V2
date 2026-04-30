@@ -286,12 +286,13 @@ export default class TournamentService {
     return result as any;
   }
 
-  static async create(data: {
+    static async create(data: {
     name: string;
     startTime: Date;
     maxPlayers: number;
     organizerId: string;
     entryFee: number;
+    entryType?: string;
     registrationDeadline: Date;
     description?: string;
     image?: string;

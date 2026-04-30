@@ -15,17 +15,105 @@ export default class MatchService {
     const db = tx || prisma;
     return db.match.create({ data: { ...data, lobbyId } });
   }
-  static async results(matchId: string) {
+    static async results(matchId: string) {
     return prisma.matchResult.findMany({
       where: { matchId },
       include: {
         user: {
           select: {
+            id: true,
             riotGameName: true,
+            username: true,
+            puuid: true,
           },
         },
       },
     });
+  }
+
+  /**
+   * Get full match detail with results, user info, lobby, round, phase info.
+   * Used by admin/partner dashboard for match detail modal.
+   */
+    static async getMatchDetail(matchId: string) {
+    const match = await prisma.match.findUnique({
+      where: { id: matchId },
+      include: {
+        lobby: {
+          include: {
+            round: {
+              include: {
+                phase: {
+                  select: {
+                    id: true,
+                    name: true,
+                    phaseNumber: true,
+                    type: true,
+                    tournamentId: true,
+                    advancementCondition: true,
+                    pointsMapping: true,
+                    matchesPerRound: true,
+                  }
+                }
+              }
+            }
+          }
+        },
+        matchResults: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                riotGameName: true,
+                username: true,
+                puuid: true,
+              }
+            }
+          },
+          orderBy: { placement: 'asc' }
+        }
+      }
+    });
+
+    if (!match) throw new ApiError(404, 'Match not found');
+
+    // Get tournament info
+    const tournament = await prisma.tournament.findUnique({
+      where: { id: match.lobby.round.phase.tournamentId },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        region: true,
+      }
+    });
+
+        return {
+      match: {
+        id: (match as any).id,
+        lobbyId: (match as any).lobbyId,
+        matchIdRiotApi: (match as any).matchIdRiotApi,
+        status: (match as any).status,
+        fetchedAt: (match as any).fetchedAt,
+        createdAt: (match as any).createdAt,
+        matchData: (match as any).matchData,
+      },
+      lobby: {
+        id: (match as any).lobby.id,
+        name: (match as any).lobby.name,
+        state: (match as any).lobby.state,
+        completedMatchesCount: (match as any).lobby.completedMatchesCount,
+        fetchedResult: (match as any).lobby.fetchedResult,
+      },
+      round: {
+        id: (match as any).lobby.round.id,
+        roundNumber: (match as any).lobby.round.roundNumber,
+        status: (match as any).lobby.round.status,
+      },
+      phase: (match as any).lobby.round.phase,
+      tournament,
+      results: (match as any).matchResults,
+    };
   }
   static async fullDetails(matchId: string) {
     if (matchId.startsWith('mini-')) {
@@ -49,22 +137,58 @@ export default class MatchService {
       return match.matchData;
     }
   }
-  static async updateResults(matchId: string, data: any) {
+    static async updateResults(matchId: string, data: any) {
     // Update match results, recalculate points, update participant score
     // data: [{ userId, placement, points }]
     return prisma.$transaction(async (tx: any) => {
+      // Get the match with lobby/round/phase info to know the tournament
+      const match = await tx.match.findUnique({
+        where: { id: matchId },
+        include: {
+          lobby: {
+            include: {
+              round: {
+                include: { phase: true }
+              }
+            }
+          }
+        }
+      });
+      if (!match) throw new ApiError(404, 'Match not found');
+      const tournamentId = match.lobby.round.phase.tournamentId;
+
+            // Get old results to compute score adjustments
+      const oldResults = await tx.matchResult.findMany({ where: { matchId } });
+      const oldScoreMap = new Map<string, number>(oldResults.map((r: any) => [r.userId, r.points as number || 0]));
+
       for (const result of data) {
+                const oldPoints = (oldScoreMap.get(result.userId) as number) || 0;
+
         await tx.matchResult.upsert({
           where: { matchId_userId: { matchId, userId: result.userId } },
           update: { placement: result.placement, points: result.points },
           create: { matchId, userId: result.userId, placement: result.placement, points: result.points }
         });
-        // Update participant score
-        const participant = await tx.participant.findFirst({ where: { userId: result.userId } });
+
+        // Update participant score: subtract old points, add new points
+        const participant = await tx.participant.findFirst({ where: { userId: result.userId, tournamentId } });
         if (participant) {
-          await tx.participant.update({ where: { id: participant.id }, data: { scoreTotal: { increment: result.points } } });
+          const delta = (result.points as number) - oldPoints;
+          if (delta !== 0) {
+            await tx.participant.update({
+              where: { id: participant.id },
+              data: { scoreTotal: { increment: delta } }
+            });
+          }
         }
       }
+
+      // Update summaries after edit
+      try {
+        const SummaryManagerService = (await import('./SummaryManagerService')).default;
+        await SummaryManagerService.queueMatchSummary(matchId, data);
+      } catch { /* non-fatal */ }
+
       return { message: 'Results updated', matchId };
     });
   }

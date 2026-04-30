@@ -9,6 +9,7 @@ import { useEffect } from "react"
 import { cn } from "@/lib/utils"
 import { ModeToggle } from "@/components/mode-toggle"
 import { LanguageToggle } from "@/components/language-toggle"
+import { CurrencyToggle } from "@/components/currency-toggle"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useTranslations, useLocale } from 'next-intl'
@@ -127,6 +128,7 @@ export function MainNav({
 
         <div className="flex items-center space-x-2">
           <LanguageToggle />
+          <CurrencyToggle />
           <ModeToggle />
 
           {/* Notification bell — only for logged-in users */}

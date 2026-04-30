@@ -45,6 +45,14 @@ const MatchController = {
       next(err);
     }
   },
+  async getDetail(req: Request, res: Response, next: NextFunction) {
+    try {
+      const detail = await MatchService.getMatchDetail(req.params.matchId);
+      res.json({ success: true, ...detail });
+    } catch (err) {
+      next(err);
+    }
+  },
   async fetchAndSaveMatchData(req: Request, res: Response, next: NextFunction) {
     try {
       const { matchId, riotMatchId, lobbyId, region } = req.body;

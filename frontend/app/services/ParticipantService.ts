@@ -4,12 +4,17 @@ import api from '../lib/apiConfig';
 export class ParticipantService {
   static async join(
     tournamentId: string,
-    discordId?: string,
+    additionalInformation?: string,
     referralSource?: string,
     joinAsReserve?: boolean,
   ): Promise<{ participant: IParticipant; checkoutUrl: string | null; requiresPayment: boolean; transactionId?: string }> {
     try {
-      const response = await api.post(`/tournaments/${tournamentId}/join`, { discordId, referralSource, joinAsReserve });
+      const response = await api.post(`/tournaments/${tournamentId}/join`, {
+        discordId: additionalInformation,
+        additionalInformation,
+        referralSource,
+        joinAsReserve
+      });
       const data = response.data;
       return {
         participant: data.participant,
