@@ -62,13 +62,22 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
     discordUrl: "",
   })
   
-  // entryFeeInVnd: nhập VND, khi đổi sẽ tự convert sang USD
+    // entryFeeInVnd: nhập VND, khi đổi sẽ tự convert sang USD
   const [entryFeeVnd, setEntryFeeVnd] = useState("");
   const handleEntryFeeVndChange = (vndStr: string) => {
     setEntryFeeVnd(vndStr);
     const vndNum = parseFloat(vndStr.replace(/,/g, '')) || 0;
     const usdValue = currency === "VND" ? Math.round((vndNum / usdToVndRate) * 100) / 100 : vndNum;
     setForm(p => ({ ...p, entryFee: usdValue }));
+  };
+
+  // customPrizePoolVnd: nhập VND cho prize pool
+  const [prizePoolVnd, setPrizePoolVnd] = useState("");
+  const handlePrizePoolVndChange = (vndStr: string) => {
+    setPrizePoolVnd(vndStr);
+    const vndNum = parseFloat(vndStr.replace(/,/g, '')) || 0;
+    const usdValue = currency === "VND" ? Math.round((vndNum / usdToVndRate) * 100) / 100 : vndNum;
+    setForm(p => ({ ...p, customPrizePool: usdValue }));
   };
   
   const [sponsors, setSponsors] = useState<{name: string; url: string; file?: File}[]>([])
@@ -221,8 +230,9 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
 
       toast({ title: "Tournament Created!", description: `${form.name} has been created successfully.` })
       setCreateOpen(false)
-      setForm({ name: "", description: "", region: "APAC", maxPlayers: 32, reservePlayersLimit: 0, entryFee: 0, hostFeePercent: 0.1, customPrizePool: 0, startTime: "", registrationDeadline: "", image: "", isCommunityMode: false, discordUrl: "" })
+            setForm({ name: "", description: "", region: "APAC", maxPlayers: 32, reservePlayersLimit: 0, entryFee: 0, hostFeePercent: 0.1, customPrizePool: 0, startTime: "", registrationDeadline: "", image: "", isCommunityMode: false, discordUrl: "" })
       setEntryFeeVnd("")
+      setPrizePoolVnd("")
             setSponsors([])
       setPrizeDistribution({ "1": 40, "2": 30, "3": 20, "4": 10 })
       setPhases([{ name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "top_n_scores", advancementValue: 4, matchesPerRound: 1, carryOverScores: false }])
@@ -514,17 +524,27 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                                 <p className="text-[9px] text-muted-foreground mt-0.5">≈ {displayMoneyFromUsd(form.entryFee)}</p>
                               )}
                             </div>
-                            <div className="space-y-2">
-                              <Label className="flex items-center gap-1">Gross Prize Pool <span className="text-[10px] font-normal text-muted-foreground">(nhập USD)</span></Label>
-                              <Input 
-                                type="number" 
-                                min={form.maxPlayers * form.entryFee} 
-                                value={Math.max(form.customPrizePool, form.maxPlayers * form.entryFee)} 
-                                onChange={(e) => {
-                                  const val = parseFloat(e.target.value) || 0;
-                                  setForm(p => ({ ...p, customPrizePool: val }));
-                                }} 
-                              />
+                                                        <div className="space-y-2">
+                              <Label className="flex items-center gap-1">Gross Prize Pool <span className="text-[10px] font-normal text-muted-foreground">(nhập {currency})</span></Label>
+                              {currency === "VND" ? (
+                                <Input 
+                                  type="text" 
+                                  min={0} 
+                                  value={prizePoolVnd} 
+                                  onChange={(e) => handlePrizePoolVndChange(e.target.value)}
+                                  placeholder="VD: 10,000,000"
+                                />
+                              ) : (
+                                <Input 
+                                  type="number" 
+                                  min={0} 
+                                  value={form.customPrizePool || ''} 
+                                  onChange={(e) => {
+                                    const val = parseFloat(e.target.value) || 0;
+                                    setForm(p => ({ ...p, customPrizePool: val }));
+                                  }} 
+                                />
+                              )}
                               <p className="text-[9px] text-muted-foreground mt-1">Min: {displayMoneyFromUsd(form.maxPlayers * form.entryFee)}</p>
                             </div>
               <div className="space-y-2">

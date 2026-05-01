@@ -252,20 +252,20 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
         </Card>
       )}
 
-      {/* ── Escrow & Description ──────────────────────────────────────── */}
+      {/* ── Trust & Escrow ──────────────────────────────────────── */}
       <Card className="border shadow-sm">
         <CardHeader>
           <CardTitle className="text-lg flex items-center">
             <ShieldCheck className="mr-2 h-5 w-5 text-primary" />
-            {isEscrow ? t("escrow_title") : t("community_title")}
+            {isEscrow ? "Trusted Partner" : t("community_title")}
           </CardTitle>
         </CardHeader>
         <CardContent className="text-sm space-y-4">
-          <div className={`p-4 rounded-lg border ${isEscrow ? 'bg-green-500/5 border-green-500/20' : 'bg-blue-500/5 border-blue-500/20'}`}>
-            <p className="font-medium mb-1">{isEscrow ? t("escrow_title") : t("community_title")}</p>
-            <p className="text-muted-foreground">{isEscrow ? t("escrow_desc") : t("community_desc")}</p>
+          <div className={`p-4 rounded-lg border ${isEscrow ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-blue-500/5 border-blue-500/20'}`}>
+            <p className="font-medium mb-1">{isEscrow ? "Verified Trusted Partner" : t("community_title")}</p>
+            <p className="text-muted-foreground">{isEscrow ? "This tournament is hosted by a Verified Trusted Partner. Prize pool is secured and guaranteed by the platform." : t("community_desc")}</p>
             {isEscrow && tournament.escrowRequiredAmount && (
-                <div className="mt-2 font-bold text-green-600 dark:text-green-400">
+                <div className="mt-2 font-bold text-emerald-600 dark:text-emerald-400">
                   <p>{t("guaranteed_pool")}: {formatCurrency(tournament.escrowRequiredAmount)}</p>
                 </div>
             )}
