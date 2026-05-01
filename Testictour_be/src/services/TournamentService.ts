@@ -13,20 +13,6 @@ export default class TournamentService {
   // Cache platform fee with a 10-minute TTL to ensure changes propagate without reboot
   private static platformFeeCache = new Map<string, { fee: number; expiresAt: number }>();
 
-  private static vndRate: number = 0;
-  private static vndRateFetchedAt: number = 0;
-
-  private static async getVndRate(): Promise<number> {
-    const now = Date.now();
-    if (this.vndRate > 0 && now - this.vndRateFetchedAt < 300000) {
-      return this.vndRate;
-    }
-    const { default: CurrencyService } = await import('./CurrencyService');
-    this.vndRate = await CurrencyService.getUsdToVndRate();
-    this.vndRateFetchedAt = now;
-    return this.vndRate;
-  }
-
   private static async getPlatformFeePercent(organizerId: string): Promise<number> {
     const now = Date.now();
     const cached = this.platformFeeCache.get(organizerId);
@@ -332,9 +318,7 @@ export default class TournamentService {
     templateId?: string;
     phases?: any[];
     isCommunityMode?: boolean;
-    customPrizePool?: number;
-    entryFeeVnd?: number;
-    customPrizePoolVnd?: number;
+        customPrizePool?: number;
     discordUrl?: string;
     sponsors?: any;
     reservePlayersLimit?: number;
@@ -397,16 +381,14 @@ export default class TournamentService {
       }
     }
 
-    const { phases, customPrizePool, entryFeeVnd, customPrizePoolVnd, ...restOfData } = data;
+    const { phases, customPrizePool, ...restOfData } = data;
 
     const DEFAULT_TOURNAMENT_IMAGE = '/images/default-tournament-banner.png';
 
-        return prisma.tournament.create({
+    return prisma.tournament.create({
       data: {
         ...restOfData,
         ...templateData,
-        entryFeeVnd: entryFeeVnd || 0,
-        customPrizePoolVnd: customPrizePoolVnd || 0,
         image: restOfData.image || DEFAULT_TOURNAMENT_IMAGE,
         startTime: finalStartTime,
         status: (templateData as any).status || 'pending',
@@ -443,7 +425,7 @@ export default class TournamentService {
         logger.info(`Initial rounds for the first phase of tournament ${tournament.id} created.`);
       }
 
-            // Initialize Escrow for the newly created tournament
+                  // Initialize Escrow for the newly created tournament
       try {
         await EscrowService.recalculateTournamentEscrow(tournament.id, {
           entryFee: tournament.entryFee,
@@ -451,16 +433,6 @@ export default class TournamentService {
           expectedParticipants: tournament.expectedParticipants,
           hostFeePercent: tournament.hostFeePercent,
         });
-        
-        // PRO/ENTERPRISE forced disable community mode (Trusted Partner)
-        const partnerSub = await prisma.partnerSubscription.findUnique({ where: { userId: tournament.organizerId } });
-        if (partnerSub && (partnerSub.plan === 'PRO' || partnerSub.plan === 'ENTERPRISE')) {
-          await prisma.tournament.update({
-            where: { id: tournament.id },
-            data: { isCommunityMode: false },
-          });
-        }
-        
         logger.info(`Escrow initialized for tournament ${tournament.id}`);
       } catch (err: any) {
         logger.error(`Failed to initialize escrow for tournament ${tournament.id}: ${err.message}`);
