@@ -30,7 +30,7 @@ export default class TournamentService {
     return fee;
   }
 
-        static async calculateNetPrizePool(
+                static async calculateNetPrizePool(
     tournament: any, 
     counts: { registered: number, reserve: number, absent: number },
     escrow?: any
@@ -40,39 +40,11 @@ export default class TournamentService {
     const isUpcoming = tournament.status === 'UPCOMING' || tournament.status === 'DRAFT' || tournament.status === 'REGISTRATION' || tournament.status === 'pending';
     const multiplier = isUpcoming ? Math.max(maxPlayers, totalCount) : totalCount;
     
-    // Nếu có customPrizePool / escrowRequiredAmount (partner config), dùng nó làm gross pool
-    const customPrizePool = tournament.customPrizePool || tournament.escrowRequiredAmount || 0;
-    let grossPool = customPrizePool > 0 ? customPrizePool : multiplier * (tournament.entryFee || 0);
-    
-    if (grossPool === 0 && isUpcoming) {
-      if (tournament.escrowRequiredAmount && tournament.escrowRequiredAmount > 0) {
-        grossPool = tournament.escrowRequiredAmount;
-      } else if (tournament.customPrizePool && tournament.customPrizePool > 0) {
-        grossPool = tournament.customPrizePool;
-      }
-    }
-
-    if (!tournament.isCommunityMode) {
-      if (escrow && escrow.fundedAmount > 0) {
-        grossPool = Math.max(grossPool, escrow.fundedAmount);
-      } else if (tournament.escrowRequiredAmount && tournament.escrowRequiredAmount > grossPool) {
-        grossPool = tournament.escrowRequiredAmount;
-      }
-    }
+        // Nếu có escrowRequiredAmount (customPrizePool đã lưu), dùng nó, không nhân với số người
+    const escrowAmount = tournament.escrowRequiredAmount || 0;
+    let grossPool = escrowAmount > 0 ? escrowAmount * 1.0 : multiplier * (tournament.entryFee || 0);
 
     let standardPool = grossPool;
-
-    // Subtract unassigned reserves refund estimate (money going back, not to winners)
-    const unassignedReserves = Math.max(0, totalCount - maxPlayers);
-    const reserveRefundAmount = Math.min(unassignedReserves * (tournament.entryFee || 0), standardPool);
-    standardPool -= reserveRefundAmount;
-
-    // Subtract absent penalties if host keeps them
-    let absentKeepAmount = 0;
-    if (tournament.absentFeePolicy === 'keep') {
-      absentKeepAmount = Math.min(counts.absent * (tournament.entryFee || 0), standardPool);
-      standardPool -= absentKeepAmount;
-    }
     
         const hostFeePercent = tournament.hostFeePercent || 0;
         const platformFeePercent = await this.getPlatformFeePercent(tournament.organizerId);
