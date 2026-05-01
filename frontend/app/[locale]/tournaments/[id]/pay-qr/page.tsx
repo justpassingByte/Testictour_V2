@@ -23,14 +23,22 @@ export default function VietQRPaymentPage() {
   const [paymentStatus, setPaymentStatus] = useState("pending");
   const { currency, usdToVndRate } = useCurrency();
 
-  // In a real system, you'd fetch the recipient's bank detail (Platform or Host).
-  // Defaulting to a placeholder bin & account for Sepay QR API.
+  const amountVnd = Number(amount) || 0;
+
+  // QR với số tiền entry fee (chưa bao gồm phí ngân hàng)
   const bankBin = "970436"; // Vietcombank
   const bankAcc = "VIRTUAL_AC"; 
-  const qrUrl = `https://qr.sepay.vn/img?acc=${bankAcc}&bank=${bankBin}&amount=${amount}&des=${ref}`;
+  const qrUrl = `https://qr.sepay.vn/img?acc=${bankAcc}&bank=${bankBin}&amount=${amountVnd}&des=${ref}`;
+
+  const formatVnd = (vnd: number) =>
+    new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(vnd);
+
+  const amountDisplay =
+    currency === "USD"
+      ? formatCurrency(amountVnd / usdToVndRate, "USD")
+      : formatVnd(amountVnd);
 
   useEffect(() => {
-    // Poll the backend to check if the transaction is matched/paid
     const interval = setInterval(async () => {
       try {
         const res = await api.get(`/tournaments/${tournamentId}/payment-status?ref=${ref}`);
@@ -54,12 +62,6 @@ export default function VietQRPaymentPage() {
 
   if (!ref) return <div className="text-center p-8">Invalid Payment Reference</div>;
 
-  const amountVnd = Number(amount) || 0;
-  const amountDisplay =
-    currency === "USD"
-      ? formatCurrency(amountVnd / usdToVndRate, "USD")
-      : formatCurrency(amountVnd, "VND");
-
   return (
     <div className="container max-w-lg mx-auto py-12 px-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <Button variant="ghost" onClick={() => router.back()} className="mb-4">
@@ -75,24 +77,28 @@ export default function VietQRPaymentPage() {
         {paymentStatus === "pending" ? (
           <>
             <div className="p-4 bg-white rounded-xl inline-block">
-              {/* Using native img to bypass Next.js hostname restrictions for external QRs without next.config.js update */}
               <img src={qrUrl} alt="VietQR" className="w-[250px] h-[250px] object-contain" />
             </div>
 
-            <div className="space-y-4 pt-4 border-t border-white/10">
-              <div className="flex justify-between items-center text-left">
-                <span className="text-gray-400 text-sm">Amount to Pay</span>
+            {/* Chi tiết thanh toán */}
+            <div className="space-y-3 pt-4 border-t border-white/10 text-left">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400 text-sm">Entry Fee</span>
                 <span className="text-xl font-bold text-orange-500">{amountDisplay}</span>
               </div>
-              <div className="flex justify-between items-center text-left">
+              <div className="flex justify-between items-center">
                 <span className="text-gray-400 text-sm">Transfer Content <br/><span className="text-xs text-red-400">(Required)</span></span>
                 <span className="text-lg font-mono font-bold text-white bg-black/50 p-2 rounded tracking-widest">{ref}</span>
               </div>
+              <p className="text-[10px] text-muted-foreground text-center pt-1">
+                Phí giao dịch ngân hàng (nếu có) sẽ được khấu trừ từ số tiền chuyển.
+                Vui lòng chuyển đúng số tiền <strong className="text-white">{amountDisplay}</strong> và nội dung chuyển khoản.
+              </p>
             </div>
 
             <div className="flex items-center justify-center gap-2 text-sm text-yellow-500 bg-yellow-500/10 p-3 rounded">
               <Loader2 className="w-4 h-4 animate-spin" />
-              <span>Waiting for Sepay verification... (Up to 1 min)</span>
+              <span>Waiting for payment confirmation... (Up to 1 min)</span>
             </div>
             
             <div className="flex items-center justify-center gap-2 text-xs text-gray-500 pt-2">

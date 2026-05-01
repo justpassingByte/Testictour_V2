@@ -620,13 +620,14 @@ export default class TournamentService {
       if (!tournament) throw new ApiError(404, 'Tournament not found');
 
       // Count all participants config entry fees for prize pool calculate (including reserves)
-      const actualCount = await db.participant.count({ where: { tournamentId } });
+            const actualCount = await db.participant.count({ where: { tournamentId } });
       const entryFee = (tournament as any).entryFee || 0;
       const hostFeePercent = (tournament as any).hostFeePercent || 0.1;
+      const platformFeePercent = await this.getPlatformFeePercent(tournament.organizerId);
       const dynamicPrizeStructure = PrizeCalculationService.getDynamicPrizeDistribution(actualCount);
       
       const totalCollected = actualCount * entryFee;
-      const platformFee = Math.floor(totalCollected * hostFeePercent);
+      const platformFee = Math.floor(totalCollected * platformFeePercent);
       const totalDistributablePrizePool = totalCollected - platformFee;
 
       const { adjusted } = PrizeCalculationService.autoAdjustPrizeStructure(

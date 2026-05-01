@@ -165,24 +165,25 @@ export default class ParticipantService {
           returnUrl: successUrl,
           notifyUrl: `${apiUrl}/webhooks/payments/momo`,
         });
-      } else if (provider === 'sepay' || provider === 'bank_transfer' || provider === 'manual') {
-        const CurrencyService = (await import('./CurrencyService')).default;
-        const usdToVndRate = await CurrencyService.getUsdToVndRate();
-        let amountVnd = Math.round(entryFee * usdToVndRate);
+            } else if (provider === 'sepay' || provider === 'bank_transfer' || provider === 'manual') {
+              const CurrencyService = (await import('./CurrencyService')).default;
+              const usdToVndRate = await CurrencyService.getUsdToVndRate();
+              let amountVnd = Math.round(entryFee * usdToVndRate);
         
-        // Add random suffix to amount to help deduplication
-        amountVnd = OrderService.generateRandomSuffixAmount(amountVnd);
+              // KHÔNG thêm random suffix — dùng đúng số tiền exact để tránh nhầm lẫn khi thanh toán
 
-        await prisma.transaction.update({
-            where: { id: transaction.id },
-            data: { reviewNotes: `Entry fee. Exact pay: ${amountVnd} VND` }
-        });
+              await prisma.transaction.update({
+                  where: { id: transaction.id },
+                  data: { 
+                    reviewNotes: `Entry fee. Exact pay: ${amountVnd} VND`,
+                  }
+              });
 
-        // The checkoutUrl routes to our backend handler for automatic payment gateway redirection
-        checkoutUrl = `${apiUrl}/payments/sepay-pg/${transaction.id}`;
-        paymentDetails = { externalRefId, amountVnd, checkoutUrl };
-        console.log(`[JOIN DEBUG] Generated checkoutUrl: ${checkoutUrl}`);
-      }
+              // The checkoutUrl routes to our backend handler for automatic payment gateway redirection
+              checkoutUrl = `${apiUrl}/payments/sepay-pg/${transaction.id}`;
+              paymentDetails = { externalRefId, amountVnd, checkoutUrl };
+              console.log(`[JOIN DEBUG] Generated checkoutUrl: ${checkoutUrl}`);
+            }
     } catch (err: any) {
       // Payment URL generation failed — clean up: remove participant + decrement slot
       logger.error(`[EntryFee] Checkout URL generation failed for participant ${participant.id}: ${err.message}`);

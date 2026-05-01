@@ -56,7 +56,7 @@ export default class SepayPgController {
 
       const checkoutURL = client.checkout.initCheckoutUrl();
 
-      // Retrieve amountVnd
+      // Retrieve amountVnd from transaction
       let amountVnd = 10000;
       if (transaction.reviewNotes && transaction.reviewNotes.includes('Exact pay:')) {
          const match = transaction.reviewNotes.match(/Exact pay:\s*(\d+)/i);
