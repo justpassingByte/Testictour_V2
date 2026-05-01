@@ -487,7 +487,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
               </div>
             </div>
 
-            {/* Players & Fees */}
+                        {/* Players & Fees */}
             <div className="grid gap-4 md:grid-cols-5 bg-white/5 p-4 rounded border border-white/10">
               <div className="space-y-2">
                 <Label>Max Players</Label>
@@ -508,74 +508,83 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                 <p className="text-[9px] text-muted-foreground mt-1">Số slot dự bị (0 = tắt)</p>
               </div>
                             <div className="space-y-2">
-                              <Label className="flex items-center gap-1">Entry Fee <span className="text-[10px] font-normal text-muted-foreground">(nhập {currency})</span></Label>
-                              {currency === "VND" ? (
-                                <Input 
-                                  type="text" 
-                                  min={0} 
-                                  value={entryFeeVnd} 
-                                  onChange={(e) => handleEntryFeeVndChange(e.target.value)}
-                                  placeholder="VD: 100,000"
-                                />
-                              ) : (
-                                <Input type="number" min={0} value={form.entryFee} onChange={(e) => setForm(p => ({ ...p, entryFee: parseFloat(e.target.value) || 0 }))} />
-                              )}
-                              {currency === "VND" && form.entryFee > 0 && (
-                                <p className="text-[9px] text-muted-foreground mt-0.5">≈ {displayMoneyFromUsd(form.entryFee)}</p>
+                              <Label className="flex items-center gap-1">Entry Fee <span className="text-[10px] font-normal text-muted-foreground">(nhập VND)</span></Label>
+                              <Input 
+                                type="text" 
+                                min={0} 
+                                value={entryFeeVnd} 
+                                onChange={(e) => {
+                                  setEntryFeeVnd(e.target.value);
+                                  const vndNum = parseFloat(e.target.value.replace(/,/g, '')) || 0;
+                                  const usdValue = Math.round((vndNum / usdToVndRate) * 100) / 100;
+                                  setForm(p => ({ ...p, entryFee: usdValue }));
+                                }}
+                                placeholder="VD: 100,000"
+                              />
+                              {entryFeeVnd && (
+                                <p className="text-[9px] text-muted-foreground mt-0.5">
+                                  {new Intl.NumberFormat('vi-VN').format(parseFloat(entryFeeVnd.replace(/,/g, '')) || 0)} ₫
+                                </p>
                               )}
                             </div>
                                                         <div className="space-y-2">
-                              <Label className="flex items-center gap-1">Gross Prize Pool <span className="text-[10px] font-normal text-muted-foreground">(nhập {currency})</span></Label>
-                              {currency === "VND" ? (
-                                <Input 
-                                  type="text" 
-                                  min={0} 
-                                  value={prizePoolVnd} 
-                                  onChange={(e) => handlePrizePoolVndChange(e.target.value)}
-                                  placeholder="VD: 10,000,000"
-                                />
-                              ) : (
-                                <Input 
-                                  type="number" 
-                                  min={0} 
-                                  value={form.customPrizePool || ''} 
-                                  onChange={(e) => {
-                                    const val = parseFloat(e.target.value) || 0;
-                                    setForm(p => ({ ...p, customPrizePool: val }));
-                                  }} 
-                                />
+                              <Label className="flex items-center gap-1">Gross Prize Pool <span className="text-[10px] font-normal text-muted-foreground">(nhập VND)</span></Label>
+                              <Input 
+                                type="text" 
+                                min={0} 
+                                value={prizePoolVnd} 
+                                onChange={(e) => {
+                                  setPrizePoolVnd(e.target.value);
+                                  const vndNum = parseFloat(e.target.value.replace(/,/g, '')) || 0;
+                                  const usdValue = Math.round((vndNum / usdToVndRate) * 100) / 100;
+                                  setForm(p => ({ ...p, customPrizePool: usdValue }));
+                                }}
+                                placeholder="VD: 10,000,000"
+                              />
+                              {form.entryFee > 0 && entryFeeVnd && (
+                                <p className="text-[9px] text-muted-foreground mt-1">
+                                  Min: {new Intl.NumberFormat('vi-VN').format(form.maxPlayers * (parseFloat(entryFeeVnd.replace(/,/g, '')) || 0))} ₫
+                                </p>
                               )}
-                              <p className="text-[9px] text-muted-foreground mt-1">Min: {displayMoneyFromUsd(form.maxPlayers * form.entryFee)}</p>
                             </div>
               <div className="space-y-2">
                 <Label>Host Fee (%)</Label>
                 <Input type="number" min={0} max={10} step={0.1} value={(form.hostFeePercent * 100).toFixed(1).replace(/\.0$/, '')} onChange={(e) => setForm(p => ({ ...p, hostFeePercent: (parseFloat(e.target.value) || 0) / 100 }))} />
               </div>
             </div>
-                        {form.entryFee > 0 && (() => {
-              const activePrizePool = Math.max(form.customPrizePool, form.maxPlayers * form.entryFee);
-              const platformAmount = activePrizePool * platformFeePercent;
-              const hostAmount = activePrizePool * form.hostFeePercent;
-              const netPool = activePrizePool - platformAmount - hostAmount;
+                                                {form.entryFee > 0 && (() => {
+              // Nếu partner nhập customPrizePool, dùng nó làm gross pool (không tính từ entry × players)
+              const hasCustomPool = form.customPrizePool > 0;
+              const grossFromEntry = form.maxPlayers * form.entryFee;
+              const activePrizePool = hasCustomPool ? form.customPrizePool : grossFromEntry;
+              const platformAmount = hasCustomPool ? 0 : activePrizePool * platformFeePercent;
+              const hostAmount = hasCustomPool ? 0 : activePrizePool * form.hostFeePercent;
+              const netPool = hasCustomPool ? activePrizePool : (activePrizePool - platformAmount - hostAmount);
+
+              // Hiển thị VND trực tiếp từ số đã nhập
+              const formatVndDisplay = (usdAmount: number) => {
+                const vndVal = Math.round(usdAmount * usdToVndRate);
+                return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(vndVal);
+              };
               
               return (
                 <div className="text-sm bg-violet-500/5 flex flex-col border border-violet-500/20 rounded-md p-4 space-y-3">
                   <div className="flex justify-between items-center text-muted-foreground">
                     <span>Gross Prize Pool (From Entry/Sponsors):</span>
-                    <span className="font-semibold text-white">{displayMoneyFromUsd(activePrizePool)}</span>
+                    <span className="font-semibold text-white">{formatVndDisplay(activePrizePool)}</span>
                   </div>
                   <div className="flex justify-between items-center text-red-400">
                     <span>Platform Fee ({(platformFeePercent * 100).toFixed(1)}% via {subscriptionPlan || 'STARTER'}):</span>
-                    <span>-{displayMoneyFromUsd(platformAmount)}</span>
+                    <span>-{formatVndDisplay(platformAmount)}</span>
                   </div>
                   <div className="flex justify-between items-center text-red-400">
                     <span>Host Fee ({(form.hostFeePercent * 100).toFixed(1)}%):</span>
-                    <span>-{displayMoneyFromUsd(hostAmount)}</span>
+                    <span>-{formatVndDisplay(hostAmount)}</span>
                   </div>
                   <div className="h-px bg-white/10 my-1 w-full" />
                   <div className="flex justify-between items-center font-bold text-emerald-400 text-lg">
                     <span>Net Prize Pool (For Players):</span>
-                    <span>{displayMoneyFromUsd(netPool)}</span>
+                    <span>{formatVndDisplay(netPool)}</span>
                   </div>
                 </div>
               );
