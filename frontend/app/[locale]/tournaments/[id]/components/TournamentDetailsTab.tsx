@@ -3,7 +3,8 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useTranslations } from "next-intl";
-import { Info, DollarSign, Wallet, Globe, Users, ScrollText, ShieldCheck } from "lucide-react"
+import { Info, DollarSign, Wallet, Globe, Users, ScrollText, ShieldCheck, Target, Layers, Medal, Trophy, ArrowRight } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 import { ITournament } from '@/app/types/tournament';
 import { useCurrency } from '@/app/contexts/currency-context';
 
@@ -26,7 +27,17 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
       maximumFractionDigits: fractionDigits,
     }).format(displayAmount);
   };
-  const prizeRanks = ['1', '2', '3', '4'];
+
+  // ── Dynamic Prize Ranks ──────────────────────────────────────────────
+  const getPrizeRanks = (): string[] => {
+    const ps = tournament.prizeStructure;
+    if (!ps) return [];
+    if (Array.isArray(ps)) {
+      return ps.map((_, i) => String(i + 1));
+    }
+    return Object.keys(ps).sort((a, b) => Number(a) - Number(b));
+  };
+
   const rankSuffix = (rank: string) => {
     const num = parseInt(rank);
     if (isNaN(num)) return rank;
@@ -36,11 +47,74 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
     return `${num}th`;
   };
 
+  const prizeRanks = getPrizeRanks();
   const isEscrow = !tournament.isCommunityMode;
+
+  // ── Scoring System Helpers ───────────────────────────────────────────
+  const getPhaseTypeLabel = (type: string) => {
+    switch(type) {
+      case 'elimination': return 'Elimination (Loại trực tiếp)';
+      case 'points': return 'Points (Tính điểm)';
+      case 'swiss': return 'Swiss (Thụy Sĩ)';
+      case 'round_robin': return 'Round Robin (Vòng tròn)';
+      case 'checkmate': return 'Checkmate (Ngưỡng điểm)';
+      default: return type;
+    }
+  };
+
+  const getPhaseTypeIcon = (type: string) => {
+    switch(type) {
+      case 'elimination': return <Target className="h-4 w-4" />;
+      case 'points': return <Medal className="h-4 w-4" />;
+      case 'swiss': return <Layers className="h-4 w-4" />;
+      case 'round_robin': return <Users className="h-4 w-4" />;
+      case 'checkmate': return <Trophy className="h-4 w-4" />;
+      default: return <Target className="h-4 w-4" />;
+    }
+  };
+
+  const getPhaseTypeDescription = (phase: any) => {
+    const ac = phase.advancementCondition as { type: string; value?: number } | null;
+    switch(phase.type) {
+      case 'elimination':
+        return `Top ${ac?.value || 4} scores advance each round. Lowest performers are eliminated.`;
+      case 'points':
+        return `Players play ${phase.matchesPerRound || 1} match(es) per round. Scores accumulate; top ${ac?.value || 4} advance.`;
+      case 'swiss':
+        return `Players play ${phase.matchesPerRound || 3} matches total. Opponents are matched by similar record. Top ${ac?.value || 4} advance.`;
+      case 'round_robin':
+        return `Each player plays every other player once. Top ${ac?.value || 4} advance.`;
+      case 'checkmate':
+        return `Players must reach a points threshold, then secure a 1st place finish to win.`;
+      default:
+        return ac ? `Top ${ac.value} advance per round.` : 'Standard format.';
+    }
+  };
+
+  // Render points mapping table (e.g. Top1=10pts, Top2=8pts...)
+  const renderPointsMapping = (phase: any) => {
+    const mapping = phase.pointsMapping;
+    if (!mapping || Object.keys(mapping).length === 0) return null;
+
+    const sortedKeys = Object.keys(mapping).sort((a, b) => Number(a) - Number(b));
+    return (
+      <div className="mt-2">
+        <p className="text-[10px] uppercase font-bold text-muted-foreground mb-1">Points per Placement:</p>
+        <div className="flex flex-wrap gap-1">
+          {sortedKeys.map(key => (
+            <span key={key} className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[11px]">
+              <span className="font-medium">#{key}</span>
+              <span className="text-emerald-400 font-bold">{mapping[key]}pts</span>
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-4">
-      {/* Financial Information and Tournament Organization */}
+      {/* ── Basic Info ──────────────────────────────────────────────────── */}
       <Card className="border shadow-sm">
         <CardHeader>
           <CardTitle className="text-lg flex items-center">
@@ -85,38 +159,100 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
         </CardContent>
       </Card>
 
-      {/* Prize Distribution */}
-      <Card className="border shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center">
-            <Wallet className="mr-2 h-5 w-5 text-primary" />
-            {t("prize_distribution")}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-          {prizeRanks.map(rank => {
-            const totalPrizePool = tournament.budget || 0;
-            const isArray = Array.isArray(tournament.prizeStructure);
-            const prizePercentage = isArray 
-              ? tournament.prizeStructure[parseInt(rank) - 1] 
-              : tournament.prizeStructure?.[rank];
-            
-            if (prizePercentage === undefined) return null;
+      {/* ── Scoring System & Phase Configuration ─────────────────────── */}
+      {tournament.phases && tournament.phases.length > 0 && (
+        <Card className="border shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center">
+              <Target className="mr-2 h-5 w-5 text-primary" />
+              Scoring System & Format
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {tournament.phases.map((phase, idx) => {
+              const ac = phase.advancementCondition as { type: string; value?: number } | null;
+              return (
+              <div key={phase.id} className={`p-4 rounded-xl border ${idx === 0 ? 'bg-violet-500/5 border-violet-500/20' : 'bg-white/5 border-white/10'}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
+                      {getPhaseTypeIcon(phase.type)}
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-sm">{phase.name || `Phase ${phase.phaseNumber}`}</h4>
+                      <span className="text-[10px] font-medium text-muted-foreground">{getPhaseTypeLabel(phase.type)}</span>
+                    </div>
+                  </div>
+                  {phase.carryOverScores && (
+                    <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-400 border-amber-500/20">
+                      Carry Scores
+                    </Badge>
+                  )}
+                </div>
 
-            const normalizedPercentage = prizePercentage > 1 ? prizePercentage / 100 : prizePercentage;
-            const prizeAmount = totalPrizePool * normalizedPercentage;
+                <p className="text-xs text-muted-foreground mb-3">{getPhaseTypeDescription(phase)}</p>
 
-            return (
-              <Card key={rank} className="flex flex-col items-center justify-center p-4 border shadow-sm bg-muted/40 text-center">
-                <span className="text-lg font-bold text-yellow-500">{rankSuffix(rank)}</span>
-                <span className="text-md font-medium text-muted-foreground">{formatCurrency(prizeAmount)}</span>
-              </Card>
+                {/* Points Mapping Table */}
+                {renderPointsMapping(phase)}
+
+                {/* Advancement info */}
+                {ac && (
+                  <div className="flex items-center gap-2 mt-2 text-xs">
+                    <ArrowRight className="h-3 w-3 text-emerald-400" />
+                    <span className="text-muted-foreground">
+                      Advance: <strong className="text-emerald-400">Top {ac.value}</strong>
+                      {ac.type === 'top_n_scores' ? ' by score' : ' by placement'}
+                    </span>
+                  </div>
+                )}
+
+                {/* Phase transition arrow */}
+                {idx < tournament.phases.length - 1 && (
+                  <div className="flex justify-center my-2">
+                    <ArrowRight className="h-5 w-5 text-muted-foreground opacity-30" />
+                  </div>
+                )}
+              </div>
             );
           })}
         </CardContent>
-      </Card>
+        </Card>
+      )}
 
-      {/* Escrow and Additional Information */}
+      {/* ── Prize Distribution ─────────────────────────────────────────── */}
+      {prizeRanks.length > 0 && (
+        <Card className="border shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center">
+              <Wallet className="mr-2 h-5 w-5 text-primary" />
+              {t("prize_distribution")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            {prizeRanks.map(rank => {
+              const totalPrizePool = tournament.budget || 0;
+              const isArray = Array.isArray(tournament.prizeStructure);
+              const prizePercentage = isArray 
+                ? tournament.prizeStructure[parseInt(rank) - 1] 
+                : tournament.prizeStructure?.[rank];
+              
+              if (prizePercentage === undefined || prizePercentage === null) return null;
+
+              const normalizedPercentage = prizePercentage > 1 ? prizePercentage / 100 : prizePercentage;
+              const prizeAmount = totalPrizePool * normalizedPercentage;
+
+              return (
+                <Card key={rank} className="flex flex-col items-center justify-center p-4 border shadow-sm bg-muted/40 text-center">
+                  <span className="text-lg font-bold text-yellow-500">{rankSuffix(rank)}</span>
+                  <span className="text-md font-medium text-muted-foreground">{formatCurrency(prizeAmount)}</span>
+                </Card>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Escrow & Description ──────────────────────────────────────── */}
       <Card className="border shadow-sm">
         <CardHeader>
           <CardTitle className="text-lg flex items-center">
