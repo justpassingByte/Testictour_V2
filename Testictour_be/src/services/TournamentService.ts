@@ -232,15 +232,15 @@ export default class TournamentService {
       });
 
             return {
-        ...t,
-        registered: registeredCount,
-        reserveCount,
-        roundsTotal,
-        currentRound,
-        entryFeeVnd: Math.round(t.entryFee * (await this.getVndRate())),
-        customPrizePoolVnd: Math.round(((t as any).escrowRequiredAmount || 0) * (await this.getVndRate())),
-        budget: finalPrizePool,
-      };
+              ...t,
+              registered: registeredCount,
+              reserveCount,
+              roundsTotal,
+              currentRound,
+              entryFeeVnd: (t as any).entryFeeVnd || 0,
+              customPrizePoolVnd: (t as any).customPrizePoolVnd || 0,
+              budget: finalPrizePool,
+            };
     }));
   }
 
@@ -303,19 +303,19 @@ export default class TournamentService {
     }, (tournament as any).escrow);
 
         const result = {
-      ...tournament,
-      participants: [],  // No longer fetched here — use /participants endpoint with pagination
-      registered: registeredCount,
-      reserveCount,
-      entryFeeVnd: Math.round(tournament.entryFee * (await this.getVndRate())),
-      customPrizePoolVnd: Math.round(((tournament as any).escrowRequiredAmount || 0) * (await this.getVndRate())),
-      budget: finalBudget
-    };
+          ...tournament,
+          participants: [],  // No longer fetched here — use /participants endpoint with pagination
+          registered: registeredCount,
+          reserveCount,
+          entryFeeVnd: (tournament as any).entryFeeVnd || 0,
+          customPrizePoolVnd: (tournament as any).customPrizePoolVnd || 0,
+          budget: finalBudget
+        };
 
     return result as any;
   }
 
-    static async create(data: {
+        static async create(data: {
     name: string;
     startTime: Date;
     maxPlayers: number;
@@ -333,6 +333,8 @@ export default class TournamentService {
     phases?: any[];
     isCommunityMode?: boolean;
     customPrizePool?: number;
+    entryFeeVnd?: number;
+    customPrizePoolVnd?: number;
     discordUrl?: string;
     sponsors?: any;
     reservePlayersLimit?: number;
@@ -395,14 +397,16 @@ export default class TournamentService {
       }
     }
 
-    const { phases, customPrizePool, ...restOfData } = data;
+    const { phases, customPrizePool, entryFeeVnd, customPrizePoolVnd, ...restOfData } = data;
 
     const DEFAULT_TOURNAMENT_IMAGE = '/images/default-tournament-banner.png';
 
-    return prisma.tournament.create({
+        return prisma.tournament.create({
       data: {
         ...restOfData,
         ...templateData,
+        entryFeeVnd: entryFeeVnd || 0,
+        customPrizePoolVnd: customPrizePoolVnd || 0,
         image: restOfData.image || DEFAULT_TOURNAMENT_IMAGE,
         startTime: finalStartTime,
         status: (templateData as any).status || 'pending',
@@ -439,7 +443,7 @@ export default class TournamentService {
         logger.info(`Initial rounds for the first phase of tournament ${tournament.id} created.`);
       }
 
-      // Initialize Escrow for the newly created tournament
+            // Initialize Escrow for the newly created tournament
       try {
         await EscrowService.recalculateTournamentEscrow(tournament.id, {
           entryFee: tournament.entryFee,
@@ -447,6 +451,16 @@ export default class TournamentService {
           expectedParticipants: tournament.expectedParticipants,
           hostFeePercent: tournament.hostFeePercent,
         });
+        
+        // PRO/ENTERPRISE forced disable community mode (Trusted Partner)
+        const partnerSub = await prisma.partnerSubscription.findUnique({ where: { userId: tournament.organizerId } });
+        if (partnerSub && (partnerSub.plan === 'PRO' || partnerSub.plan === 'ENTERPRISE')) {
+          await prisma.tournament.update({
+            where: { id: tournament.id },
+            data: { isCommunityMode: false },
+          });
+        }
+        
         logger.info(`Escrow initialized for tournament ${tournament.id}`);
       } catch (err: any) {
         logger.error(`Failed to initialize escrow for tournament ${tournament.id}: ${err.message}`);

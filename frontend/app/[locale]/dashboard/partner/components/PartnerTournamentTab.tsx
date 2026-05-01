@@ -184,17 +184,19 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
         Object.entries(prizeDistribution).map(([rank, percent]) => [rank, percent / 100])
       );
 
-      await api.post('/tournaments', {
+            await api.post('/tournaments', {
         name: form.name,
         description: form.description,
         region: form.region,
         maxPlayers: form.maxPlayers,
         entryFee: form.entryFee,
+        entryFeeVnd: parseInt(entryFeeVnd.replace(/,/g, '')) || 0,
         startTime: new Date(form.startTime).toISOString(),
         registrationDeadline: new Date(form.registrationDeadline).toISOString(),
         hostFeePercent: form.hostFeePercent,
         expectedParticipants: form.maxPlayers,
-        customPrizePool: Math.max(form.customPrizePool, form.maxPlayers * form.entryFee),
+        customPrizePool: form.customPrizePool,
+        customPrizePoolVnd: parseInt(prizePoolVnd.replace(/,/g, '')) || 0,
         prizeStructure,
         image: canCustomBrand ? (imageFile ? (imagePreview || form.image || undefined) : (form.image || undefined)) : '/images/default-tournament-banner.png',
         roundsTotal: phases.reduce((sum, p) => sum + p.numberOfRounds, 0),

@@ -73,7 +73,8 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
   };
 
   const prizeRanks = getPrizeRanks();
-  const isEscrow = !tournament.isCommunityMode;
+  const isTrusted = (tournament as any).organizer?.partnerSubscription?.plan === 'PRO' || (tournament as any).organizer?.partnerSubscription?.plan === 'ENTERPRISE';
+  const isEscrow = !tournament.isCommunityMode && !isTrusted;
 
   // Gross Prize Pool: entryFee × maxPlayers (hoặc customPrizePool/escrowRequiredAmount)
   const grossPrizePool = Math.max(
@@ -292,14 +293,14 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
         <CardHeader>
           <CardTitle className="text-lg flex items-center">
             <ShieldCheck className="mr-2 h-5 w-5 text-primary" />
-            {isEscrow ? "Trusted Partner" : t("community_title")}
+            {isTrusted ? "Trusted Partner" : isEscrow ? "Escrow Secured" : t("community_title")}
           </CardTitle>
         </CardHeader>
         <CardContent className="text-sm space-y-4">
-          <div className={`p-4 rounded-lg border ${isEscrow ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-blue-500/5 border-blue-500/20'}`}>
-            <p className="font-medium mb-1">{isEscrow ? "Verified Trusted Partner" : t("community_title")}</p>
-            <p className="text-muted-foreground">{isEscrow ? "This tournament is hosted by a Verified Trusted Partner. Prize pool is secured and guaranteed by the platform." : t("community_desc")}</p>
-            {isEscrow && tournament.escrowRequiredAmount && (
+          <div className={`p-4 rounded-lg border ${isTrusted ? 'bg-emerald-500/5 border-emerald-500/20' : isEscrow ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-blue-500/5 border-blue-500/20'}`}>
+            <p className="font-medium mb-1">{isTrusted ? "Verified Trusted Partner" : isEscrow ? "Escrow Secured Tournament" : t("community_title")}</p>
+            <p className="text-muted-foreground">{isTrusted ? "This tournament is hosted by a Verified Trusted Partner. Prize pool is secured and guaranteed by the platform." : isEscrow ? "This tournament is secured by an escrow fund. Organizer has deposited the prize pool upfront for player protection." : t("community_desc")}</p>
+            {(isEscrow || isTrusted) && tournament.escrowRequiredAmount && (
                 <div className="mt-2 font-bold text-emerald-600 dark:text-emerald-400">
                   <p>{t("guaranteed_pool")}: {formatVndLocal((tournament as any).customPrizePoolVnd) || formatCurrency(tournament.escrowRequiredAmount)}</p>
                 </div>
