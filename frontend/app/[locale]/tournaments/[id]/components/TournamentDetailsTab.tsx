@@ -28,6 +28,12 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
     }).format(displayAmount);
   };
 
+  // Hiển thị VND trực tiếp nếu có entryFeeVnd/customPrizePoolVnd từ backend
+  const formatVndLocal = (vndAmount: number) => {
+    if (vndAmount <= 0) return null;
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(vndAmount);
+  };
+
   // ── Dynamic Prize Ranks (with default fallback) ─────────────────────
   const getPrizeRanks = (): string[] => {
     const ps = tournament.prizeStructure;
@@ -159,14 +165,18 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
               <DollarSign className="mr-2 h-4 w-4 text-muted-foreground mt-0.5" />
               <span className="text-muted-foreground">{t("registration_fee")}:</span>
               <div className="ml-auto text-right">
-                <div className="font-medium">{formatCurrency(tournament.entryFee)}</div>
+                <div className="font-medium">
+                  {formatVndLocal((tournament as any).entryFeeVnd) || formatCurrency(tournament.entryFee)}
+                </div>
               </div>
             </div>
             <div className="flex items-start">
               <Wallet className="mr-2 h-4 w-4 text-muted-foreground mt-0.5" />
               <span className="text-muted-foreground">{t("gross_prize_pool")}:</span>
               <div className="ml-auto text-right">
-                <div className="font-medium">{formatCurrency(grossPrizePool)}</div>
+                <div className="font-medium">
+                  {formatVndLocal((tournament as any).customPrizePoolVnd) || formatCurrency(grossPrizePool)}
+                </div>
               </div>
             </div>
           </div>
@@ -291,7 +301,7 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
             <p className="text-muted-foreground">{isEscrow ? "This tournament is hosted by a Verified Trusted Partner. Prize pool is secured and guaranteed by the platform." : t("community_desc")}</p>
             {isEscrow && tournament.escrowRequiredAmount && (
                 <div className="mt-2 font-bold text-emerald-600 dark:text-emerald-400">
-                  <p>{t("guaranteed_pool")}: {formatCurrency(tournament.escrowRequiredAmount)}</p>
+                  <p>{t("guaranteed_pool")}: {formatVndLocal((tournament as any).customPrizePoolVnd) || formatCurrency(tournament.escrowRequiredAmount)}</p>
                 </div>
             )}
           </div>

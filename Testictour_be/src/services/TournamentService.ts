@@ -13,6 +13,20 @@ export default class TournamentService {
   // Cache platform fee with a 10-minute TTL to ensure changes propagate without reboot
   private static platformFeeCache = new Map<string, { fee: number; expiresAt: number }>();
 
+  private static vndRate: number = 0;
+  private static vndRateFetchedAt: number = 0;
+
+  private static async getVndRate(): Promise<number> {
+    const now = Date.now();
+    if (this.vndRate > 0 && now - this.vndRateFetchedAt < 300000) {
+      return this.vndRate;
+    }
+    const { default: CurrencyService } = await import('./CurrencyService');
+    this.vndRate = await CurrencyService.getUsdToVndRate();
+    this.vndRateFetchedAt = now;
+    return this.vndRate;
+  }
+
   private static async getPlatformFeePercent(organizerId: string): Promise<number> {
     const now = Date.now();
     const cached = this.platformFeeCache.get(organizerId);
@@ -35,19 +49,14 @@ export default class TournamentService {
     counts: { registered: number, reserve: number, absent: number },
     escrow?: any
   ): Promise<number> {
-    const maxPlayers = tournament.maxPlayers || tournament.expectedParticipants || 0;
+        const maxPlayers = tournament.maxPlayers || tournament.expectedParticipants || 0;
     const totalCount = counts.registered + counts.reserve;
     const isUpcoming = tournament.status === 'UPCOMING' || tournament.status === 'DRAFT' || tournament.status === 'REGISTRATION' || tournament.status === 'pending';
     const multiplier = isUpcoming ? Math.max(maxPlayers, totalCount) : totalCount;
     
     // Nếu có customPrizePool / escrowRequiredAmount (partner config), dùng nó làm gross pool
     const customPrizePool = tournament.customPrizePool || tournament.escrowRequiredAmount || 0;
-    if (customPrizePool > 0) {
-      return Math.round(customPrizePool);
-    }
-
-    // Không có custom → tính từ entry fee
-    let grossPool = multiplier * (tournament.entryFee || 0);
+    let grossPool = customPrizePool > 0 ? customPrizePool : multiplier * (tournament.entryFee || 0);
     
     if (grossPool === 0 && isUpcoming) {
       if (tournament.escrowRequiredAmount && tournament.escrowRequiredAmount > 0) {
@@ -222,12 +231,14 @@ export default class TournamentService {
         absent: absentCount
       });
 
-      return {
+            return {
         ...t,
         registered: registeredCount,
         reserveCount,
         roundsTotal,
         currentRound,
+        entryFeeVnd: Math.round(t.entryFee * (await this.getVndRate())),
+        customPrizePoolVnd: Math.round(((t as any).escrowRequiredAmount || 0) * (await this.getVndRate())),
         budget: finalPrizePool,
       };
     }));
@@ -291,11 +302,13 @@ export default class TournamentService {
       absent: absentCount
     }, (tournament as any).escrow);
 
-    const result = {
+        const result = {
       ...tournament,
       participants: [],  // No longer fetched here — use /participants endpoint with pagination
       registered: registeredCount,
       reserveCount,
+      entryFeeVnd: Math.round(tournament.entryFee * (await this.getVndRate())),
+      customPrizePoolVnd: Math.round(((tournament as any).escrowRequiredAmount || 0) * (await this.getVndRate())),
       budget: finalBudget
     };
 

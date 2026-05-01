@@ -551,15 +551,15 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                 <Label>Host Fee (%)</Label>
                 <Input type="number" min={0} max={10} step={0.1} value={(form.hostFeePercent * 100).toFixed(1).replace(/\.0$/, '')} onChange={(e) => setForm(p => ({ ...p, hostFeePercent: (parseFloat(e.target.value) || 0) / 100 }))} />
               </div>
-            </div>
+                        </div>
                                                 {form.entryFee > 0 && (() => {
-              // Nếu partner nhập customPrizePool, dùng nó làm gross pool (không tính từ entry × players)
+              // Luôn tính phí từ gross prize pool (dù custom hay từ entry × players)
               const hasCustomPool = form.customPrizePool > 0;
               const grossFromEntry = form.maxPlayers * form.entryFee;
               const activePrizePool = hasCustomPool ? form.customPrizePool : grossFromEntry;
-              const platformAmount = hasCustomPool ? 0 : activePrizePool * platformFeePercent;
-              const hostAmount = hasCustomPool ? 0 : activePrizePool * form.hostFeePercent;
-              const netPool = hasCustomPool ? activePrizePool : (activePrizePool - platformAmount - hostAmount);
+              const platformAmount = activePrizePool * platformFeePercent;
+              const hostAmount = activePrizePool * form.hostFeePercent;
+              const netPool = activePrizePool - platformAmount - hostAmount;
 
               // Hiển thị VND trực tiếp từ số đã nhập
               const formatVndDisplay = (usdAmount: number) => {
