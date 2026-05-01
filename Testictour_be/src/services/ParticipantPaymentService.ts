@@ -28,30 +28,44 @@ export default class ParticipantPaymentService {
       throw new ApiError(400, `Transaction ${transactionId} has no linked participantId (refId).`);
     }
 
-    const participant = await prisma.participant.findUnique({ where: { id: participantId } });
-    
-    // Idempotency guard — already processed
-    if (participant && participant.paid) {
-      logger.info(`[EntryFee] Participant ${participantId} already marked paid via transaction ${transactionId}. Skipping.`);
-      return { alreadyConfirmed: true };
-    }
-
     if (transaction.type !== 'entry_fee') {
       throw new ApiError(400, `Transaction ${transactionId} is not an entry_fee transaction.`);
     }
 
+    // Use a fresh database read inside the transaction to avoid race conditions
     await prisma.$transaction(async (tx) => {
-      // 1. Mark transaction as success (or keep as paid/success)
-      if (transaction.status !== 'success' && transaction.status !== 'paid') {
-          await tx.transaction.update({
-            where: { id: transactionId },
-            data: {
-              status: 'success',
-              providerEventId,
-              reviewedAt: new Date(),
-            },
-          });
+      // Re-read transaction inside the transaction to get the latest status
+      const currentTx = await tx.transaction.findUnique({ where: { id: transactionId } });
+      if (!currentTx) {
+        throw new ApiError(404, `Entry fee transaction ${transactionId} disappeared during processing.`);
       }
+
+      // Idempotency guard — check if already processed
+      if (currentTx.status === 'success' || currentTx.status === 'paid') {
+        logger.info(`[EntryFee] Transaction ${transactionId} already processed (status=${currentTx.status}). Ensuring participant is paid.`);
+        
+        // Ensure participant is marked paid if not already
+        const participant = await tx.participant.findUnique({ where: { id: participantId } });
+        if (participant && !participant.paid) {
+          await tx.participant.update({
+            where: { id: participantId },
+            data: { paid: true, paymentStatus: 'paid' },
+          });
+          logger.info(`[EntryFee] Fixed: Participant ${participantId} was missing paid flag.`);
+        }
+        
+        return { alreadyConfirmed: true };
+      }
+
+      // 1. Mark transaction as success
+      await tx.transaction.update({
+        where: { id: transactionId },
+        data: {
+          status: 'success',
+          providerEventId,
+          reviewedAt: new Date(),
+        },
+      });
 
       // 2. Mark participant as paid
       await tx.participant.update({

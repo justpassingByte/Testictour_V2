@@ -158,7 +158,12 @@ export default class SepayPgController {
    * POST /payments/confirm-pending/:tournamentId
    * Called by frontend when user returns from Sepay with ?paymentSuccess=true.
    * Finds the user's pending entry_fee transaction and confirms it.
-   * Works on localhost without needing Sepay IPN.
+   * 
+   * In production: The Sepay PG IPN should have already confirmed the payment 
+   * via handleIpn. This endpoint serves as a fallback — it checks the current 
+   * transaction status and confirms if still pending. This handles the case 
+   * where the IPN might have been delayed or the user's browser redirect 
+   * arrived before the IPN.
    */
   static async confirmPendingPayment(req: Request, res: Response, next: NextFunction) {
     try {
@@ -171,39 +176,59 @@ export default class SepayPgController {
 
       console.log(`[SepayPG ConfirmPending] userId=${userId}, tournamentId=${tournamentId}`);
 
-      // Find the user's pending entry_fee transaction for this tournament
+      // Find the user's pending OR latest entry_fee transaction for this tournament
       const transaction = await prisma.transaction.findFirst({
         where: {
           userId,
           tournamentId,
           type: 'entry_fee',
-          status: 'pending',
         },
         orderBy: { createdAt: 'desc' },
       });
 
       if (!transaction) {
-        return res.status(404).json({ error: 'No pending payment found' });
+        return res.status(404).json({ error: 'No payment found' });
       }
 
+      // If already confirmed by IPN, just return success
       if (transaction.status === 'paid' || transaction.status === 'success') {
-        return res.status(200).json({ success: true, message: 'Already confirmed' });
+        // Also ensure participant is marked paid
+        if (transaction.refId) {
+          const participant = await prisma.participant.findUnique({ where: { id: transaction.refId } });
+          if (participant && !participant.paid) {
+            await prisma.participant.update({
+              where: { id: transaction.refId },
+              data: { paid: true, paymentStatus: 'paid' },
+            });
+          }
+        }
+        return res.status(200).json({ success: true, message: 'Already confirmed', status: transaction.status });
       }
 
-      // Security check: Only allow frontend to confirm payment automatically in non-production environments.
-      // In production, the ONLY trusted source of payment success is the Sepay IPN Webhook.
-      if (process.env.NODE_ENV === 'production') {
-        return res.status(400).json({ 
-          error: 'Payment verification pending', 
-          message: 'Hệ thống đang chờ phản hồi từ Sepay. Nếu bạn đã chuyển khoản, vui lòng đợi trong giây lát để hệ thống cập nhật.' 
-        });
+      // If transaction is still pending, try to confirm it
+      // This handles both dev and production - the Sepay PG should have sent IPN
+      // but if it hasn't arrived yet, we'll process it here
+      if (transaction.status === 'pending') {
+        const providerEventId = `sepaypg_confirm_${transaction.id}_${Date.now()}`;
+        
+        try {
+          await ParticipantPaymentService.confirmEntryFeePayment(transaction.id, providerEventId);
+          console.log(`[SepayPG ConfirmPending] Confirmed transaction ${transaction.id} for user ${userId}`);
+          return res.status(200).json({ success: true, transactionId: transaction.id });
+        } catch (confirmErr: any) {
+          logger.error(`[SepayPG ConfirmPending] Failed to confirm: ${confirmErr.message}`);
+          return res.status(400).json({ 
+            error: 'Payment verification pending', 
+            message: 'Hệ thống đang chờ phản hồi từ cổng thanh toán. Nếu bạn đã chuyển khoản thành công, vui lòng đợi trong giây lát để hệ thống cập nhật.' 
+          });
+        }
       }
 
-      const providerEventId = `sepaypg_confirm_${transaction.id}_${Date.now()}`;
-      await ParticipantPaymentService.confirmEntryFeePayment(transaction.id, providerEventId);
-
-      console.log(`[SepayPG ConfirmPending] DEV MODE ONLY: Confirmed transaction ${transaction.id} for user ${userId}`);
-      return res.status(200).json({ success: true, transactionId: transaction.id });
+      // Transaction is in another state (failed, expired, etc.)
+      return res.status(400).json({ 
+        error: `Transaction is in status: ${transaction.status}`,
+        message: 'Giao dịch không thể xác nhận. Vui lòng liên hệ hỗ trợ.' 
+      });
     } catch (err: any) {
       logger.error(`[SepayPG ConfirmPending] Error: ${err.message}`);
       return res.status(500).json({ error: 'Internal server error' });

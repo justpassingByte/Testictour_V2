@@ -5,6 +5,8 @@ import Link from "next/link"
 import { Search, ArrowUpDown, Download, Trophy } from "lucide-react"
 import { PlayerRoundStats, IRound, ITournament } from "@/app/types/tournament"
 import { useTranslations } from "next-intl"
+import { useCurrency } from "@/app/contexts/currency-context"
+import { formatCurrency } from "@/lib/utils"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -22,6 +24,11 @@ interface ResultsTabProps {
 
 export function ResultsTab({ round, tournament, allPlayers, numMatches }: ResultsTabProps) {
   const t = useTranslations("common");
+  const { currency, usdToVndRate } = useCurrency();
+  const displayMoneyFromUsd = (amountUsd: number) => {
+    const displayAmount = currency === "VND" ? amountUsd * usdToVndRate : amountUsd;
+    return formatCurrency(displayAmount, currency);
+  };
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedLobby, setSelectedLobby] = useState<string>("all")
   const [selectedStatus, setSelectedStatus] = useState<string>("all")
@@ -241,9 +248,9 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
                       >
                         {displayStatus === "pending" ? t("awaiting") : displayStatus === "completed" ? t("finished") : t(displayStatus as any)}
                       </Badge>
-                      {hasPrize && prizeStructure && (
+                                            {hasPrize && prizeStructure && (
                         <span className="text-xs font-bold text-amber-400">
-                          🏆 ${((prizeStructure[rank - 1] / 100) * (tournament.budget || 0)).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                          🏆 {displayMoneyFromUsd(((prizeStructure[rank - 1] / 100) * (tournament.budget || 0)))}
                         </span>
                       )}
                     </div>

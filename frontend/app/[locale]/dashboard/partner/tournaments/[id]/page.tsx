@@ -529,7 +529,7 @@ export default function TournamentManagePage() {
           {winnerPrize && (
             <div className="shrink-0 text-right">
               <p className="text-xs text-emerald-400/70 font-semibold uppercase tracking-wider">Prize Won</p>
-              <p className="text-2xl font-bold text-emerald-400">${winnerPrize.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+              <p className="text-2xl font-bold text-emerald-400">{displayMoneyFromUsd(winnerPrize)}</p>
             </div>
           )}
         </div>
@@ -1250,7 +1250,7 @@ export default function TournamentManagePage() {
                           )}
                           <p className="text-xs text-muted-foreground mt-0.5">{p.scoreTotal || 0} pts</p>
                           {getPrize(podiumRanks[i] - 1) > 0 && (
-                            <p className="text-xs font-bold text-emerald-400">${getPrize(podiumRanks[i] - 1).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                            <p className="text-xs font-bold text-emerald-400">{displayMoneyFromUsd(getPrize(podiumRanks[i] - 1))}</p>
                           )}
                         </div>
                         <div className={`w-24 ${podiumHeights[i]} rounded-t-lg border-2 ${podiumColors[i]} flex items-center justify-center`}>
@@ -1332,7 +1332,7 @@ export default function TournamentManagePage() {
                           <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">{prizePercent}%</Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          <span className="font-bold text-emerald-400">${prizeAmount.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                          <span className="font-bold text-emerald-400">{displayMoneyFromUsd(prizeAmount)}</span>
                         </TableCell>
                       </TableRow>
                       );

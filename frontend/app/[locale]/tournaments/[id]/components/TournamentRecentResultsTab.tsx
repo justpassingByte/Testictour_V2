@@ -21,8 +21,16 @@ import {
 import { Copy, TrendingUp, User } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 
+import { useCurrency } from "@/app/contexts/currency-context"
+import { formatCurrency } from "@/lib/utils"
+
 export function TournamentRecentResultsTab({ tournamentId, tournament }: { tournamentId: string, tournament: any }) {
   const t = useTranslations("common");
+  const { currency, usdToVndRate } = useCurrency();
+  const displayMoneyFromUsd = (amountUsd: number) => {
+    const displayAmount = currency === "VND" ? amountUsd * usdToVndRate : amountUsd;
+    return formatCurrency(displayAmount, currency);
+  };
 
   // ── React Query replaces manual fetch + window event listeners ──
   const { data: rawLeaderboard = [], isLoading: loading } = useQuery({
@@ -160,7 +168,7 @@ export function TournamentRecentResultsTab({ tournamentId, tournament }: { tourn
                       <p className="text-[10px] font-bold text-primary/80 mt-0.5">{p.scoreTotal || 0} PTS</p>
                       {reward && (
                          <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[9px] px-1.5 py-0 mt-1">
-                           ${reward.amount}
+                           {displayMoneyFromUsd(reward.amount)}
                          </Badge>
                       )}
                     </div>
@@ -209,14 +217,14 @@ export function TournamentRecentResultsTab({ tournamentId, tournament }: { tourn
                 </TableHeader>
                 <TableBody>
                   {leaderboard.map((participant, index) => (
-                    <LeaderboardRow key={participant.id} participant={participant} rank={index + 1} t={t} getPlacementIcon={getPlacementIcon} getPlacementColor={getPlacementColor} isCompleted={tournament?.status === 'COMPLETED' || tournament?.status === 'completed'} />
+                    <LeaderboardRow key={participant.id} participant={participant} rank={index + 1} t={t} getPlacementIcon={getPlacementIcon} getPlacementColor={getPlacementColor} isCompleted={tournament?.status === 'COMPLETED' || tournament?.status === 'completed'} displayMoneyFromUsd={displayMoneyFromUsd} />
                   ))}
                 </TableBody>
               </Table>
             </div>
           ) : (
             /* ── Virtualized list for >100 rows — only renders visible rows ── */
-            <VirtualizedLeaderboard leaderboard={leaderboard} t={t} getPlacementIcon={getPlacementIcon} getPlacementColor={getPlacementColor} isCompleted={tournament?.status === 'COMPLETED' || tournament?.status === 'completed'} />
+            <VirtualizedLeaderboard leaderboard={leaderboard} t={t} getPlacementIcon={getPlacementIcon} getPlacementColor={getPlacementColor} isCompleted={tournament?.status === 'COMPLETED' || tournament?.status === 'completed'} displayMoneyFromUsd={displayMoneyFromUsd} />
           )}
         </CardContent>
       </Card>
@@ -230,12 +238,13 @@ export function TournamentRecentResultsTab({ tournamentId, tournament }: { tourn
 // ══════════════════════════════════════════════════════════
 
 const LeaderboardRow = React.memo(function LeaderboardRow({
-  participant, rank, t, getPlacementIcon, getPlacementColor, isCompleted
+  participant, rank, t, getPlacementIcon, getPlacementColor, isCompleted, displayMoneyFromUsd
 }: {
   participant: any; rank: number; t: any;
   getPlacementIcon: (p: number) => React.ReactNode;
   getPlacementColor: (p: number) => string;
   isCompleted: boolean;
+  displayMoneyFromUsd: (amount: number) => string;
 }) {
   const name = participant.user?.riotGameName || participant.user?.username || participant.inGameName;
   const tag = participant.user?.riotGameTag || participant.gameSpecificId;
@@ -305,7 +314,7 @@ const LeaderboardRow = React.memo(function LeaderboardRow({
         {isCompleted && reward ? (
           <div className="flex flex-col items-center">
             <Badge className="bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border-emerald-500/30 transition-all shadow-lg font-bold text-xs">
-              ${reward.amount.toLocaleString()}
+              {displayMoneyFromUsd(reward.amount)}
             </Badge>
             <span className={`text-[8px] mt-1 uppercase font-black tracking-tighter ${reward.status === 'projected' ? 'text-amber-500/70' : 'text-emerald-500/70'}`}>
               {reward.status === 'projected' ? (t("projected") || "Dự kiến") : (t("awarded") || "Đã trao")}
@@ -333,12 +342,13 @@ const LeaderboardRow = React.memo(function LeaderboardRow({
 // ══════════════════════════════════════════════════════════
 
 function VirtualizedLeaderboard({
-  leaderboard, t, getPlacementIcon, getPlacementColor, isCompleted
+  leaderboard, t, getPlacementIcon, getPlacementColor, isCompleted, displayMoneyFromUsd
 }: {
   leaderboard: any[]; t: any;
   getPlacementIcon: (p: number) => React.ReactNode;
   getPlacementColor: (p: number) => string;
   isCompleted: boolean;
+  displayMoneyFromUsd: (amount: number) => string;
 }) {
   const ROW_HEIGHT = 56;
   const MAX_VISIBLE_ROWS = 12;
@@ -346,7 +356,7 @@ function VirtualizedLeaderboard({
 
   // react-window v2 rowComponent: receives { index, style, ariaAttributes, ...rowProps }
   function RowComponent(props: any) {
-    const { index, style, ariaAttributes, leaderboard: lb, t: translationFn, getPlacementIcon: gpi, getPlacementColor: gpc, isCompleted: isC } = props;
+    const { index, style, ariaAttributes, leaderboard: lb, t: translationFn, getPlacementIcon: gpi, getPlacementColor: gpc, isCompleted: isC, displayMoneyFromUsd: dmf } = props;
     const participant = lb[index];
     const rank = index + 1;
     const name = participant.user?.riotGameName || participant.user?.username || participant.inGameName;
@@ -422,7 +432,7 @@ function VirtualizedLeaderboard({
         <div className="flex-1 text-center">
           {isC && reward ? (
             <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 font-bold text-xs">
-              ${reward.amount.toLocaleString()}
+              {dmf(reward.amount)}
             </Badge>
           ) : <span className="text-muted-foreground/30">-</span>}
         </div>
@@ -444,7 +454,8 @@ function VirtualizedLeaderboard({
     getPlacementIcon,
     getPlacementColor,
     isCompleted,
-  }), [leaderboard, t, getPlacementIcon, getPlacementColor, isCompleted]);
+    displayMoneyFromUsd,
+  }), [leaderboard, t, getPlacementIcon, getPlacementColor, isCompleted, displayMoneyFromUsd]);
 
   return (
     <div>

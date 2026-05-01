@@ -725,6 +725,86 @@ export default {
         }
     },
 
+            // GET /partner/transactions
+    // List transactions from all tournaments owned by this partner
+    async getTransactions(req: Request, res: Response, next: NextFunction) {
+        try {
+            const userId = (req as any).user.id;
+            const page = parseInt(req.query.page as string) || 1;
+            const limit = parseInt(req.query.limit as string) || 50;
+            const type = req.query.type as string;
+            const status = req.query.status as string;
+            const search = req.query.search as string;
+
+            // Get all tournament IDs owned by this partner
+            const tournamentIds = await prisma.tournament.findMany({
+                where: { organizerId: userId },
+                select: { id: true },
+            });
+            const tournamentIdList = tournamentIds.map(t => t.id);
+
+            if (tournamentIdList.length === 0) {
+                return res.json({
+                    success: true,
+                    data: [],
+                    pagination: { page, limit, total: 0, totalPages: 0 },
+                    stats: {},
+                });
+            }
+
+            const where: any = {
+                tournamentId: { in: tournamentIdList },
+            };
+            if (type && type !== 'all') where.type = type;
+            if (status && status !== 'all') where.status = status;
+            if (search) {
+                where.OR = [
+                    { id: { contains: search, mode: 'insensitive' } },
+                    { refId: { contains: search, mode: 'insensitive' } },
+                    { user: { username: { contains: search, mode: 'insensitive' } } },
+                    { user: { email: { contains: search, mode: 'insensitive' } } },
+                ];
+            }
+
+            const [transactions, total] = await Promise.all([
+                prisma.transaction.findMany({
+                    where,
+                    include: {
+                        user: { select: { id: true, username: true, email: true, role: true } },
+                        tournament: { select: { id: true, name: true } },
+                    },
+                    orderBy: { createdAt: 'desc' },
+                    skip: (page - 1) * limit,
+                    take: limit,
+                }),
+                prisma.transaction.count({ where }),
+            ]);
+
+            // Summary stats for this partner's tournaments
+            const stats = await prisma.transaction.groupBy({
+                by: ['type'],
+                where: {
+                    tournamentId: { in: tournamentIdList },
+                    status: 'success',
+                },
+                _sum: { amount: true },
+                _count: true,
+            });
+
+            return res.json({
+                success: true,
+                data: transactions,
+                pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+                stats: stats.reduce((acc, s) => {
+                    acc[s.type] = { total: s._sum.amount || 0, count: s._count };
+                    return acc;
+                }, {} as Record<string, any>),
+            });
+        } catch (err) {
+            next(err);
+        }
+    },
+
     // POST /partner/subscription/upgrade
     async upgradeSubscription(req: Request, res: Response, next: NextFunction) {
         try {

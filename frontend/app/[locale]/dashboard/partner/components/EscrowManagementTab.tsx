@@ -402,24 +402,24 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
                  const standardPool = Math.max(0, displayPool - absentKeepAmount)
 
                  return (
-                 <div className="space-y-1 border-t border-white/10 pt-2 text-xs">
+                                  <div className="space-y-1 border-t border-white/10 pt-2 text-xs">
                     {absentKeepAmount > 0 && (
                       <div className="flex justify-between items-center text-muted-foreground">
                          <span>Absent Fees Kept (Host):</span>
-                         <span className="font-medium text-orange-400">${absentKeepAmount.toLocaleString()}</span>
+                         <span className="font-medium text-orange-400">{displayMoneyFromUsd(absentKeepAmount)}</span>
                       </div>
                     )}
                     <div className="flex justify-between items-center text-muted-foreground">
                        <span>Host Fee ({(tournamentData?.hostFeePercent || 0) * 100}% of Standard Pool):</span>
-                       <span className="font-medium text-orange-400">${(standardPool * (tournamentData?.hostFeePercent || 0)).toLocaleString()}</span>
+                       <span className="font-medium text-orange-400">{displayMoneyFromUsd(standardPool * (tournamentData?.hostFeePercent || 0))}</span>
                     </div>
                     <div className="flex justify-between items-center text-muted-foreground">
                        <span>Platform Fee ({(tournamentData?.platformFeePercent || 0) * 100}% of Standard Pool):</span>
-                       <span className="font-medium text-blue-400">${(standardPool * (tournamentData?.platformFeePercent || 0)).toLocaleString()}</span>
+                       <span className="font-medium text-blue-400">{displayMoneyFromUsd(standardPool * (tournamentData?.platformFeePercent || 0))}</span>
                     </div>
                     <div className="flex justify-between items-center text-zinc-300 font-medium pt-1">
                        <span>Net Prize Pool:</span>
-                       <span className="text-emerald-400">${(standardPool * (1 - (tournamentData?.hostFeePercent || 0) - (tournamentData?.platformFeePercent || 0))).toLocaleString()}</span>
+                       <span className="text-emerald-400">{displayMoneyFromUsd(standardPool * (1 - (tournamentData?.hostFeePercent || 0) - (tournamentData?.platformFeePercent || 0)))}</span>
                     </div>
                  </div>
                  );

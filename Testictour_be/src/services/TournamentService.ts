@@ -30,17 +30,28 @@ export default class TournamentService {
     return fee;
   }
 
-  static async calculateNetPrizePool(
+    static async calculateNetPrizePool(
     tournament: any, 
     counts: { registered: number, reserve: number, absent: number },
     escrow?: any
   ): Promise<number> {
     const maxPlayers = tournament.maxPlayers || tournament.expectedParticipants || 0;
     const totalCount = counts.registered + counts.reserve;
-    const isUpcoming = tournament.status === 'UPCOMING' || tournament.status === 'DRAFT' || tournament.status === 'REGISTRATION';
+    const isUpcoming = tournament.status === 'UPCOMING' || tournament.status === 'DRAFT' || tournament.status === 'REGISTRATION' || tournament.status === 'pending';
     const multiplier = isUpcoming ? Math.max(maxPlayers, totalCount) : totalCount;
     
     let grossPool = multiplier * (tournament.entryFee || 0);
+
+    // Nếu giải đấu mới tạo và chưa có người tham gia (grossPool = 0),
+    // ưu tiên dùng escrowRequiredAmount (customPrizePool do partner nhập)
+    // để hiển thị quỹ thưởng dự kiến cho public
+    if (grossPool === 0 && isUpcoming) {
+      if (tournament.escrowRequiredAmount && tournament.escrowRequiredAmount > 0) {
+        grossPool = tournament.escrowRequiredAmount;
+      } else if (tournament.customPrizePool && tournament.customPrizePool > 0) {
+        grossPool = tournament.customPrizePool;
+      }
+    }
 
     if (!tournament.isCommunityMode) {
       if (escrow && escrow.fundedAmount > 0) {
@@ -120,7 +131,7 @@ export default class TournamentService {
       const reserveCount = reserveMap.get(t.id) || 0;
       const absentCount = absentMap.get(t.id) || 0;
 
-      const finalPrizePool = await this.calculateNetPrizePool(t, {
+            const finalPrizePool = await this.calculateNetPrizePool(t, {
         registered: registeredCount,
         reserve: reserveCount,
         absent: absentCount
@@ -138,6 +149,7 @@ export default class TournamentService {
         registered: registeredCount,
         reserveCount,
         reservePlayersLimit: (t as any).reservePlayersLimit || 0,
+        escrowRequiredAmount: (t as any).escrowRequiredAmount || 0,
         budget: finalPrizePool,
         organizer: t.organizer,
         isCommunityMode: t.isCommunityMode,
@@ -378,7 +390,7 @@ export default class TournamentService {
         startTime: finalStartTime,
         status: (templateData as any).status || 'pending',
         registrationDeadline: data.registrationDeadline || (templateData as any).registrationDeadline || new Date(),
-        prizeStructure: (templateData as any).prizeStructure || {},
+                prizeStructure: data.prizeStructure || (templateData as any).prizeStructure || {},
         expectedParticipants: (templateData as any).expectedParticipants || 0,
         isCommunityMode: data.isCommunityMode || false,
         escrowRequiredAmount: customPrizePool || 0,

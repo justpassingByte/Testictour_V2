@@ -5,7 +5,7 @@ import { useTournamentStore } from '@/app/stores/tournamentStore'
 import { Badge } from "@/components/ui/badge"
 import { AlertTriangle, ShieldCheck, Lock, Copy, Check } from "lucide-react"
 import { useTranslations } from "next-intl"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 import api from "@/app/lib/apiConfig"
@@ -30,28 +30,65 @@ export default function TournamentInfoClient({ initialTournament }: TournamentIn
   const currentStatus = statusMapping[tournament.status] || { text: tournament.status, color: "" }
 
   const [copiedId, setCopiedId] = useState(false)
+  const [isConfirming, setIsConfirming] = useState(false)
   const searchParams = useSearchParams()
+  const paymentConfirmedRef = useRef(false)
 
   // Confirm Sepay PG payment when redirected back with ?paymentSuccess=true
   useEffect(() => {
     const paymentSuccess = searchParams.get('paymentSuccess')
-    if (paymentSuccess === 'true') {
-      api.post(`/payments/confirm-pending/${tournament.id}`, {})
-        .then(() => {
-          toast.success('Payment confirmed! Your registration is complete.')
+    if (paymentSuccess === 'true' && !paymentConfirmedRef.current) {
+      paymentConfirmedRef.current = true
+      setIsConfirming(true)
+
+      const confirmPayment = async (retries = 5, delay = 2000): Promise<boolean> => {
+        for (let i = 0; i < retries; i++) {
+          try {
+            const res = await api.post(`/payments/confirm-pending/${tournament.id}`, {})
+            if (res.data?.success) {
+              toast.success('Thanh toán thành công! Đăng ký của bạn đã được xác nhận.')
+              return true
+            }
+            return false
+          } catch (err: any) {
+            const errorMsg = err?.response?.data?.error || err?.message || ''
+            // If already confirmed by IPN, treat as success
+            if (errorMsg?.includes('Already confirmed') || err?.response?.status === 200) {
+              toast.success('Thanh toán thành công! Đăng ký của bạn đã được xác nhận.')
+              return true
+            }
+            // If it's a "pending" response (IPN not arrived yet), wait and retry
+            if (i < retries - 1 && err?.response?.status === 400) {
+              await new Promise(r => setTimeout(r, delay))
+              continue
+            }
+            return false
+          }
+        }
+        return false
+      }
+
+      confirmPayment()
+        .then((confirmed) => {
+          if (!confirmed) {
+            // If still not confirmed after retries, show a generic success message
+            // The Sepay IPN will eventually confirm the payment
+            toast.success('Đăng ký hoàn tất! Hệ thống đang xác nhận thanh toán của bạn.')
+          }
         })
         .catch(() => {
           // Payment might already be confirmed, still show success to user
-          toast.success('Registration complete!')
+          toast.success('Đăng ký hoàn tất!')
         })
         .finally(() => {
+          setIsConfirming(false)
           // Clean URL params
           const url = new URL(window.location.href)
           url.searchParams.delete('paymentSuccess')
           window.history.replaceState({}, '', url.toString())
         })
     }
-  }, [])
+  }, [tournament.id])
 
   const handleCopyId = () => {
     navigator.clipboard.writeText(`Tournament ID: ${tournament.id}`)
@@ -61,6 +98,12 @@ export default function TournamentInfoClient({ initialTournament }: TournamentIn
 
   return (
     <div className="flex flex-col space-y-2">
+      {isConfirming && (
+        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-md p-3 mb-2 flex items-center gap-3">
+          <div className="animate-spin rounded-full h-4 w-4 border-2 border-emerald-500 border-t-transparent" />
+          <p className="text-sm text-emerald-400">Đang xác nhận thanh toán của bạn...</p>
+        </div>
+      )}
       <div className="flex items-center space-x-2">
         <h1 className="text-3xl font-bold flex items-center gap-2 group">
           {tournament.name}

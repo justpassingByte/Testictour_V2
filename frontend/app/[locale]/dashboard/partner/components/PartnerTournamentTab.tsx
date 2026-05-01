@@ -82,6 +82,13 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
     setForm(prev => ({ ...prev, image: "" }))
   }
 
+  const [prizeDistribution, setPrizeDistribution] = useState<Record<string, number>>({
+    "1": 40,
+    "2": 30,
+    "3": 20,
+    "4": 10,
+  })
+
   const [phases, setPhases] = useState([
     { name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "top_n_scores", advancementValue: 4, matchesPerRound: 1, carryOverScores: false }
   ])
@@ -154,6 +161,11 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
         carryOverScores: p.carryOverScores,
       }))
 
+            // Chuyển đổi prizeDistribution từ phần trăm sang tỷ lệ decimal
+      const prizeStructure = Object.fromEntries(
+        Object.entries(prizeDistribution).map(([rank, percent]) => [rank, percent / 100])
+      );
+
       await api.post('/tournaments', {
         name: form.name,
         description: form.description,
@@ -165,6 +177,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
         hostFeePercent: form.hostFeePercent,
         expectedParticipants: form.maxPlayers,
         customPrizePool: Math.max(form.customPrizePool, form.maxPlayers * form.entryFee),
+        prizeStructure,
         image: canCustomBrand ? (imageFile ? (imagePreview || form.image || undefined) : (form.image || undefined)) : '/images/default-tournament-banner.png',
         roundsTotal: phases.reduce((sum, p) => sum + p.numberOfRounds, 0),
         config: { phases: phaseConfigs },
@@ -200,7 +213,8 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
       toast({ title: "Tournament Created!", description: `${form.name} has been created successfully.` })
       setCreateOpen(false)
       setForm({ name: "", description: "", region: "APAC", maxPlayers: 32, reservePlayersLimit: 0, entryFee: 0, hostFeePercent: 0.1, customPrizePool: 0, startTime: "", registrationDeadline: "", image: "", isCommunityMode: false, discordUrl: "" })
-      setSponsors([])
+            setSponsors([])
+      setPrizeDistribution({ "1": 40, "2": 30, "3": 20, "4": 10 })
       setPhases([{ name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "top_n_scores", advancementValue: 4, matchesPerRound: 1, carryOverScores: false }])
       setImageFile(null)
       setImagePreview(null)
@@ -473,12 +487,12 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                 <Input type="number" min={0} max={16} value={form.reservePlayersLimit} onChange={(e) => setForm(p => ({ ...p, reservePlayersLimit: parseInt(e.target.value) || 0 }))} />
                 <p className="text-[9px] text-muted-foreground mt-1">Số slot dự bị (0 = tắt)</p>
               </div>
-              <div className="space-y-2">
-                <Label>Entry Fee ($)</Label>
+                            <div className="space-y-2">
+                <Label>Entry Fee ({currency})</Label>
                 <Input type="number" min={0} value={form.entryFee} onChange={(e) => setForm(p => ({ ...p, entryFee: parseFloat(e.target.value) || 0 }))} />
               </div>
               <div className="space-y-2">
-                <Label>Gross Prize Pool ($)</Label>
+                <Label>Gross Prize Pool ({currency})</Label>
                 <Input 
                   type="number" 
                   min={form.maxPlayers * form.entryFee} 
@@ -488,14 +502,14 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                     setForm(p => ({ ...p, customPrizePool: val }));
                   }} 
                 />
-                <p className="text-[9px] text-muted-foreground mt-1">Min: ${form.maxPlayers * form.entryFee}</p>
+                <p className="text-[9px] text-muted-foreground mt-1">Min: {displayMoneyFromUsd(form.maxPlayers * form.entryFee)}</p>
               </div>
               <div className="space-y-2">
                 <Label>Host Fee (%)</Label>
                 <Input type="number" min={0} max={10} step={0.1} value={(form.hostFeePercent * 100).toFixed(1).replace(/\.0$/, '')} onChange={(e) => setForm(p => ({ ...p, hostFeePercent: (parseFloat(e.target.value) || 0) / 100 }))} />
               </div>
             </div>
-            {form.entryFee > 0 && (() => {
+                        {form.entryFee > 0 && (() => {
               const activePrizePool = Math.max(form.customPrizePool, form.maxPlayers * form.entryFee);
               const platformAmount = activePrizePool * platformFeePercent;
               const hostAmount = activePrizePool * form.hostFeePercent;
@@ -505,20 +519,20 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                 <div className="text-sm bg-violet-500/5 flex flex-col border border-violet-500/20 rounded-md p-4 space-y-3">
                   <div className="flex justify-between items-center text-muted-foreground">
                     <span>Gross Prize Pool (From Entry/Sponsors):</span>
-                    <span className="font-semibold text-white">${activePrizePool.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                    <span className="font-semibold text-white">{displayMoneyFromUsd(activePrizePool)}</span>
                   </div>
                   <div className="flex justify-between items-center text-red-400">
                     <span>Platform Fee ({(platformFeePercent * 100).toFixed(1)}% via {subscriptionPlan || 'STARTER'}):</span>
-                    <span>-${platformAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                    <span>-{displayMoneyFromUsd(platformAmount)}</span>
                   </div>
                   <div className="flex justify-between items-center text-red-400">
                     <span>Host Fee ({(form.hostFeePercent * 100).toFixed(1)}%):</span>
-                    <span>-${hostAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                    <span>-{displayMoneyFromUsd(hostAmount)}</span>
                   </div>
                   <div className="h-px bg-white/10 my-1 w-full" />
                   <div className="flex justify-between items-center font-bold text-emerald-400 text-lg">
                     <span>Net Prize Pool (For Players):</span>
-                    <span>${netPool.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                    <span>{displayMoneyFromUsd(netPool)}</span>
                   </div>
                 </div>
               );
@@ -601,7 +615,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                </div>
             </div>
 
-            {/* Config Phases (from admin) */}
+                                    {/* Community / Escrow Mode Config */}
             <div className="border border-white/10 rounded-lg p-0">
                <div className="p-3 border-b border-white/10 bg-black/20 flex flex-col sm:flex-row items-center justify-between">
                  <div className="mb-2 sm:mb-0">
@@ -654,7 +668,86 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                </div>
             </div>
 
-            {/* Config Phases (from admin) */}
+            {/* Prize Distribution Config */}
+            <div className="border border-white/10 rounded-lg p-0">
+               <div className="p-3 border-b border-white/10 bg-black/20 flex flex-col sm:flex-row items-center justify-between">
+                 <div className="mb-2 sm:mb-0">
+                    <h3 className="font-bold text-amber-400">Prize Distribution (Tỷ lệ phần thưởng)</h3>
+                    <p className="text-xs text-muted-foreground">Nhập % thưởng cho từng thứ hạng (tổng = 100%)</p>
+                 </div>
+               </div>
+               <div className="p-4">
+                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                   {Object.entries(prizeDistribution).map(([rank, percent]) => (
+                     <div key={rank} className="space-y-1.5">
+                       <Label className="text-[11px] uppercase tracking-wide font-bold">
+                         #{rank} {rank === "1" ? "🥇" : rank === "2" ? "🥈" : rank === "3" ? "🥉" : ""}
+                       </Label>
+                       <div className="flex items-center gap-1">
+                         <Input
+                           type="number"
+                           min={0}
+                           max={100}
+                           value={percent}
+                           onChange={(e) => {
+                             const val = parseFloat(e.target.value) || 0;
+                             setPrizeDistribution(prev => ({ ...prev, [rank]: Math.min(100, Math.max(0, val)) }));
+                           }}
+                           className="bg-black/40 text-center font-bold text-lg"
+                         />
+                         <span className="text-sm font-bold text-muted-foreground">%</span>
+                       </div>
+                     </div>
+                   ))}
+                 </div>
+                 <div className="flex items-center gap-2 mt-3">
+                   <Button
+                     type="button"
+                     variant="outline"
+                     size="sm"
+                     onClick={() => {
+                       const numRanks = Object.keys(prizeDistribution).length;
+                       if (numRanks < 8) {
+                         const nextRank = numRanks + 1;
+                         setPrizeDistribution(prev => ({ ...prev, [nextRank.toString()]: 0 }));
+                       }
+                     }}
+                     disabled={Object.keys(prizeDistribution).length >= 8}
+                     className="h-7 text-xs border-dashed"
+                   >
+                     <Plus className="mr-1 h-3 w-3" /> Add Rank
+                   </Button>
+                   <Button
+                     type="button"
+                     variant="outline"
+                     size="sm"
+                     onClick={() => {
+                       const entries = Object.entries(prizeDistribution);
+                       if (entries.length > 1) {
+                         const lastKey = entries[entries.length - 1][0];
+                         const newDist = { ...prizeDistribution };
+                         delete newDist[lastKey];
+                         setPrizeDistribution(newDist);
+                       }
+                     }}
+                     disabled={Object.keys(prizeDistribution).length <= 1}
+                     className="h-7 text-xs text-red-400 border-red-500/30 hover:bg-red-500/10"
+                   >
+                     Remove Last
+                   </Button>
+                 </div>
+                 <div className="mt-2 text-xs">
+                   Tổng: <span className={`font-bold ${Object.values(prizeDistribution).reduce((a, b) => a + b, 0) === 100 ? 'text-emerald-400' : 'text-red-400'}`}>
+                     {Object.values(prizeDistribution).reduce((a, b) => a + b, 0)}%
+                   </span>
+                   {Object.values(prizeDistribution).reduce((a, b) => a + b, 0) !== 100 && (
+                     <span className="text-red-400 ml-2">(Cần tổng = 100%)</span>
+                   )}
+                 </div>
+               </div>
+            </div>
+
+                        {/* Config Phases */}
             <div className="border border-white/10 rounded-lg p-0">
                <div className="p-3 border-b border-white/10 bg-black/20 flex flex-col sm:flex-row items-center justify-between">
                  <div className="mb-2 sm:mb-0">

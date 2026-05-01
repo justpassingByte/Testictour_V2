@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import { Plus, Settings, DollarSign, Users, Trophy, BarChart3, Crown, Menu, PanelLeftClose, HandCoins, Gift, Star } from "lucide-react";
+import { Plus, Settings, DollarSign, Users, Trophy, BarChart3, Crown, Menu, PanelLeftClose, HandCoins, Gift, Star, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTranslations } from "next-intl";
 
@@ -26,6 +26,7 @@ export default function PartnerLayout({ children }: { children: React.ReactNode 
   const isActive = (tabId: string) => {
     if (tabId === 'tournaments' && pathname.includes('/tournaments')) return true;
     if (tabId === 'lobbies' && pathname.includes('/lobbies')) return true;
+    if (tabId === 'transactions' && pathname.includes('/transactions')) return true;
     return false;
   };
 
@@ -77,6 +78,7 @@ export default function PartnerLayout({ children }: { children: React.ReactNode 
           )}
           {[
             { id: 'revenue', icon: HandCoins, label: t("revenue") },
+            { id: 'transactions', icon: Receipt, label: t("transactions") },
             { id: 'wallet', icon: DollarSign, label: t("wallet") },
             { id: 'analytics', icon: BarChart3, label: t("analytics") },
             { id: 'plans', icon: Crown, label: t("plans") }

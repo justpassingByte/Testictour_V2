@@ -63,7 +63,7 @@ export default function HomePageClient({ tournaments, lobbies }: HomePageClientP
               </div>
 
               <div className="relative z-10 space-y-8 animate-fade-in">
-                <h1 className="text-[40px] md:text-[48px] lg:text-[56px] leading-[1.15] font-bold tracking-tight [text-shadow:_0_2px_10px_rgb(0_0_0_/_0.8)]">
+                                <h1 className="text-[40px] md:text-[48px] lg:text-[56px] leading-[1.15] font-bold tracking-tight [text-shadow:_0_2px_10px_rgb(0_0_0_/_0.8)]">
                   <span className="gradient-text drop-shadow-md">{t('hero_title_part1')}</span> <br />
                   <span className="text-white drop-shadow-xl">{t('hero_title_part2')}</span>
                 </h1>

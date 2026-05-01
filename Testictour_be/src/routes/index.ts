@@ -58,10 +58,11 @@ router.get('/public/plans', getPublicPlans);
 
 import { getPublicPartnerRewards } from '../controllers/partnerReward.controller';
 import SepayPgController from '../controllers/SepayPgController';
+import auth from '../middlewares/auth';
 
 router.get('/public/partner-rewards/:partnerId', getPublicPartnerRewards);
 router.get('/payments/sepay-pg/:transactionId', SepayPgController.renderCheckout);
 router.post('/payments/sepay-pg/ipn/:transactionId', SepayPgController.handleIpn);
-router.post('/payments/confirm-pending/:tournamentId', SepayPgController.confirmPendingPayment);
+router.post('/payments/confirm-pending/:tournamentId', auth('user', 'partner', 'admin'), SepayPgController.confirmPendingPayment);
 
 export default router;

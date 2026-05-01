@@ -21,6 +21,7 @@ router.get('/export/users', auth('partner', 'admin'), PartnerController.exportUs
 router.post('/import/players', auth('partner', 'admin'), upload.single('file'), PartnerController.importPlayers);
 
 // Transactions
+router.get('/transactions', auth('partner', 'admin'), PartnerController.getTransactions);
 router.post('/transaction', auth('partner', 'admin'), PartnerController.processTransaction);
 
 // Settings
