@@ -155,7 +155,7 @@ const TournamentController = {
         startTime: new Date(req.body.startTime),
         maxPlayers: req.body.maxPlayers,
         entryFee: req.body.entryFee,
-        entryType: req.body.entryType || 'usd',
+        entryType: req.body.entryType || 'vnd',
         organizerId: user.id,
         registrationDeadline: new Date(req.body.registrationDeadline),
         description: req.body.description,

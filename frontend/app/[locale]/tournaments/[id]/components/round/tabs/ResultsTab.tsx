@@ -24,9 +24,10 @@ interface ResultsTabProps {
 
 export function ResultsTab({ round, tournament, allPlayers, numMatches }: ResultsTabProps) {
   const t = useTranslations("common");
-  const { currency, usdToVndRate } = useCurrency();
-  const displayMoneyFromUsd = (amountUsd: number) => {
-    const displayAmount = currency === "VND" ? amountUsd * usdToVndRate : amountUsd;
+    const { currency, usdToVndRate } = useCurrency();
+  // VND mode: số tiền từ backend đã là VND
+  const displayMoney = (amount: number) => {
+    const displayAmount = currency === "USD" && usdToVndRate > 0 ? amount / usdToVndRate : amount;
     return formatCurrency(displayAmount, currency);
   };
   const [searchQuery, setSearchQuery] = useState("")
@@ -250,7 +251,7 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
                       </Badge>
                                             {hasPrize && prizeStructure && (
                         <span className="text-xs font-bold text-amber-400">
-                          🏆 {displayMoneyFromUsd(((prizeStructure[rank - 1] / 100) * (tournament.budget || 0)))}
+                          🏆 {displayMoney(((prizeStructure[rank - 1] / 100) * (tournament.budget || 0)))}
                         </span>
                       )}
                     </div>

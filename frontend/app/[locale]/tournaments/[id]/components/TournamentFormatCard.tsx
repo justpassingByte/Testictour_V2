@@ -14,9 +14,10 @@ interface TournamentFormatCardProps {
 export function TournamentFormatCard({ tournament }: TournamentFormatCardProps) {
   const t = useTranslations("common")
   const { currency, usdToVndRate } = useCurrency()
-  
-  const displayMoneyFromUsd = (amountUsd: number) => {
-    const displayAmount = currency === "VND" ? amountUsd * usdToVndRate : amountUsd;
+    
+  // VND mode: entryFee/budget từ backend đã là VND
+  const displayMoney = (amount: number) => {
+    const displayAmount = currency === "USD" && usdToVndRate > 0 ? amount / usdToVndRate : amount;
     return formatCurrency(displayAmount, currency);
   };
 
@@ -33,13 +34,13 @@ export function TournamentFormatCard({ tournament }: TournamentFormatCardProps) 
         <div className="flex justify-between items-start">
           <div className="text-muted-foreground mt-0.5">{t("registration_fee")}:</div>
           <div className="text-right">
-            <div className="font-medium">{displayMoneyFromUsd(tournament.entryFee || 0)}</div>
+            <div className="font-medium">{displayMoney(tournament.entryFee || 0)}</div>
           </div>
         </div>
         <div className="flex justify-between items-start">
           <div className="text-muted-foreground mt-0.5">{t("prize_pool")}:</div>
           <div className="text-right">
-            <div className="font-medium">{displayMoneyFromUsd(tournament.budget || 0)}</div>
+            <div className="font-medium">{displayMoney(tournament.budget || 0)}</div>
           </div>
         </div>
         <div className="grid gap-1">

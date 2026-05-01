@@ -129,34 +129,38 @@ export default class ParticipantService {
       const externalRefId = `ORDER_${orderRef}`;
       const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
 
+            // VND mode: entryFee đã là VND
+      const amountVnd = Math.round(entryFee || 0);
+
       transaction = await prisma.transaction.create({
         data: {
           userId,
           tournamentId,
           type: 'entry_fee',
-          amount: entryFee,
-          currency: 'usd',
+          amount: amountVnd,
+          currency: 'vnd',
           status: 'pending',
           refId: participant.id,
           externalRefId,
           paymentMethod: provider,
           expiresAt,
-          reviewNotes: `Entry fee for tournament ${tournamentId}`,
+          reviewNotes: `Phí đăng ký giải đấu ${tournamentId}: ${amountVnd} VND`,
         },
       });
 
       if (provider === 'stripe') {
+        // Stripe cần USD — convert tạm
+        const usdRate = await CurrencyService.getUsdToVndRate();
+        const amountUsd = usdRate > 0 ? Math.round((amountVnd / usdRate) * 100) / 100 : 0;
         checkoutUrl = await StripeService.createEntryFeeCheckout({
           tournamentId,
           participantId: participant.id,
           transactionId: transaction.id,
-          amountUsd: entryFee,
+          amountUsd,
           successUrl,
           cancelUrl,
         });
       } else if (provider === 'momo') {
-        const usdToVndRate = await CurrencyService.getUsdToVndRate();
-        const amountVnd = Math.round(entryFee * usdToVndRate);
         checkoutUrl = await MomoService.createEntryFeePayment({
           tournamentId,
           participantId: participant.id,
@@ -166,22 +170,18 @@ export default class ParticipantService {
           notifyUrl: `${apiUrl}/webhooks/payments/momo`,
         });
             } else if (provider === 'sepay' || provider === 'bank_transfer' || provider === 'manual') {
-              const CurrencyService = (await import('./CurrencyService')).default;
-              const usdToVndRate = await CurrencyService.getUsdToVndRate();
-              let amountVnd = Math.round(entryFee * usdToVndRate);
-        
-              // KHÔNG thêm random suffix — dùng đúng số tiền exact để tránh nhầm lẫn khi thanh toán
+              // Dùng thẳng amountVnd — không cần convert
 
               await prisma.transaction.update({
                   where: { id: transaction.id },
                   data: { 
-                    reviewNotes: `Entry fee. Exact pay: ${amountVnd} VND`,
+                    reviewNotes: `Phí đăng ký. Chuyển khoản đúng: ${amountVnd} VND`,
                   }
               });
 
               // The checkoutUrl routes to our backend handler for automatic payment gateway redirection
               checkoutUrl = `${apiUrl}/payments/sepay-pg/${transaction.id}`;
-              paymentDetails = { externalRefId, amountVnd, checkoutUrl };
+              paymentDetails = { externalRefId: transaction.externalRefId, amountVnd, checkoutUrl };
               console.log(`[JOIN DEBUG] Generated checkoutUrl: ${checkoutUrl}`);
             }
     } catch (err: any) {
@@ -439,8 +439,7 @@ export default class ParticipantService {
       const tournament = await tx.tournament.findUnique({ where: { id: participant.tournamentId } });
       if (!tournament) throw new ApiError(404, 'Tournament not found');
 
-      // If participant paid, create a pending refund transaction for admin to process via gateway
-      // (Entry fees are paid via Stripe/MoMo, so refund must be handled externally)
+            // If participant paid, create a pending refund transaction for admin to process via gateway
       if (tournament.status === 'UPCOMING' && participant.paid) {
         const entryFee = (tournament as any).entryFee || 0;
         if (entryFee > 0) {
@@ -450,12 +449,12 @@ export default class ParticipantService {
               tournamentId: participant.tournamentId,
               type: 'refund',
               amount: entryFee,
-              currency: 'usd',
+              currency: 'vnd',
               status: 'pending', // Admin processes gateway refund manually
               refId: participant.id,
               reviewNotes: participant.isReserve
-                ? 'Entry fee refund — reserve player removed'
-                : 'Entry fee refund — participant removed before tournament start',
+                ? `Hoàn phí — reserve player removed: ${entryFee} VND`
+                : `Hoàn phí — participant removed before tournament start: ${entryFee} VND`,
             },
           });
         }

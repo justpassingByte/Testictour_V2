@@ -42,7 +42,7 @@ export default class OrderService {
         tournamentId: data.tournamentId,
         type: data.type,
         amount: data.amount,
-        currency: data.currency || 'usd',
+        currency: data.currency || 'vnd',
         status: 'pending_payment',
         refId: data.refId,
         externalRefId: `ORDER_${orderRef}`,

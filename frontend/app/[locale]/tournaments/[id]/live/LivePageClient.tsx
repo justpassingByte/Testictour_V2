@@ -111,8 +111,9 @@ export default function LivePageClient({ tournament: initialTournament, liveStat
   const { currency, usdToVndRate } = useCurrency();
   const queryClient = useQueryClient();
 
-  const displayMoneyFromUsd = (amountUsd: number) => {
-    const displayAmount = currency === "VND" ? amountUsd * usdToVndRate : amountUsd;
+  // VND mode: số tiền từ backend đã là VND
+  const displayMoney = (amount: number) => {
+    const displayAmount = currency === "USD" && usdToVndRate > 0 ? amount / usdToVndRate : amount;
     const locale = currency === "VND" ? "vi-VN" : "en-US";
     const fractionDigits = currency === "VND" ? 0 : 2;
     return new Intl.NumberFormat(locale, {
@@ -236,7 +237,7 @@ export default function LivePageClient({ tournament: initialTournament, liveStat
               </div>
               <div>
                 <div className="flex flex-col">
-                  <p className="text-2xl font-bold text-foreground">{displayMoneyFromUsd(calculatedPrizePool)}</p>
+                  <p className="text-2xl font-bold text-foreground">{displayMoney(calculatedPrizePool)}</p>
                 </div>
                 <p className="text-sm font-medium text-muted-foreground mt-1">{t("prize_pool") || "Estimated Prize Pool"} <span className="text-xs text-muted-foreground font-normal ml-1">[{tournament.registered || 0} Players]</span></p>
               </div>

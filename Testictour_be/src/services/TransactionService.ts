@@ -14,7 +14,7 @@ export default class TransactionService {
     }
   }
 
-  static async entryFee(userId: string, tournamentId: string, amount: number, tx?: Prisma.TransactionClient, currency: string = 'usd') {
+    static async entryFee(userId: string, tournamentId: string, amount: number, tx?: Prisma.TransactionClient, currency: string = 'vnd') {
     return this._executeTransaction(tx, async (db) => {
       const balance = await db.balance.findUnique({ where: { userId } });
       if (!balance) throw new ApiError(400, 'Balance not found');
@@ -23,7 +23,7 @@ export default class TransactionService {
         if (balance.coins < amount) throw new ApiError(400, 'Insufficient coins balance');
         await db.balance.update({ where: { userId }, data: { coins: { decrement: amount } } });
       } else {
-        if (balance.amount < amount) throw new ApiError(400, 'Insufficient USD balance');
+        if (balance.amount < amount) throw new ApiError(400, 'Insufficient VND balance');
         await db.balance.update({ where: { userId }, data: { amount: { decrement: amount } } });
       }
 
@@ -32,7 +32,7 @@ export default class TransactionService {
     });
   }
 
-  static async refund(userId: string, tournamentId: string, amount: number, tx?: Prisma.TransactionClient, currency: string = 'usd') {
+  static async refund(userId: string, tournamentId: string, amount: number, tx?: Prisma.TransactionClient, currency: string = 'vnd') {
     return this._executeTransaction(tx, async (db) => {
       const updateData = currency === 'coins' ? { coins: { increment: amount } } : { amount: { increment: amount } };
       await db.balance.update({ where: { userId }, data: updateData });
@@ -41,7 +41,7 @@ export default class TransactionService {
     });
   }
 
-  static async payout(userId: string, tournamentId: string, amount: number, tx?: Prisma.TransactionClient, currency: string = 'usd') {
+  static async payout(userId: string, tournamentId: string, amount: number, tx?: Prisma.TransactionClient, currency: string = 'vnd') {
     return this._executeTransaction(tx, async (db) => {
       // Create the Reward record
       const reward = await db.reward.create({

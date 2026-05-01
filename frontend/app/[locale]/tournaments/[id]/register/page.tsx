@@ -258,8 +258,9 @@ export default function TournamentRegistration({ params }: { params: { id: strin
     )
   }
 
-  const displayMoneyFromUsd = (amountUsd: number) => {
-    const displayAmount = currency === "VND" ? amountUsd * usdToVndRate : amountUsd
+  // VND mode: entryFee/budget từ backend đã là VND
+  const displayMoney = (amount: number) => {
+    const displayAmount = currency === "USD" && usdToVndRate > 0 ? amount / usdToVndRate : amount
     return formatCurrency(displayAmount, currency)
   }
 
@@ -382,13 +383,13 @@ export default function TournamentRegistration({ params }: { params: { id: strin
                 </div>
                 <div className="flex items-center gap-1.5 bg-[#18181b]/95 px-2.5 py-1 rounded-md border border-[#3f3f46] shadow-sm">
                   <DollarSign className="h-4 w-4 text-amber-400" />
-                  <span className="text-amber-400 font-bold">{displayMoneyFromUsd(tournament.entryFee)}</span>
+                  <span className="text-amber-400 font-bold">{displayMoney(tournament.entryFee)}</span>
                 </div>
                 <div className="flex items-center gap-1.5 bg-[#18181b]/95 px-2.5 py-1 rounded-md border border-[#3f3f46] shadow-sm">
                   <Trophy className="h-4 w-4 text-yellow-400" />
                   <span className="text-yellow-400 font-bold">
                     {(tournament.budget && tournament.budget > 0)
-                      ? `${displayMoneyFromUsd(tournament.budget)} `
+                      ? `${displayMoney(tournament.budget)} `
                       : t("tbd_prize_pool") || "TBD Prize Pool"}
                   </span>
                 </div>
@@ -564,7 +565,7 @@ export default function TournamentRegistration({ params }: { params: { id: strin
                       <p className="text-xs text-amber-300/80">
                         This tournament requires an entry fee of{" "}
                         <strong className="text-amber-300">
-                          {displayMoneyFromUsd(tournament.entryFee)}
+                          {displayMoney(tournament.entryFee)}
                         </strong>.
                         After clicking Register, you will be redirected to the payment gateway to complete your registration.
                       </p>
@@ -631,7 +632,7 @@ export default function TournamentRegistration({ params }: { params: { id: strin
                 {status === "loading" ? (
                   <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{tournament.entryFee > 0 ? "Reserving slot..." : t("registering")}</>
                 ) : tournament.entryFee > 0 ? (
-                  <><DollarSign className="mr-2 h-4 w-4" />Register & Pay {displayMoneyFromUsd(tournament.entryFee)}<ArrowRight className="ml-2 h-4 w-4" /></>
+                  <><DollarSign className="mr-2 h-4 w-4" />Register & Pay {displayMoney(tournament.entryFee)}<ArrowRight className="ml-2 h-4 w-4" /></>
                 ) : (
                   <>{t("register")}<ArrowRight className="ml-2 h-4 w-4" /></>
                 )}

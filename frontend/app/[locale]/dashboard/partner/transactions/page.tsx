@@ -50,8 +50,9 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
 
 export default function PartnerTransactionsPage() {
   const { currency, usdToVndRate } = useCurrency()
-  const displayMoneyFromUsd = (amountUsd: number) => {
-    const displayAmount = currency === "VND" ? amountUsd * usdToVndRate : amountUsd
+  // VND mode: số tiền từ backend đã là VND
+  const displayMoney = (amount: number) => {
+    const displayAmount = currency === "USD" && usdToVndRate > 0 ? amount / usdToVndRate : amount
     return formatCurrency(displayAmount, currency)
   }
 
@@ -121,7 +122,7 @@ export default function PartnerTransactionsPage() {
                 <p className={`text-[11px] text-${card.color}-400 font-semibold uppercase tracking-wide`}>{card.label}</p>
                 <card.icon className={`h-4 w-4 text-${card.color}-500`} />
               </div>
-              <p className={`text-2xl font-bold text-${card.color}-500`}>{displayMoneyFromUsd(card.value)}</p>
+              <p className={`text-2xl font-bold text-${card.color}-500`}>{displayMoney(card.value)}</p>
             </CardContent>
           </Card>
         ))}
@@ -227,7 +228,7 @@ export default function PartnerTransactionsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className={`text-right font-semibold text-sm ${isIn ? "text-green-500" : "text-red-500"}`}>
-                        {isIn ? "+" : "-"}{displayMoneyFromUsd(Math.abs(tx.amount))}
+                        {isIn ? "+" : "-"}{displayMoney(Math.abs(tx.amount))}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground max-w-[150px] truncate">
                         {tx.tournament?.name || "—"}

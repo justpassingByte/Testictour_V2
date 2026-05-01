@@ -42,8 +42,9 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
   const t = useTranslations("Common")
   const { toast } = useToast()
   const { currency, usdToVndRate } = useCurrency()
-  const displayMoneyFromUsd = (amountUsd: number) => {
-    const displayAmount = currency === "VND" ? amountUsd * usdToVndRate : amountUsd;
+  // VND mode: số tiền từ backend đã là VND
+  const displayMoney = (amount: number) => {
+    const displayAmount = currency === "USD" && usdToVndRate > 0 ? amount / usdToVndRate : amount;
     return formatCurrency(displayAmount, currency);
   };
     
@@ -378,16 +379,16 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
                         <div className="flex flex-col">
               <div className="text-2xl font-bold text-emerald-400">
                 {['PRO', 'ENTERPRISE'].includes(subscriptionPlan) ? (
-                  <>{displayMoneyFromUsd(escrow.requiredAmount)}</>
+                  <>{displayMoney(escrow.requiredAmount)}</>
                 ) : (
-                  <>{displayMoneyFromUsd(escrow.fundedAmount)} <span className="text-sm font-normal text-muted-foreground">/ {displayMoneyFromUsd(escrow.requiredAmount)}</span></>
+                  <>{displayMoney(escrow.fundedAmount)} <span className="text-sm font-normal text-muted-foreground">/ {displayMoney(escrow.requiredAmount)}</span></>
                 )}
               </div>
               <div className="text-[11px] text-emerald-400/70 mt-0.5 mb-2">
                 {['PRO', 'ENTERPRISE'].includes(subscriptionPlan) ? (
-                  <>{displayMoneyFromUsd(escrow.requiredAmount)}</>
+                  <>{displayMoney(escrow.requiredAmount)}</>
                 ) : (
-                  <>{displayMoneyFromUsd(escrow.fundedAmount)} <span className="opacity-70">/ {displayMoneyFromUsd(escrow.requiredAmount)}</span></>
+                  <>{displayMoney(escrow.fundedAmount)} <span className="opacity-70">/ {displayMoney(escrow.requiredAmount)}</span></>
                 )}
               </div>
               {(() => {
@@ -406,20 +407,20 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
                     {absentKeepAmount > 0 && (
                       <div className="flex justify-between items-center text-muted-foreground">
                          <span>Absent Fees Kept (Host):</span>
-                         <span className="font-medium text-orange-400">{displayMoneyFromUsd(absentKeepAmount)}</span>
+                         <span className="font-medium text-orange-400">{displayMoney(absentKeepAmount)}</span>
                       </div>
                     )}
                     <div className="flex justify-between items-center text-muted-foreground">
                        <span>Host Fee ({(tournamentData?.hostFeePercent || 0) * 100}% of Standard Pool):</span>
-                       <span className="font-medium text-orange-400">{displayMoneyFromUsd(standardPool * (tournamentData?.hostFeePercent || 0))}</span>
+                       <span className="font-medium text-orange-400">{displayMoney(standardPool * (tournamentData?.hostFeePercent || 0))}</span>
                     </div>
                     <div className="flex justify-between items-center text-muted-foreground">
                        <span>Platform Fee ({(tournamentData?.platformFeePercent || 0) * 100}% of Standard Pool):</span>
-                       <span className="font-medium text-blue-400">{displayMoneyFromUsd(standardPool * (tournamentData?.platformFeePercent || 0))}</span>
+                       <span className="font-medium text-blue-400">{displayMoney(standardPool * (tournamentData?.platformFeePercent || 0))}</span>
                     </div>
                     <div className="flex justify-between items-center text-zinc-300 font-medium pt-1">
                        <span>Net Prize Pool:</span>
-                       <span className="text-emerald-400">{displayMoneyFromUsd(standardPool * (1 - (tournamentData?.hostFeePercent || 0) - (tournamentData?.platformFeePercent || 0)))}</span>
+                       <span className="text-emerald-400">{displayMoney(standardPool * (1 - (tournamentData?.hostFeePercent || 0) - (tournamentData?.platformFeePercent || 0)))}</span>
                     </div>
                  </div>
                  );
@@ -440,7 +441,7 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-violet-400 flex flex-col">
-              <span>{displayMoneyFromUsd(escrow.releasedAmount)}</span>
+              <span>{displayMoney(escrow.releasedAmount)}</span>
             </div>
             {escrow.status === 'released' && <p className="text-xs text-emerald-400 mt-1 flex items-center gap-1"><CheckCircle2 className="w-3 h-3"/> Đã hoàn tất</p>}
           </CardContent>
@@ -456,7 +457,7 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
                 <Banknote className="w-5 h-5 text-blue-400" /> 1. Nạp Quỹ Bảo Lãnh
               </CardTitle>
               <CardDescription>
-                Bạn cần nạp đủ <strong>{displayMoneyFromUsd(escrow.requiredAmount)}</strong> vào quỹ Escrow trước khi giải đấu bắt đầu. Nếu quỹ trống, giải sẽ không thể <code>Bắt đầu (Start)</code>.
+                Bạn cần nạp đủ <strong>{displayMoney(escrow.requiredAmount)}</strong> vào quỹ Escrow trước khi giải đấu bắt đầu. Nếu quỹ trống, giải sẽ không thể <code>Bắt đầu (Start)</code>.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -467,7 +468,7 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
                       <Clock className="h-4 w-4" />
                       <AlertTitle className="text-sm font-bold">Chưa nạp đủ quỹ</AlertTitle>
                       <AlertDescription className="text-xs">
-                        Thiếu {displayMoneyFromUsd(Math.max(0, escrow.requiredAmount - escrow.fundedAmount))}. Hãy chọn phương thức thanh toán.
+                        Thiếu {displayMoney(Math.max(0, escrow.requiredAmount - escrow.fundedAmount))}. Hãy chọn phương thức thanh toán.
                       </AlertDescription>
                     </Alert>
                   </div>
@@ -489,7 +490,7 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
                     disabled={fundingLoading}
                   >
                     {fundingLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ShieldCheck className="w-4 h-4 mr-2" />}
-                    Thanh toán ngay ({displayMoneyFromUsd(fundingAmount)})
+                    Thanh toán ngay ({displayMoney(fundingAmount)})
                   </Button>
                 </>
               ) : (
@@ -662,7 +663,7 @@ export function EscrowManagementTab({ tournamentId, tournamentName, tournamentSt
                         <TableCell className="text-right font-medium text-emerald-400 whitespace-nowrap">
                           {row.estimatedPayout > 0 ? (
                             <div className="flex flex-col items-end">
-                              <span>{displayMoneyFromUsd(row.estimatedPayout)}</span>
+                              <span>{displayMoney(row.estimatedPayout)}</span>
                             </div>
                             ) : "-"}
                         </TableCell>

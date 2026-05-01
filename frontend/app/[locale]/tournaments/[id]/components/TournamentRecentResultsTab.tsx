@@ -27,8 +27,9 @@ import { formatCurrency } from "@/lib/utils"
 export function TournamentRecentResultsTab({ tournamentId, tournament }: { tournamentId: string, tournament: any }) {
   const t = useTranslations("common");
   const { currency, usdToVndRate } = useCurrency();
-  const displayMoneyFromUsd = (amountUsd: number) => {
-    const displayAmount = currency === "VND" ? amountUsd * usdToVndRate : amountUsd;
+  // VND mode: số tiền từ backend đã là VND
+  const displayMoney = (amount: number) => {
+    const displayAmount = currency === "USD" && usdToVndRate > 0 ? amount / usdToVndRate : amount;
     return formatCurrency(displayAmount, currency);
   };
 
@@ -168,7 +169,7 @@ export function TournamentRecentResultsTab({ tournamentId, tournament }: { tourn
                       <p className="text-[10px] font-bold text-primary/80 mt-0.5">{p.scoreTotal || 0} PTS</p>
                       {reward && (
                          <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[9px] px-1.5 py-0 mt-1">
-                           {displayMoneyFromUsd(reward.amount)}
+                           {displayMoney(reward.amount)}
                          </Badge>
                       )}
                     </div>
@@ -217,14 +218,14 @@ export function TournamentRecentResultsTab({ tournamentId, tournament }: { tourn
                 </TableHeader>
                 <TableBody>
                   {leaderboard.map((participant, index) => (
-                    <LeaderboardRow key={participant.id} participant={participant} rank={index + 1} t={t} getPlacementIcon={getPlacementIcon} getPlacementColor={getPlacementColor} isCompleted={tournament?.status === 'COMPLETED' || tournament?.status === 'completed'} displayMoneyFromUsd={displayMoneyFromUsd} />
+                    <LeaderboardRow key={participant.id} participant={participant} rank={index + 1} t={t} getPlacementIcon={getPlacementIcon} getPlacementColor={getPlacementColor} isCompleted={tournament?.status === 'COMPLETED' || tournament?.status === 'completed'} displayMoneyFromUsd={displayMoney} />
                   ))}
                 </TableBody>
               </Table>
             </div>
           ) : (
             /* ── Virtualized list for >100 rows — only renders visible rows ── */
-            <VirtualizedLeaderboard leaderboard={leaderboard} t={t} getPlacementIcon={getPlacementIcon} getPlacementColor={getPlacementColor} isCompleted={tournament?.status === 'COMPLETED' || tournament?.status === 'completed'} displayMoneyFromUsd={displayMoneyFromUsd} />
+            <VirtualizedLeaderboard leaderboard={leaderboard} t={t} getPlacementIcon={getPlacementIcon} getPlacementColor={getPlacementColor} isCompleted={tournament?.status === 'COMPLETED' || tournament?.status === 'completed'} displayMoneyFromUsd={displayMoney} />
           )}
         </CardContent>
       </Card>

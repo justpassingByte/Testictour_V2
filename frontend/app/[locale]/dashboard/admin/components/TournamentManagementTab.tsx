@@ -51,8 +51,9 @@ const calculatePrizePool = (registered: number, entryFee: number, hostFeePercent
 const TournamentManagementTab = observer(() => {
   const { tournaments, loading, fetchTournaments } = useTournamentStore();
   const { currency, usdToVndRate } = useCurrency();
-  const displayMoneyFromUsd = (amountUsd: number) => {
-    const displayAmount = currency === "VND" ? amountUsd * usdToVndRate : amountUsd;
+  // VND mode: số tiền từ backend đã là VND
+  const displayMoney = (amount: number) => {
+    const displayAmount = currency === "USD" && usdToVndRate > 0 ? amount / usdToVndRate : amount;
     return formatCurrency(displayAmount, currency);
   };
   const [syncing, setSyncing] = useState<Record<string, boolean>>({});
@@ -140,7 +141,7 @@ const TournamentManagementTab = observer(() => {
                   </div>
                 )}
                 <div className="text-sm">
-                  <strong>Prize Pool:</strong> {displayMoneyFromUsd(prizePool)}
+                  <strong>Prize Pool:</strong> {displayMoney(prizePool)}
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <p>Last synced: {tournament.lastSyncTime ? new Date(tournament.lastSyncTime).toLocaleString() : 'Never'}</p>

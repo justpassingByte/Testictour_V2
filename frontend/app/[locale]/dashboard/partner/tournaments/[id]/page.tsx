@@ -54,8 +54,9 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.
 export default function TournamentManagePage() {
   const t = useTranslations("common");
   const { currency, usdToVndRate } = useCurrency()
-  const displayMoneyFromUsd = (amountUsd: number) => {
-    const displayAmount = currency === "VND" ? amountUsd * usdToVndRate : amountUsd;
+  // VND mode: số tiền từ backend đã là VND
+  const displayMoney = (amount: number) => {
+    const displayAmount = currency === "USD" && usdToVndRate > 0 ? amount / usdToVndRate : amount;
     return formatCurrency(displayAmount, currency);
   };
   const params = useParams()
@@ -478,10 +479,10 @@ export default function TournamentManagePage() {
           <CardContent className="p-4">
             <p className="text-[11px] text-emerald-400 font-semibold uppercase tracking-wide">{t("prize_pool")}</p>
             <div className="flex flex-col mt-1">
-              <p className="text-xl font-bold text-emerald-400">{displayMoneyFromUsd(prizePool)}</p>
+              <p className="text-xl font-bold text-emerald-400">{displayMoney(prizePool)}</p>
             </div>
             <p className="text-[10px] text-muted-foreground mt-1.5 flex justify-between items-center">
-              <span>Entry: {displayMoneyFromUsd(tournament.entryFee)}</span>
+              <span>Entry: {displayMoney(tournament.entryFee)}</span>
             </p>
   </CardContent>
         </Card>
@@ -529,7 +530,7 @@ export default function TournamentManagePage() {
           {winnerPrize && (
             <div className="shrink-0 text-right">
               <p className="text-xs text-emerald-400/70 font-semibold uppercase tracking-wider">Prize Won</p>
-              <p className="text-2xl font-bold text-emerald-400">{displayMoneyFromUsd(winnerPrize)}</p>
+              <p className="text-2xl font-bold text-emerald-400">{displayMoney(winnerPrize)}</p>
             </div>
           )}
         </div>
@@ -1250,7 +1251,7 @@ export default function TournamentManagePage() {
                           )}
                           <p className="text-xs text-muted-foreground mt-0.5">{p.scoreTotal || 0} pts</p>
                           {getPrize(podiumRanks[i] - 1) > 0 && (
-                            <p className="text-xs font-bold text-emerald-400">{displayMoneyFromUsd(getPrize(podiumRanks[i] - 1))}</p>
+                            <p className="text-xs font-bold text-emerald-400">{displayMoney(getPrize(podiumRanks[i] - 1))}</p>
                           )}
                         </div>
                         <div className={`w-24 ${podiumHeights[i]} rounded-t-lg border-2 ${podiumColors[i]} flex items-center justify-center`}>
@@ -1332,7 +1333,7 @@ export default function TournamentManagePage() {
                           <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">{prizePercent}%</Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          <span className="font-bold text-emerald-400">{displayMoneyFromUsd(prizeAmount)}</span>
+                          <span className="font-bold text-emerald-400">{displayMoney(prizeAmount)}</span>
                         </TableCell>
                       </TableRow>
                       );

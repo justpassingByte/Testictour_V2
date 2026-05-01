@@ -30,9 +30,10 @@ interface PartnerTournamentTabProps {
 
 export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTournamentTabProps) {
   const { currentUser } = useUserStore()
-  const { currency, usdToVndRate } = useCurrency()
-  const displayMoneyFromUsd = (amountUsd: number) => {
-    const displayAmount = currency === "VND" ? amountUsd * usdToVndRate : amountUsd;
+    const { currency, usdToVndRate } = useCurrency()
+  // VND mode: entryFee/budget từ backend đã là VND, hiển thị trực tiếp
+  const displayMoney = (amount: number) => {
+    const displayAmount = currency === "USD" && usdToVndRate > 0 ? amount / usdToVndRate : amount;
     return formatCurrency(displayAmount, currency);
   };
   const t = useTranslations("common")
@@ -160,8 +161,9 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
       toast({ title: "Validation Error", description: "Please fill in all required fields.", variant: "destructive" })
       return
     }
-    setCreating(true)
+        setCreating(true)
     try {
+      // VND mode: gửi thẳng giá trị VND lên backend (backend đã xử lý VND)
       const phaseConfigs = phases.map((p, i) => ({
         id: `phase-${i + 1}`,
         name: p.name,
@@ -183,12 +185,12 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
               description: form.description,
               region: form.region,
               maxPlayers: form.maxPlayers,
-              entryFee: parseInt(entryFeeVnd.replace(/,/g, '')) || 0,
+              entryFee: parseInt(entryFeeVnd.replace(/,/g, '')) || 0, // ✅ VND
               startTime: new Date(form.startTime).toISOString(),
               registrationDeadline: new Date(form.registrationDeadline).toISOString(),
               hostFeePercent: form.hostFeePercent,
               expectedParticipants: form.maxPlayers,
-              customPrizePool: parseInt(prizePoolVnd.replace(/,/g, '')) || 0,
+              customPrizePool: parseInt(prizePoolVnd.replace(/,/g, '')) || 0, // ✅ VND
         prizeStructure,
         image: canCustomBrand ? (imageFile ? (imagePreview || form.image || undefined) : (form.image || undefined)) : '/images/default-tournament-banner.png',
         roundsTotal: phases.reduce((sum, p) => sum + p.numberOfRounds, 0),
@@ -352,7 +354,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                       </TableCell>
                                             <TableCell className="font-medium">
                         <div className="flex flex-col">
-                          <span>{displayMoneyFromUsd(prizePool)}</span>
+                          <span>{displayMoney(prizePool)}</span>
                         </div>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
@@ -820,7 +822,8 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                                 <SelectItem value="checkmate">Checkmate (Ngưỡng điểm)</SelectItem>
                               </SelectContent>
                             </Select>
-                            <p className="text-[9px] text-muted-foreground mt-1 px-1">
+                            <p 
+                            className="text-[9px] text-muted-foreground mt-1 px-1">
                               {phase.type === 'elimination' && "Loại trực tiếp những người bét bảng sau khi đánh xong."}
                               {phase.type === 'points' && "Chơi nhiều trận, sau khi xong thi tính tổng điểm để đi tiếp."}
                               {phase.type === 'swiss' && "Thi đấu nhiều trận, cộng dồn điểm, xào lobby sau mỗi trận."}

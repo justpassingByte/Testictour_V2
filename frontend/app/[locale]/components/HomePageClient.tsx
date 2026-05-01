@@ -283,8 +283,9 @@ function FeaturedTournamentCard({ tournament, index }: { tournament: ITournament
 function MiniTourLobbyCard({ lobby, index }: { lobby: MiniTourLobby, index: number }) {
   const t = useTranslations('common');
   const { currency, usdToVndRate } = useCurrency();
-  const displayMoneyFromUsd = (amountUsd: number) => {
-    const displayAmount = currency === "VND" ? amountUsd * usdToVndRate : amountUsd;
+  // VND mode: số tiền từ backend đã là VND
+  const displayMoney = (amount: number) => {
+    const displayAmount = currency === "USD" && usdToVndRate > 0 ? amount / usdToVndRate : amount;
     return formatCurrency(displayAmount, currency);
   };
   
@@ -329,7 +330,7 @@ function MiniTourLobbyCard({ lobby, index }: { lobby: MiniTourLobby, index: numb
               {t('entry_fee', { defaultValue: 'Entry' })}
             </span>
             <div className="text-right">
-              <span className="font-medium">{displayMoneyFromUsd(lobby.entryFee)}</span>
+              <span className="font-medium">{displayMoney(lobby.entryFee)}</span>
   </div>
           </div>
           <div className="flex items-start justify-between">
@@ -338,7 +339,7 @@ function MiniTourLobbyCard({ lobby, index }: { lobby: MiniTourLobby, index: numb
               {t('prize_pool', { defaultValue: 'Prize' })}
             </span>
             <div className="text-right">
-              <span className="font-bold text-primary">{displayMoneyFromUsd(lobby.prizePool)}</span>
+              <span className="font-bold text-primary">{displayMoney(lobby.prizePool)}</span>
               </div>
           </div>
           <div className="flex items-center justify-between">

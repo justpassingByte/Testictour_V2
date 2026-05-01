@@ -287,11 +287,12 @@ function TournamentCard({ tournament, index }: { tournament: ITournament; index:
 
   const formattedDate = new Date(tournament.startTime).toLocaleDateString();
   const formattedTime = new Date(tournament.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const displayMoneyFromUsd = (amountUsd: number) => {
-    const displayAmount = currency === "VND" ? amountUsd * usdToVndRate : amountUsd;
+  // VND mode: entryFee/budget từ backend đã là VND
+  const displayMoney = (amount: number) => {
+    const displayAmount = currency === "USD" && usdToVndRate > 0 ? amount / usdToVndRate : amount;
     return formatCurrency(displayAmount, currency);
   };
-  const registrationFeeDisplay = tournament.entryFee === 0 ? formatCurrency(0, currency) : displayMoneyFromUsd(tournament.entryFee);
+  const registrationFeeDisplay = tournament.entryFee === 0 ? formatCurrency(0, currency) : displayMoney(tournament.entryFee);
 
   // Helper to safely translate status
   const getStatusTranslation = (status: string) => {
@@ -361,7 +362,7 @@ function TournamentCard({ tournament, index }: { tournament: ITournament; index:
           <div className="flex items-center justify-between text-sm">
             <span>{t('prize_pool', { fallback: 'Prize Pool' })}:</span>
             <span className="font-bold text-emerald-400">
-              {displayMoneyFromUsd(tournament.budget || 0)}
+              {displayMoney(tournament.budget || 0)}
             </span>
           </div>
         </div>

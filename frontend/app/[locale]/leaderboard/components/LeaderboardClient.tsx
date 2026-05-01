@@ -21,9 +21,10 @@ import { formatCurrency } from "@/lib/utils"
 
 export default function LeaderboardClient() {
   const t = useTranslations('common')
-  const { currency, usdToVndRate } = useCurrency()
-  const displayMoneyFromUsd = (amountUsd: number) => {
-    const displayAmount = currency === "VND" ? amountUsd * usdToVndRate : amountUsd;
+    const { currency, usdToVndRate } = useCurrency()
+  // VND mode: số tiền từ backend đã là VND
+  const displayMoney = (amount: number) => {
+    const displayAmount = currency === "USD" && usdToVndRate > 0 ? amount / usdToVndRate : amount;
     return formatCurrency(displayAmount, currency);
   };
   const [players, setPlayers] = useState<LeaderboardPlayer[]>([])
@@ -175,7 +176,7 @@ export default function LeaderboardClient() {
                     <div className={`w-full rounded-t-xl rounded-b-md text-center p-4 bg-gradient-to-b ${isFirst ? 'from-yellow-500/20 to-transparent border border-yellow-500/30 md:h-48' : isSecond ? 'from-gray-400/20 to-transparent border border-gray-400/30 md:h-36' : 'from-amber-700/20 to-transparent border border-amber-700/30 md:h-28'}`}>
                       <h3 className={`font-bold truncate group-hover:text-primary transition-colors ${isFirst ? 'text-2xl mt-2' : 'text-xl'}`}>{player.username}</h3>
                       <div className="text-primary font-black mt-1">{(player.totalPoints || 0).toLocaleString()} <span className="text-xs font-medium text-muted-foreground">pts</span></div>
-                      <div className="text-emerald-500 font-bold text-sm -mt-0.5">{displayMoneyFromUsd(player.totalPrizeWon || 0)}</div>
+                      <div className="text-emerald-500 font-bold text-sm -mt-0.5">{displayMoney(player.totalPrizeWon || 0)}</div>
                     </div>
                   </Link>
                 )
@@ -277,7 +278,7 @@ export default function LeaderboardClient() {
                           {(player.totalPoints || 0).toLocaleString()}
                         </TableCell>
                                                 <TableCell className="text-right text-emerald-500 font-medium">
-                          {displayMoneyFromUsd(player.totalPrizeWon || 0)}
+                          {displayMoney(player.totalPrizeWon || 0)}
                         </TableCell>
                         <TableCell className="text-center">
                           <span className="flex items-center justify-center gap-1">

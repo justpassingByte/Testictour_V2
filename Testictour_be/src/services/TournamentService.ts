@@ -49,8 +49,8 @@ export default class TournamentService {
         const hostFeePercent = tournament.hostFeePercent || 0;
         const platformFeePercent = await this.getPlatformFeePercent(tournament.organizerId);
 
-        const netPrizePool = standardPool * (1 - hostFeePercent - platformFeePercent);
-        return Math.round(netPrizePool);
+                const netPrizePool = standardPool * (1 - hostFeePercent - platformFeePercent);
+        return Math.round(netPrizePool); // Đã là VND
   }
 
   /**
