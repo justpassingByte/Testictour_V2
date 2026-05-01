@@ -69,6 +69,16 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
   const prizeRanks = getPrizeRanks();
   const isEscrow = !tournament.isCommunityMode;
 
+  // Gross Prize Pool: entryFee × maxPlayers (hoặc customPrizePool/escrowRequiredAmount)
+  const grossPrizePool = Math.max(
+    tournament.escrowRequiredAmount || 0,
+    tournament.entryFee * tournament.maxPlayers,
+    tournament.budget || 0
+  );
+
+  // Net Prize Pool (sau phí) cho prize distribution
+  const netPrizePool = tournament.budget || 0;
+
   // ── Scoring System Helpers ───────────────────────────────────────────
   const getPhaseTypeLabel = (type: string) => {
     switch(type) {
@@ -154,9 +164,9 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
             </div>
             <div className="flex items-start">
               <Wallet className="mr-2 h-4 w-4 text-muted-foreground mt-0.5" />
-              <span className="text-muted-foreground">{t("budget")}:</span>
+              <span className="text-muted-foreground">{t("gross_prize_pool")}:</span>
               <div className="ml-auto text-right">
-                <div className="font-medium">{formatCurrency(tournament.budget || 0)}</div>
+                <div className="font-medium">{formatCurrency(grossPrizePool)}</div>
               </div>
             </div>
           </div>

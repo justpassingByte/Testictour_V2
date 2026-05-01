@@ -30,7 +30,7 @@ export default class TournamentService {
     return fee;
   }
 
-    static async calculateNetPrizePool(
+        static async calculateNetPrizePool(
     tournament: any, 
     counts: { registered: number, reserve: number, absent: number },
     escrow?: any
@@ -40,11 +40,15 @@ export default class TournamentService {
     const isUpcoming = tournament.status === 'UPCOMING' || tournament.status === 'DRAFT' || tournament.status === 'REGISTRATION' || tournament.status === 'pending';
     const multiplier = isUpcoming ? Math.max(maxPlayers, totalCount) : totalCount;
     
-    let grossPool = multiplier * (tournament.entryFee || 0);
+    // Nếu có customPrizePool / escrowRequiredAmount (partner config), dùng nó làm gross pool
+    const customPrizePool = tournament.customPrizePool || tournament.escrowRequiredAmount || 0;
+    if (customPrizePool > 0) {
+      return Math.round(customPrizePool);
+    }
 
-    // Nếu giải đấu mới tạo và chưa có người tham gia (grossPool = 0),
-    // ưu tiên dùng escrowRequiredAmount (customPrizePool do partner nhập)
-    // để hiển thị quỹ thưởng dự kiến cho public
+    // Không có custom → tính từ entry fee
+    let grossPool = multiplier * (tournament.entryFee || 0);
+    
     if (grossPool === 0 && isUpcoming) {
       if (tournament.escrowRequiredAmount && tournament.escrowRequiredAmount > 0) {
         grossPool = tournament.escrowRequiredAmount;
@@ -79,7 +83,7 @@ export default class TournamentService {
     const platformFeePercent = await this.getPlatformFeePercent(tournament.organizerId);
 
     const netPrizePool = standardPool * (1 - hostFeePercent - platformFeePercent);
-    return Math.floor(netPrizePool);
+    return Math.round(netPrizePool);
   }
 
   /**
