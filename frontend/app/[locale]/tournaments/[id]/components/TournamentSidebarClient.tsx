@@ -123,27 +123,116 @@ export default function TournamentSidebarClient({ initialTournament }: Tournamen
     e.preventDefault()
     setLoadingExportScoreboard(true)
     try {
-      const res = await api.get(`/tournaments/${tournament.id}/bracket`)
+      const res = await api.get(`/tournaments/${tournament.id}/scoreboard-export`)
       const data = res.data
-      if (!data.success || !data.phases) throw new Error("Invalid bracket data")
+      if (!data.success || !data.phases) throw new Error("Invalid scoreboard export data")
 
       let csvContent = ""
+      csvContent += `TOURNAMENT: ${data.tournamentName}\n`
+      csvContent += `Status: ${data.tournamentStatus}\n\n`
+
       data.phases.forEach((phase: any) => {
-        csvContent += `\n${phase.name.toUpperCase()}\n`
+        csvContent += `═══════════════════════════════════════════════════════════════\n`
+        csvContent += `${phase.phaseName.toUpperCase()} (Phase ${phase.phaseNumber})\n`
+        csvContent += `═══════════════════════════════════════════════════════════════\n\n`
+        
         phase.groups.forEach((group: any) => {
+          csvContent += `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n`
+          csvContent += `BẢNG ${group.groupLetter}\n`
+          csvContent += `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`
+
           group.lobbies.forEach((lobby: any) => {
-            const groupLetterRegex = lobby.name.match(/\[(.*?)\]/);
-            const actualGroup = groupLetterRegex ? groupLetterRegex[1] : (group.groupLetter || '');
+            csvContent += `  Lobby: ${lobby.lobbyName} (Trạng thái: ${lobby.state})\n`
+            csvContent += `  ${'─'.repeat(80)}\n`
 
-            csvContent += `\nBảng ${actualGroup} - ${lobby.name}\n`
-            csvContent += `In-Game Name,Riot ID,Placement,Points\n`
+            if (lobby.matches && lobby.matches.length > 0 && lobby.matches[0].results && lobby.matches[0].results.length > 0) {
+              // Collect all unique players across all matches
+              const allPlayerEntries: Record<string, { username: string; riotId: string; matchResults: Record<number, { placement: number; points: number }>; totalPoints: number }> = {}
 
-            lobby.players.forEach((player: any) => {
-              const riotId = player.riotGameName && player.riotGameTag ? `${player.riotGameName}#${player.riotGameTag}` : ""
-              csvContent += `"${player.username}","${riotId}","${player.placement || ''}","${player.points || 0}"\n`
-            })
+              lobby.matches.forEach((match: any, matchIdx: number) => {
+                match.results.forEach((r: any) => {
+                  const key = r.userId
+                  if (!allPlayerEntries[key]) {
+                    const riotId = r.riotGameName && r.riotGameTag ? `${r.riotGameName}#${r.riotGameTag}` : ''
+                    allPlayerEntries[key] = {
+                      username: r.username,
+                      riotId,
+                      matchResults: {},
+                      totalPoints: 0,
+                    }
+                  }
+                  allPlayerEntries[key].matchResults[matchIdx + 1] = {
+                    placement: r.placement,
+                    points: r.points,
+                  }
+                  allPlayerEntries[key].totalPoints += r.points
+                })
+              })
+
+              // Build header row
+              let headerRow = 'In-Game Name,Riot ID'
+              lobby.matches.forEach((_: any, matchIdx: number) => {
+                headerRow += `,Match ${matchIdx + 1} Placement,Match ${matchIdx + 1} Points`
+              })
+              headerRow += ',Total Points\n'
+              csvContent += `  ${headerRow}`
+
+              // Sort players by totalPoints descending
+              const sortedPlayers = Object.values(allPlayerEntries).sort((a: any, b: any) => b.totalPoints - a.totalPoints)
+
+              sortedPlayers.forEach((player: any) => {
+                let row = `"${player.username}","${player.riotId}"`
+                lobby.matches.forEach((_: any, matchIdx: number) => {
+                  const mr = player.matchResults[matchIdx + 1]
+                  if (mr) {
+                    row += `,${mr.placement},${mr.points}`
+                  } else {
+                    row += `,,`
+                  }
+                })
+                row += `,${player.totalPoints}\n`
+                csvContent += `  ${row}`
+              })
+            } else {
+              csvContent += `  (Chưa có dữ liệu trận đấu)\n`
+            }
+            csvContent += `\n`
           })
         })
+      })
+
+      // Overall Summary
+      csvContent += `═══════════════════════════════════════════════════════════════\n`
+      csvContent += `TỔNG HỢP ĐIỂM TOÀN GIẢI\n`
+      csvContent += `═══════════════════════════════════════════════════════════════\n\n`
+
+      const overallTotals: Record<string, { username: string; riotId: string; totalPoints: number; matches: number }> = {}
+      data.phases.forEach((phase: any) => {
+        phase.groups.forEach((group: any) => {
+          group.lobbies.forEach((lobby: any) => {
+            if (lobby.matches) {
+              lobby.matches.forEach((match: any) => {
+                if (match.results) {
+                  match.results.forEach((r: any) => {
+                    const key = r.userId
+                    if (!overallTotals[key]) {
+                      const riotId = r.riotGameName && r.riotGameTag ? `${r.riotGameName}#${r.riotGameTag}` : ''
+                      overallTotals[key] = { username: r.username, riotId, totalPoints: 0, matches: 0 }
+                    }
+                    overallTotals[key].totalPoints += r.points
+                    overallTotals[key].matches += 1
+                  })
+                }
+              })
+            }
+          })
+        })
+      })
+
+      const sortedTotals = Object.values(overallTotals).sort((a: any, b: any) => b.totalPoints - a.totalPoints)
+      csvContent += `Rank,In-Game Name,Riot ID,Total Points,Matches Played\n`
+      sortedTotals.forEach((player: any, idx: number) => {
+        csvContent += `${idx + 1},"${player.username}","${player.riotId}",${player.totalPoints},${player.matches}\n`
       })
 
       downloadCSV(csvContent, `scoreboard_${tournament.id}.csv`)
@@ -160,17 +249,23 @@ export default function TournamentSidebarClient({ initialTournament }: Tournamen
     e.preventDefault()
     setLoadingExportPlayers(true)
     try {
-      const response = await api.get(`/tournaments/${tournament.id}/participants`)
+      // Fetch ALL participants with a high limit
+      const response = await api.get(`/tournaments/${tournament.id}/participants?limit=2500`)
       const participants = response.data.participants || response.data.data || []
       
-      let csvContent = "In-Game Name,Riot ID,Email,Status,Payment Status\n"
+      let csvContent = "In-Game Name,Riot ID,Username,Email,Rank,Region,Status,Eliminated,Score,Joined At\n"
       participants.forEach((p: any) => {
-        const username = p.inGameName || p.user?.username || ''
-        const riotId = p.gameSpecificId || ''
+        const userName = p.user?.username || ''
+        const riotGameName = p.user?.riotGameName || ''
+        const riotGameTag = p.user?.riotGameTag || ''
+        const riotId = riotGameName && riotGameTag ? `${riotGameName}#${riotGameTag}` : riotGameName || userName
         const email = p.user?.email || ''
+        const rank = p.user?.rank || p.rank || 'UNRANKED'
+        const region = p.user?.region || p.region || ''
         const status = p.eliminated ? 'Eliminated' : 'Active'
-        const payment = p.paid ? 'Paid' : 'Unpaid'
-        csvContent += `"${username}","${riotId}","${email}","${status}","${payment}"\n`
+        const score = p.scoreTotal || 0
+        const joinedAt = p.joinedAt ? format(new Date(p.joinedAt), 'yyyy-MM-dd HH:mm') : ''
+        csvContent += `"${riotGameName || userName}","${riotId}","${userName}","${email}","${rank}","${region}","${status}","${p.eliminated ? 'Yes' : 'No'}","${score}","${joinedAt}"\n`
       })
 
       downloadCSV(csvContent, `participants_${tournament.id}.csv`)

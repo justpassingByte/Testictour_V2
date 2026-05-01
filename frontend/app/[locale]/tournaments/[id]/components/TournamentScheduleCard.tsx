@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ITournament } from "@/app/types/tournament"
-import { CalendarClock, Timer } from "lucide-react"
+import { CalendarClock, Timer, ClipboardCheck, Building2, Play } from "lucide-react"
 import { format, differenceInDays, differenceInSeconds } from "date-fns"
 import { useTranslations } from "next-intl"
 
@@ -13,10 +13,16 @@ interface TournamentScheduleCardProps {
 
 export function TournamentScheduleCard({ tournament }: TournamentScheduleCardProps) {
   const t = useTranslations("common")
-  const startDate = new Date(tournament.startTime)
+    const startDate = new Date(tournament.startTime)
   const endDate = tournament.endTime ? new Date(tournament.endTime) : null
   const registrationDeadlineDate = tournament.registrationDeadline && !isNaN(new Date(tournament.registrationDeadline).getTime()) 
     ? new Date(tournament.registrationDeadline) 
+    : null
+  const checkInDate = (tournament as any).checkInTime && !isNaN(new Date((tournament as any).checkInTime).getTime())
+    ? new Date((tournament as any).checkInTime)
+    : null
+  const lobbyCreationDate = (tournament as any).lobbyCreationTime && !isNaN(new Date((tournament as any).lobbyCreationTime).getTime())
+    ? new Date((tournament as any).lobbyCreationTime)
     : null
   
   const [now, setNow] = useState(new Date())
@@ -82,35 +88,63 @@ export function TournamentScheduleCard({ tournament }: TournamentScheduleCardPro
           </div>
         </CardTitle>
       </CardHeader>
-      <CardContent className="grid gap-3 text-sm">
-        <div className="flex justify-between items-center p-2 rounded-lg bg-black/10">
-          <div className="text-muted-foreground">{t("start_date")}</div>
+            <CardContent className="grid gap-2.5 text-sm">
+        {/* 1. Registration Deadline */}
+        <div className="flex justify-between items-center p-2 rounded-lg bg-black/10 hover:bg-black/20 transition-colors">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <ClipboardCheck className="h-4 w-4 text-blue-400" />
+            <span>{t("registration_deadline")}</span>
+          </div>
+          <div className="font-medium text-right">
+            {registrationDeadlineDate ? (
+              <>{format(registrationDeadlineDate, "MMM d, yyyy")} <br/> {format(registrationDeadlineDate, "h:mm a")}</>
+            ) : "N/A"}
+          </div>
+        </div>
+
+        {/* 2. Check-in Time */}
+        {checkInDate && (
+          <div className="flex justify-between items-center p-2 rounded-lg bg-black/10 hover:bg-black/20 transition-colors">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <ClipboardCheck className="h-4 w-4 text-amber-400" />
+              <span>{t("check_in_time")}</span>
+            </div>
+            <div className="font-medium text-right">
+              {format(checkInDate, "MMM d, yyyy")} <br/> {format(checkInDate, "h:mm a")}
+            </div>
+          </div>
+        )}
+
+        {/* 3. Lobby Creation Time */}
+        {lobbyCreationDate && (
+          <div className="flex justify-between items-center p-2 rounded-lg bg-black/10 hover:bg-black/20 transition-colors">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Building2 className="h-4 w-4 text-violet-400" />
+              <span>{t("lobby_creation_time")}</span>
+            </div>
+            <div className="font-medium text-right">
+              {format(lobbyCreationDate, "MMM d, yyyy")} <br/> {format(lobbyCreationDate, "h:mm a")}
+            </div>
+          </div>
+        )}
+
+        {/* 4. Start Time */}
+        <div className="flex justify-between items-center p-2 rounded-lg bg-black/10 hover:bg-black/20 transition-colors border-l-2 border-primary/40">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Play className="h-4 w-4 text-green-400" />
+            <span className="font-semibold text-white">{t("start_date")}</span>
+          </div>
           <div className="font-medium text-right">
             {format(startDate, "MMM d, yyyy")} <br/> {format(startDate, "h:mm a")}
           </div>
         </div>
         
-        <div className="flex justify-between items-center p-2 rounded-lg bg-black/10">
-          <div className="text-muted-foreground">{t("registration_deadline")}</div>
-          <div className="font-medium text-right">
-            {registrationDeadlineDate ? (
-              <>
-                {format(registrationDeadlineDate, "MMM d, yyyy")} <br/> {format(registrationDeadlineDate, "h:mm a")}
-                {daysUntilRegistrationDeadline > 0 && (
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    ({daysUntilRegistrationDeadline} {daysUntilRegistrationDeadline === 1 ? 'day' : 'days'} left)
-                  </div>
-                )}
-              </>
-            ) : (
-              "N/A"
-            )}
-          </div>
-        </div>
-        
         {endDate && (
-          <div className="flex justify-between items-center p-2 rounded-lg bg-black/10">
-            <div className="text-muted-foreground">{t("end_date")}</div>
+          <div className="flex justify-between items-center p-2 rounded-lg bg-black/10 hover:bg-black/20 transition-colors">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <CalendarClock className="h-4 w-4 text-red-400" />
+              <span>{t("end_date")}</span>
+            </div>
             <div className="font-medium text-right">
               {format(endDate, "MMM d, yyyy")} <br/> {format(endDate, "h:mm a")}
             </div>

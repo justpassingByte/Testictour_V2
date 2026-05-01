@@ -151,4 +151,113 @@ router.post('/:id/pre-assign', auth('admin'), async (req: Request, res: Response
   }
 });
 
+// ── Scoreboard Export (Public) ────────────────────────────────────────────
+// Returns full structured scoreboard data: each phase → group/lobby → match → placement + points
+// Used for exporting scoreboard CSV with complete per-match data
+router.get('/:id/scoreboard-export', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { prisma } = require('../services/prisma');
+
+    const tournament = await prisma.tournament.findUnique({
+      where: { id: req.params.id },
+      include: {
+        phases: {
+          orderBy: { phaseNumber: 'asc' },
+          include: {
+            rounds: {
+              orderBy: { roundNumber: 'asc' },
+              include: {
+                lobbies: {
+                  include: {
+                    matches: {
+                      include: {
+                        matchResults: {
+                          include: {
+                            user: {
+                              select: { id: true, username: true, riotGameName: true, riotGameTag: true }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!tournament) {
+      return res.status(404).json({ success: false, message: 'Tournament not found' });
+    }
+
+    // Helper to get group letter from roundNumber
+    const groupNameFromNumber = (num: number) => String.fromCharCode(64 + num);
+
+    // Build structured response
+    const phases = tournament.phases.map((phase: any) => {
+      const groups = phase.rounds.map((round: any) => {
+        const groupLetter = groupNameFromNumber(round.roundNumber);
+        const lobbies = round.lobbies.map((lobby: any) => {
+          const matches = lobby.matches.map((match: any, matchIdx: number) => {
+            const results = match.matchResults.map((r: any) => ({
+              userId: r.userId,
+              username: r.user?.username || 'Unknown',
+              riotGameName: r.user?.riotGameName || '',
+              riotGameTag: r.user?.riotGameTag || '',
+              placement: r.placement,
+              points: r.points,
+            }));
+            // Sort by placement for cleaner output
+            results.sort((a: any, b: any) => a.placement - b.placement);
+            return {
+              matchNumber: matchIdx + 1,
+              matchIdRiotApi: match.matchIdRiotApi,
+              fetchedAt: match.fetchedAt,
+              results,
+              totalPoints: results.reduce((sum: number, r: any) => sum + r.points, 0),
+            };
+          });
+
+          return {
+            lobbyId: lobby.id,
+            lobbyName: lobby.name,
+            state: lobby.state,
+            completedMatchesCount: lobby.completedMatchesCount,
+            matches,
+          };
+        });
+
+        return {
+          groupLetter,
+          roundId: round.id,
+          roundNumber: round.roundNumber,
+          status: round.status,
+          lobbies,
+        };
+      });
+
+      return {
+        phaseId: phase.id,
+        phaseName: phase.name,
+        phaseNumber: phase.phaseNumber,
+        type: phase.type,
+        status: phase.status,
+        groups,
+      };
+    });
+
+    res.json({
+      success: true,
+      tournamentName: tournament.name,
+      tournamentStatus: tournament.status,
+      phases,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

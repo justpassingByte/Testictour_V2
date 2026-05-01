@@ -2140,5 +2140,7 @@
   "create_manage_tournaments": "Tạo và quản lý giải đấu của riêng bạn.",
   "upgrade_to_pro": "Nâng cấp lên PRO để tạo giải đấu",
   "upgrade_to_create": "Nâng cấp gói đăng ký của bạn để tạo giải đấu.",
-  "advanced_config": "Cấu hình giải đấu nâng cao cho Đối tác."
+  "advanced_config": "Cấu hình giải đấu nâng cao cho Đối tác.",
+  "check_in_time": "Thời Gian Điểm Danh",
+  "lobby_creation_time": "Thời Gian Tạo Lobby"
 }

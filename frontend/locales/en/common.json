@@ -2140,5 +2140,7 @@
   "create_manage_tournaments": "Create and manage your own tournaments.",
   "upgrade_to_pro": "Upgrade to PRO to create tournaments",
   "upgrade_to_create": "Upgrade your subscription to create tournaments.",
-  "advanced_config": "Advanced tournament configuration for Partner."
+  "advanced_config": "Advanced tournament configuration for Partner.",
+  "check_in_time": "Check-in Time",
+  "lobby_creation_time": "Lobby Creation Time"
 }
