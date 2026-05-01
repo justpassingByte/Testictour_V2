@@ -74,11 +74,11 @@ export default class TournamentService {
       standardPool -= absentKeepAmount;
     }
     
-    const hostFeePercent = tournament.hostFeePercent || 0;
-    const platformFeePercent = await this.getPlatformFeePercent(tournament.organizerId);
+        const hostFeePercent = tournament.hostFeePercent || 0;
+        const platformFeePercent = await this.getPlatformFeePercent(tournament.organizerId);
 
-    const netPrizePool = standardPool * (1 - hostFeePercent - platformFeePercent);
-    return Math.round(netPrizePool);
+        const netPrizePool = standardPool * (1 - hostFeePercent - platformFeePercent);
+        return Math.round(netPrizePool);
   }
 
   /**
@@ -218,56 +218,54 @@ export default class TournamentService {
       });
 
             return {
-              ...t,
-              registered: registeredCount,
-              reserveCount,
-              roundsTotal,
-              currentRound,
-              entryFeeVnd: (t as any).entryFeeVnd || 0,
-              customPrizePoolVnd: (t as any).customPrizePoolVnd || 0,
-              budget: finalPrizePool,
-            };
+                    ...t,
+                    registered: registeredCount,
+                    reserveCount,
+                    roundsTotal,
+                    currentRound,
+                    budget: finalPrizePool,
+                  };
     }));
   }
 
   static async detail(id: string) {
     const tournament = await prisma.tournament.findUnique({ 
-      where: { id }, 
-      include: { 
-        organizer: {
-          include: {
-            partnerSubscription: true
-          }
-        },
-        escrow: true,
-        _count: {
-          select: {
-            participants: { where: { isReserve: false } },
-          }
-        },
-        phases: { 
-          orderBy: { phaseNumber: 'asc' },
-          include: { 
-            rounds: {
-              include: {
-                lobbies: {
-                  include: {
-                    matches: {
-                      select: {
-                        id: true,
-                        lobbyId: true,
-                        matchIdRiotApi: true,
-                        matchData: true,
-                        fetchedAt: true,
-                      }
+            where: { id }, 
+            include: { 
+              organizer: {
+                include: {
+                  partnerSubscription: true
+                }
+              },
+              escrow: true,
+              _count: {
+                select: {
+                  participants: { where: { isReserve: false } },
+                }
+              },
+              phases: { 
+                orderBy: { phaseNumber: 'asc' },
+                include: { 
+                  rounds: {
+                    include: {
+                      lobbies: {
+                        include: {
+                          matches: {
+                            select: {
+                              id: true,
+                              lobbyId: true,
+                              matchIdRiotApi: true,
+                              matchData: true,
+                              fetchedAt: true,
+                            }
+                          }
+                        }
+                      },
                     }
                   }
-                },
+                }
               }
             }
-          }
-        }
-      }
     });
     if (!tournament) throw new ApiError(404, 'Tournament not found');
 
@@ -275,28 +273,26 @@ export default class TournamentService {
     const registeredCount = (tournament._count as any).participants;
     // Count reserves separately
     const reserveCount = await prisma.participant.count({
-      where: { tournamentId: id, isReserve: true }
+            where: { tournamentId: id, isReserve: true }
     });
 
     const absentCount = await prisma.participant.count({
-      where: { tournamentId: id, isAbsent: true }
+            where: { tournamentId: id, isAbsent: true }
     });
 
     const finalBudget = await this.calculateNetPrizePool(tournament, {
-      registered: registeredCount,
-      reserve: reserveCount,
-      absent: absentCount
+            registered: registeredCount,
+            reserve: reserveCount,
+            absent: absentCount
     }, (tournament as any).escrow);
 
-        const result = {
-          ...tournament,
-          participants: [],  // No longer fetched here — use /participants endpoint with pagination
-          registered: registeredCount,
-          reserveCount,
-          entryFeeVnd: (tournament as any).entryFeeVnd || 0,
-          customPrizePoolVnd: (tournament as any).customPrizePoolVnd || 0,
-          budget: finalBudget
-        };
+              const result = {
+                ...tournament,
+                participants: [],  // No longer fetched here — use /participants endpoint with pagination
+                registered: registeredCount,
+                reserveCount,
+                budget: finalBudget
+              };
 
     return result as any;
   }
@@ -385,7 +381,7 @@ export default class TournamentService {
 
     const DEFAULT_TOURNAMENT_IMAGE = '/images/default-tournament-banner.png';
 
-    return prisma.tournament.create({
+        return prisma.tournament.create({
       data: {
         ...restOfData,
         ...templateData,
@@ -423,19 +419,6 @@ export default class TournamentService {
           lastRoundStartTime = currentRoundStartTime;
         }
         logger.info(`Initial rounds for the first phase of tournament ${tournament.id} created.`);
-      }
-
-                  // Initialize Escrow for the newly created tournament
-      try {
-        await EscrowService.recalculateTournamentEscrow(tournament.id, {
-          entryFee: tournament.entryFee,
-          maxPlayers: tournament.maxPlayers,
-          expectedParticipants: tournament.expectedParticipants,
-          hostFeePercent: tournament.hostFeePercent,
-        });
-        logger.info(`Escrow initialized for tournament ${tournament.id}`);
-      } catch (err: any) {
-        logger.error(`Failed to initialize escrow for tournament ${tournament.id}: ${err.message}`);
       }
 
       return tournament;
