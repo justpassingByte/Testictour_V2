@@ -682,9 +682,10 @@ export default function TournamentManagePage() {
               ) : (
                 <Table>
                   <TableHeader>
-                    <TableRow>
+                                        <TableRow>
                       <TableHead>#</TableHead>
                       <TableHead>{t("player")}</TableHead>
+                      <TableHead>{t("additional_information")}</TableHead>
                       <TableHead>PUUID</TableHead>
                       <TableHead>{t("region")}</TableHead>
                       <TableHead>Nguồn</TableHead>
@@ -707,6 +708,19 @@ export default function TournamentManagePage() {
                             <span className="font-medium text-sm">{p.inGameName || p.user?.username || 'Unknown'}</span>
                             {i === 0 && <Crown className="h-3.5 w-3.5 text-yellow-400" />}
                           </div>
+                                                </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {p.user?.discordId ? (
+                            <div className="flex items-center gap-1.5 cursor-pointer group" onClick={() => {
+                              navigator.clipboard.writeText(p.user!.discordId!);
+                              toast({ description: "Đã copy " });
+                            }}>
+                              <span className="text-xs font-mono text-[#5865F2]">{p.user.discordId.slice(0, 12)}{p.user.discordId.length > 12 ? '...' : ''}</span>
+                              <Copy className="h-3 w-3 text-muted-foreground opacity-50 group-hover:opacity-100 transition-opacity" />
+                            </div>
+                          ) : (
+                            <span className="text-xs">—</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {p.user?.puuid ? (
@@ -1435,9 +1449,10 @@ export default function TournamentManagePage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-12">#</TableHead>
+                                                <TableHead className="w-12">#</TableHead>
                         <TableHead>Người chơi</TableHead>
                         <TableHead>PUUID</TableHead>
+                        <TableHead>{t("additional_information")}</TableHead>
                         <TableHead className="text-center">Điểm</TableHead>
                         <TableHead className="text-center">% Thưởng</TableHead>
                         <TableHead className="text-right">Số tiền thưởng</TableHead>
@@ -1473,7 +1488,7 @@ export default function TournamentManagePage() {
                                   {rank === 1 && <Crown className="h-3.5 w-3.5 text-yellow-400" />}
                                 </div>
                               </TableCell>
-                              <TableCell className="text-sm text-muted-foreground">
+                                                            <TableCell className="text-sm text-muted-foreground">
                                 {p.user?.puuid ? (
                                   <div className="flex items-center gap-1.5 cursor-pointer group" onClick={() => {
                                     navigator.clipboard.writeText(p.user!.puuid!);
@@ -1484,6 +1499,19 @@ export default function TournamentManagePage() {
                                   </div>
                                 ) : (
                                   <span className="text-xs">N/A</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {p.user?.discordId ? (
+                                  <div className="flex items-center gap-1.5 cursor-pointer group" onClick={() => {
+                                    navigator.clipboard.writeText(p.user!.discordId!);
+                                    toast({ description: "Đã copy Discord ID" });
+                                  }}>
+                                    <span className="font-mono text-xs text-[#5865F2]">{p.user.discordId.slice(0, 12)}{p.user.discordId.length > 12 ? '...' : ''}</span>
+                                    <Copy className="h-3 w-3 text-muted-foreground opacity-50 group-hover:opacity-100 transition-opacity" />
+                                  </div>
+                                ) : (
+                                  <span className="text-xs">—</span>
                                 )}
                               </TableCell>
                               <TableCell className="text-center font-bold">{p.scoreTotal || 0}</TableCell>

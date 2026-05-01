@@ -223,10 +223,17 @@ export default class ParticipantService {
       ];
     }
 
-    const [data, total] = await Promise.all([
+        const [data, total] = await Promise.all([
       prisma.participant.findMany({
         where: whereClause,
-        include: { user: true },
+        include: {
+          user: {
+            select: {
+              id: true, username: true, riotGameName: true, riotGameTag: true,
+              email: true, discordId: true, puuid: true, rank: true, region: true
+            }
+          }
+        },
         skip: skip,
         take: limit,
       }),
@@ -240,8 +247,8 @@ export default class ParticipantService {
     // leaderboard shows everyone's ranking and prizes are assigned correctly.
     const participants = await prisma.participant.findMany({
       where: { tournamentId, paid: true },
-      include: { 
-        user: { select: { id: true, username: true, riotGameName: true, riotGameTag: true, rank: true, topFourRate: true, firstPlaceRate: true, region: true } },
+            include: { 
+        user: { select: { id: true, username: true, riotGameName: true, riotGameTag: true, rank: true, topFourRate: true, firstPlaceRate: true, region: true, email: true, discordId: true } },
         rewards: true 
       }
     });
@@ -399,7 +406,7 @@ export default class ParticipantService {
       prisma.participant.findMany({
         where: { tournamentId },
         include: {
-          user: { select: { id: true, username: true, riotGameName: true, riotGameTag: true, rank: true, region: true } },
+                    user: { select: { id: true, username: true, riotGameName: true, riotGameTag: true, rank: true, region: true, email: true, discordId: true } },
           rewards: true,
         },
         orderBy: { scoreTotal: 'desc' },
@@ -416,16 +423,62 @@ export default class ParticipantService {
    * Lightweight top-N participants for winner banners etc.
    * Only fetches the top N participants sorted by score.
    */
-  static async topParticipants(tournamentId: string, limit: number = 3) {
-    return prisma.participant.findMany({
-      where: { tournamentId },
+    static async topParticipants(tournamentId: string, limit: number = 3) {
+    // Get all participants (not just top N) so we can apply tiebreak sorting
+    const allParticipants = await prisma.participant.findMany({
+      where: { tournamentId, paid: true },
       include: {
-        user: { select: { id: true, username: true, riotGameName: true, riotGameTag: true, puuid: true, rank: true, region: true } },
+        user: { select: { id: true, username: true, riotGameName: true, riotGameTag: true, puuid: true, rank: true, region: true, email: true, discordId: true } },
         rewards: true,
       },
-      orderBy: { scoreTotal: 'desc' },
-      take: limit,
     });
+
+    if (allParticipants.length === 0) return [];
+
+    // Fetch match results for tiebreak calculation
+    const userIds = allParticipants.map(p => p.user?.id).filter(Boolean) as string[];
+    const matchResults = await prisma.matchResult.findMany({
+      where: {
+        userId: { in: userIds },
+        match: {
+          lobby: {
+            round: {
+              phase: { tournamentId }
+            }
+          }
+        }
+      },
+      select: { userId: true, placement: true, points: true },
+      orderBy: { id: 'asc' }
+    });
+
+    const playerStatsMap = new Map<string, { placements: number[]; computedScore: number }>();
+    for (const r of matchResults) {
+      const stats = playerStatsMap.get(r.userId) || { placements: [], computedScore: 0 };
+      stats.placements.push(r.placement);
+      stats.computedScore += (r.points || 0);
+      playerStatsMap.set(r.userId, stats);
+    }
+
+    const { default: RoundService } = await import('./RoundService');
+
+    // Sort using tiebreakComparator like leaderboard does
+    allParticipants.sort((a, b) => {
+      const aUserId = a.user?.id || '';
+      const bUserId = b.user?.id || '';
+      const statsA = playerStatsMap.get(aUserId) || { placements: [], computedScore: 0 };
+      const statsB = playerStatsMap.get(bUserId) || { placements: [], computedScore: 0 };
+
+      const scoreA = (a.scoreTotal || 0) > 0 ? (a.scoreTotal || 0) : statsA.computedScore;
+      const scoreB = (b.scoreTotal || 0) > 0 ? (b.scoreTotal || 0) : statsB.computedScore;
+      return RoundService.tiebreakComparator(
+        { score: scoreA, placements: statsA.placements, userId: aUserId },
+        { score: scoreB, placements: statsB.placements, userId: bUserId }
+      );
+    });
+
+    // Return only top N after proper tiebreak sorting
+    return allParticipants.slice(0, limit);
   }
 
   static async update(participantId: string, data: any) {
@@ -481,7 +534,7 @@ export default class ParticipantService {
     return prisma.participant.findMany({
       where: { tournamentId, isReserve: true, paid: true },
       include: {
-        user: { select: { id: true, username: true, riotGameName: true, riotGameTag: true, email: true, puuid: true, rank: true } }
+        user: { select: { id: true, username: true, riotGameName: true, riotGameTag: true, email: true, discordId: true, puuid: true, rank: true } }
       },
       orderBy: { joinedAt: 'asc' },
     });

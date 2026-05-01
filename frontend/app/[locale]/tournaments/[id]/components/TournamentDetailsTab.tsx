@@ -16,8 +16,9 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
   const t = useTranslations("common");  
   const { currency, usdToVndRate } = useCurrency();
 
-  const formatCurrency = (amountUsd: number) => {
-    const displayAmount = currency === "VND" ? amountUsd * usdToVndRate : amountUsd;
+  // VND mode: số tiền từ backend đã là VND
+  const displayMoney = (amount: number) => {
+    const displayAmount = currency === "USD" && usdToVndRate > 0 ? amount / usdToVndRate : amount;
     const locale = currency === "VND" ? "vi-VN" : "en-US";
     const fractionDigits = currency === "VND" ? 0 : 2;
     return new Intl.NumberFormat(locale, {
@@ -28,7 +29,7 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
     }).format(displayAmount);
   };
 
-  // Hiển thị VND trực tiếp nếu có entryFeeVnd/customPrizePoolVnd từ backend
+  // Format VND thuần (luôn hiển thị VND)
   const formatVndLocal = (vndAmount: number) => {
     if (vndAmount <= 0) return null;
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(vndAmount);
@@ -130,17 +131,25 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
   // Render points mapping table (e.g. Top1=10pts, Top2=8pts...)
   const renderPointsMapping = (phase: any) => {
     const mapping = phase.pointsMapping;
-    if (!mapping || Object.keys(mapping).length === 0) return null;
+    if (!mapping || (Array.isArray(mapping) && mapping.length === 0) || Object.keys(mapping).length === 0) return null;
 
-    const sortedKeys = Object.keys(mapping).sort((a, b) => Number(a) - Number(b));
+    const isArray = Array.isArray(mapping);
+    const entries = isArray
+      ? mapping.map((pts: number, idx: number) => ({ rank: idx + 1, pts }))
+      : Object.keys(mapping).sort((a, b) => Number(a) - Number(b)).map(key => ({ rank: Number(key), pts: mapping[key] }));
+    
+    // Lọc bỏ rank có pts = 0 không cần hiển thị (placement 8 được 0pts thì không show)
+    const filtered = entries.filter(e => e.pts > 0);
+    if (filtered.length === 0) return null;
+
     return (
       <div className="mt-2">
         <p className="text-[10px] uppercase font-bold text-muted-foreground mb-1">Points per Placement:</p>
         <div className="flex flex-wrap gap-1">
-          {sortedKeys.map(key => (
-            <span key={key} className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[11px]">
-              <span className="font-medium">#{key}</span>
-              <span className="text-emerald-400 font-bold">{mapping[key]}pts</span>
+          {filtered.map(e => (
+            <span key={e.rank} className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[11px]">
+              <span className="font-medium">#{e.rank}</span>
+              <span className="text-emerald-400 font-bold">{e.pts}pts</span>
             </span>
           ))}
         </div>
@@ -166,18 +175,24 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
               <DollarSign className="mr-2 h-4 w-4 text-muted-foreground mt-0.5" />
               <span className="text-muted-foreground">{t("registration_fee")}:</span>
               <div className="ml-auto text-right">
-                <div className="font-medium">
-                  {formatVndLocal((tournament as any).entryFeeVnd) || formatCurrency(tournament.entryFee)}
-                </div>
+                <div className="font-medium">{displayMoney(tournament.entryFee)}</div>
               </div>
             </div>
             <div className="flex items-start">
               <Wallet className="mr-2 h-4 w-4 text-muted-foreground mt-0.5" />
               <span className="text-muted-foreground">{t("gross_prize_pool")}:</span>
+              <div className="ml-auto text-right flex flex-col items-end">
+                <div className="font-medium">{displayMoney(grossPrizePool)}</div>
+                {(tournament.hostFeePercent ?? 0) > 0 && (
+                  <span className="text-[10px] text-muted-foreground">Host Fee: {((tournament.hostFeePercent ?? 0) * 100).toFixed(1)}%</span>
+                )}
+              </div>
+            </div>
+            <div className="flex items-start">
+              <Wallet className="mr-2 h-4 w-4 text-emerald-400 mt-0.5" />
+              <span className="text-muted-foreground">Net Prize Pool (for players):</span>
               <div className="ml-auto text-right">
-                <div className="font-medium">
-                  {formatVndLocal((tournament as any).customPrizePoolVnd) || formatCurrency(grossPrizePool)}
-                </div>
+                <div className="font-medium text-emerald-400">{displayMoney(tournament.budget || 0)}</div>
               </div>
             </div>
           </div>
@@ -280,7 +295,8 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
               return (
                 <Card key={rank} className="flex flex-col items-center justify-center p-4 border shadow-sm bg-muted/40 text-center">
                   <span className="text-lg font-bold text-yellow-500">{rankSuffix(rank)}</span>
-                  <span className="text-md font-medium text-muted-foreground">{formatCurrency(prizeAmount)}</span>
+                  <span className="text-xs text-muted-foreground">{(prizePercentage * 100).toFixed(1)}%</span>
+                  <span className="text-md font-medium">{displayMoney(prizeAmount)}</span>
                 </Card>
               );
             })}
@@ -302,7 +318,7 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
             <p className="text-muted-foreground">{isTrusted ? "This tournament is hosted by a Verified Trusted Partner. Prize pool is secured and guaranteed by the platform." : isEscrow ? "This tournament is secured by an escrow fund. Organizer has deposited the prize pool upfront for player protection." : t("community_desc")}</p>
             {(isEscrow || isTrusted) && tournament.escrowRequiredAmount && (
                 <div className="mt-2 font-bold text-emerald-600 dark:text-emerald-400">
-                  <p>{t("guaranteed_pool")}: {formatVndLocal((tournament as any).customPrizePoolVnd) || formatCurrency(tournament.escrowRequiredAmount)}</p>
+                  <p>{t("guaranteed_pool")}: {displayMoney(tournament.escrowRequiredAmount)}</p>
                 </div>
             )}
           </div>

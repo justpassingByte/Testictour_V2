@@ -217,7 +217,15 @@ export default class EscrowService {
     }
 
     if (!tournament.escrow) {
-      throw new ApiError(400, 'Tournament escrow has not been initialized');
+      // Check if the organizer has a PRO/ENTERPRISE plan - they don't require escrow
+      const sub = await db.partnerSubscription.findUnique({
+        where: { userId: tournament.organizerId }
+      });
+      if (!sub || (sub.plan !== 'PRO' && sub.plan !== 'ENTERPRISE')) {
+        throw new ApiError(400, 'Tournament escrow has not been initialized');
+      }
+      // For PRO/ENTERPRISE, return tournament without throwing - assertTournamentCanStart handles it
+      return tournament as typeof tournament & { escrow: NonNullable<typeof tournament.escrow> };
     }
 
     // After the null-check above TypeScript infers escrow as non-null,
@@ -304,6 +312,18 @@ export default class EscrowService {
 
     if (tournament.isCommunityMode) {
       return tournament;
+    }
+
+    // Check if organizer has PRO/ENTERPRISE plan - they bypass escrow requirements
+    const sub = await db.partnerSubscription.findUnique({
+      where: { userId: tournament.organizerId }
+    });
+    if (sub && (sub.plan === 'PRO' || sub.plan === 'ENTERPRISE')) {
+      return tournament; // Partners with PRO/ENTERPRISE can start without escrow
+    }
+
+    if (!tournament.escrow) {
+      throw new ApiError(400, 'Tournament escrow has not been initialized');
     }
 
     if (tournament.escrow.status === 'locked' && tournament.escrow.fundedAmount >= tournament.escrow.requiredAmount) {

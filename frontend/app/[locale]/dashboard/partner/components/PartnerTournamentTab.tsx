@@ -102,8 +102,8 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
     "4": 10,
   })
 
-  const [phases, setPhases] = useState([
-    { name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "top_n_scores", advancementValue: 4, matchesPerRound: 1, carryOverScores: false }
+    const [phases, setPhases] = useState([
+        { name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "top_n_scores", advancementValue: 4, matchesPerRound: 1, carryOverScores: false, pointsMapping: [8, 7, 6, 5, 4, 3, 2, 1] }
   ])
 
   const addPhase = () => {
@@ -116,6 +116,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
       advancementValue: 4,
       matchesPerRound: 1,
       carryOverScores: false,
+      pointsMapping: [8, 7, 6, 5, 4, 3, 2, 1],
     }])
   }
 
@@ -164,7 +165,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
         setCreating(true)
     try {
       // VND mode: gửi thẳng giá trị VND lên backend (backend đã xử lý VND)
-      const phaseConfigs = phases.map((p, i) => ({
+            const phaseConfigs = phases.map((p, i) => ({
         id: `phase-${i + 1}`,
         name: p.name,
         type: p.type,
@@ -173,6 +174,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
         matchesPerRound: p.matchesPerRound,
         advancementCondition: { type: p.advancementType, value: p.advancementValue },
         carryOverScores: p.carryOverScores,
+        pointsMapping: p.pointsMapping,
       }))
 
             // Chuyển đổi prizeDistribution từ phần trăm sang tỷ lệ decimal
@@ -230,8 +232,8 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
       setEntryFeeVnd("")
       setPrizePoolVnd("")
             setSponsors([])
-      setPrizeDistribution({ "1": 40, "2": 30, "3": 20, "4": 10 })
-      setPhases([{ name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "top_n_scores", advancementValue: 4, matchesPerRound: 1, carryOverScores: false }])
+            setPrizeDistribution({ "1": 40, "2": 30, "3": 20, "4": 10 })
+            setPhases([{ name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "top_n_scores", advancementValue: 4, matchesPerRound: 1, carryOverScores: false, pointsMapping: [8, 7, 6, 5, 4, 3, 2, 1] }])
       setImageFile(null)
       setImagePreview(null)
       fetchMyTournaments()
@@ -856,7 +858,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                             <Label className="text-[11px] uppercase tracking-wide">Advance Target</Label>
                             <Input type="number" min={1} value={phase.advancementValue} onChange={(e) => updatePhase(index, "advancementValue", parseInt(e.target.value))} className="bg-black/40" />
                           </div>
-                          <div className="space-y-1.5">
+                                                    <div className="space-y-1.5">
                             <Label className="text-[11px] uppercase tracking-wide">Carry Over Scores</Label>
                             <Select value={phase.carryOverScores ? "true" : "false"} onValueChange={(v) => updatePhase(index, "carryOverScores", v === "true")}>
                               <SelectTrigger className="bg-black/40"><SelectValue /></SelectTrigger>
@@ -865,6 +867,49 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                                 <SelectItem value="true">Yes — Giữ điểm từ phase trước</SelectItem>
                               </SelectContent>
                             </Select>
+                          </div>
+                        </div>
+                        {/* Point System Config */}
+                        <div className="mt-2 p-3 rounded-lg bg-indigo-500/5 border border-indigo-500/20">
+                          <div className="flex items-center justify-between mb-2">
+                            <Label className="text-[11px] uppercase tracking-wide font-bold text-indigo-400">
+                              <span className="mr-1">🎯</span> Point System (Điểm theo thứ hạng)
+                            </Label>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-6 text-[10px] border-indigo-500/30 text-indigo-400"
+                                                            onClick={() => {
+                                // Reset to default: Top1=8, Top2=7, Top3=6, Top4=5, Top5=4, Top6=3, Top7=2, Top8=1
+                                updatePhase(index, "pointsMapping", [8, 7, 6, 5, 4, 3, 2, 1]);
+                              }}
+                            >
+                              Reset Default
+                            </Button>
+                          </div>
+                          <p className="text-[9px] text-muted-foreground mb-2">Nhập điểm cho từng thứ hạng (vị trí 1 → hết lobby)</p>
+                          <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
+                                                        {(phase.pointsMapping || [8, 7, 6, 5, 4, 3, 2, 1]).map((pt: number, pi: number) => (
+                              <div key={pi} className="flex flex-col items-center">
+                                <span className="text-[10px] text-muted-foreground font-medium mb-0.5">
+                                  #{pi + 1}
+                                  {pi === 0 ? '🥇' : pi === 1 ? '🥈' : pi === 2 ? '🥉' : ''}
+                                </span>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  max={20}
+                                  value={pt}
+                                  onChange={(e) => {
+                                    const newMapping = [...(phase.pointsMapping || [8, 7, 6, 5, 4, 3, 2, 1])];
+                                    newMapping[pi] = parseInt(e.target.value) || 0;
+                                    updatePhase(index, "pointsMapping", newMapping);
+                                  }}
+                                  className="bg-black/40 text-center font-bold text-sm h-8 w-full"
+                                />
+                              </div>
+                            ))}
                           </div>
                         </div>
                       </CardContent>
