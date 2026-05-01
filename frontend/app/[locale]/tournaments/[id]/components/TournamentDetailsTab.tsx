@@ -28,14 +28,33 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
     }).format(displayAmount);
   };
 
-  // ── Dynamic Prize Ranks ──────────────────────────────────────────────
+  // ── Dynamic Prize Ranks (with default fallback) ─────────────────────
   const getPrizeRanks = (): string[] => {
     const ps = tournament.prizeStructure;
-    if (!ps) return [];
-    if (Array.isArray(ps)) {
-      return ps.map((_, i) => String(i + 1));
+    if (ps && Object.keys(ps).length > 0) {
+      if (Array.isArray(ps)) {
+        return ps.map((_, i) => String(i + 1));
+      }
+      return Object.keys(ps).sort((a, b) => Number(a) - Number(b));
     }
-    return Object.keys(ps).sort((a, b) => Number(a) - Number(b));
+    // Default: 4 ranks with 40/30/20/10
+    return ['1', '2', '3', '4'];
+  };
+
+  // Get prize percentage for a given rank with fallback
+  const getPrizePercentage = (rank: string): number => {
+    const ps = tournament.prizeStructure;
+    const defaultPercentages: Record<string, number> = { '1': 0.4, '2': 0.3, '3': 0.2, '4': 0.1 };
+    
+    if (!ps || Object.keys(ps).length === 0) {
+      return defaultPercentages[rank] || 0;
+    }
+    
+    const isArray = Array.isArray(ps);
+    const raw = isArray ? ps[parseInt(rank) - 1] : ps[rank];
+    if (raw === undefined || raw === null) return 0;
+    
+    return raw > 1 ? raw / 100 : raw;
   };
 
   const rankSuffix = (rank: string) => {
@@ -231,15 +250,11 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
           <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             {prizeRanks.map(rank => {
               const totalPrizePool = tournament.budget || 0;
-              const isArray = Array.isArray(tournament.prizeStructure);
-              const prizePercentage = isArray 
-                ? tournament.prizeStructure[parseInt(rank) - 1] 
-                : tournament.prizeStructure?.[rank];
+              const prizePercentage = getPrizePercentage(rank);
               
-              if (prizePercentage === undefined || prizePercentage === null) return null;
+              if (prizePercentage === 0) return null;
 
-              const normalizedPercentage = prizePercentage > 1 ? prizePercentage / 100 : prizePercentage;
-              const prizeAmount = totalPrizePool * normalizedPercentage;
+              const prizeAmount = totalPrizePool * prizePercentage;
 
               return (
                 <Card key={rank} className="flex flex-col items-center justify-center p-4 border shadow-sm bg-muted/40 text-center">
