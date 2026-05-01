@@ -96,6 +96,8 @@ model Tournament {
   region                  String?
   startTime               DateTime
   endTime                 DateTime?
+  checkInTime             DateTime?               // Thời gian điểm danh (check-in)
+  lobbyCreationTime       DateTime?               // Thời gian tạo lobby
   entryFee                Float                   @default(0)
   entryType               String                  @default("usd")
   organizer               User                    @relation("UserOrganizedTournaments", fields: [organizerId], references: [id])

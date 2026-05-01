@@ -150,7 +150,7 @@ const TournamentController = {
         await ensurePaidPartner(user.id, req.body.maxPlayers);
       }
 
-            const data = await TournamentService.create({
+                        const data = await TournamentService.create({
         name: req.body.name,
         startTime: new Date(req.body.startTime),
         maxPlayers: req.body.maxPlayers,
@@ -158,6 +158,8 @@ const TournamentController = {
         entryType: req.body.entryType || 'vnd',
         organizerId: user.id,
         registrationDeadline: new Date(req.body.registrationDeadline),
+        checkInTime: req.body.checkInTime ? new Date(req.body.checkInTime) : undefined,
+        lobbyCreationTime: req.body.lobbyCreationTime ? new Date(req.body.lobbyCreationTime) : undefined,
         description: req.body.description,
         image: req.body.image,
         region: req.body.region,

@@ -47,7 +47,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
   const canCreate = subscriptionPlan === 'PRO' || subscriptionPlan === 'ENTERPRISE' || subscriptionPlan === 'STARTER'
   const canCustomBrand = subscriptionPlan === 'PRO' || subscriptionPlan === 'ENTERPRISE'
 
-    const [form, setForm] = useState({
+        const [form, setForm] = useState({
     name: "",
     description: "",
     region: "APAC",
@@ -58,6 +58,8 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
     customPrizePool: 0,
     startTime: "",
     registrationDeadline: "",
+    checkInTime: "",          // Thời gian điểm danh
+    lobbyCreationTime: "",    // Thời gian tạo lobby
     image: "",
     isCommunityMode: false,
     discordUrl: "",
@@ -183,17 +185,19 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
       );
 
             await api.post('/tournaments', {
-              name: form.name,
-              description: form.description,
-              region: form.region,
-              maxPlayers: form.maxPlayers,
-              entryFee: parseInt(entryFeeVnd.replace(/,/g, '')) || 0, // ✅ VND
-              startTime: new Date(form.startTime).toISOString(),
-              registrationDeadline: new Date(form.registrationDeadline).toISOString(),
-              hostFeePercent: form.hostFeePercent,
-              expectedParticipants: form.maxPlayers,
-              customPrizePool: parseInt(prizePoolVnd.replace(/,/g, '')) || 0, // ✅ VND
-        prizeStructure,
+                    name: form.name,
+                    description: form.description,
+                    region: form.region,
+                    maxPlayers: form.maxPlayers,
+                    entryFee: parseInt(entryFeeVnd.replace(/,/g, '')) || 0, // ✅ VND
+                    startTime: new Date(form.startTime).toISOString(),
+                    registrationDeadline: new Date(form.registrationDeadline).toISOString(),
+                    checkInTime: form.checkInTime ? new Date(form.checkInTime).toISOString() : undefined,
+                    lobbyCreationTime: form.lobbyCreationTime ? new Date(form.lobbyCreationTime).toISOString() : undefined,
+                    hostFeePercent: form.hostFeePercent,
+                    expectedParticipants: form.maxPlayers,
+                    customPrizePool: parseInt(prizePoolVnd.replace(/,/g, '')) || 0, // ✅ VND
+              prizeStructure,
         image: canCustomBrand ? (imageFile ? (imagePreview || form.image || undefined) : (form.image || undefined)) : '/images/default-tournament-banner.png',
         roundsTotal: phases.reduce((sum, p) => sum + p.numberOfRounds, 0),
         config: { phases: phaseConfigs },
@@ -228,7 +232,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
 
       toast({ title: "Tournament Created!", description: `${form.name} has been created successfully.` })
       setCreateOpen(false)
-            setForm({ name: "", description: "", region: "APAC", maxPlayers: 32, reservePlayersLimit: 0, entryFee: 0, hostFeePercent: 0.1, customPrizePool: 0, startTime: "", registrationDeadline: "", image: "", isCommunityMode: false, discordUrl: "" })
+            setForm({ name: "", description: "", region: "APAC", maxPlayers: 32, reservePlayersLimit: 0, entryFee: 0, hostFeePercent: 0.1, customPrizePool: 0, startTime: "", registrationDeadline: "", checkInTime: "", lobbyCreationTime: "", image: "", isCommunityMode: false, discordUrl: "" })
       setEntryFeeVnd("")
       setPrizePoolVnd("")
             setSponsors([])
@@ -473,15 +477,23 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
               />
             </div>
 
-            {/* Schedule */}
+                        {/* Schedule */}
             <div className="grid gap-4 md:grid-cols-2 bg-white/5 p-4 rounded border border-white/10">
-              <div className="space-y-2">
-                <Label>Start Time *</Label>
-                <Input type="datetime-local" value={form.startTime} onChange={(e) => setForm(p => ({ ...p, startTime: e.target.value }))} />
-              </div>
               <div className="space-y-2">
                 <Label>Registration Deadline *</Label>
                 <Input type="datetime-local" value={form.registrationDeadline} onChange={(e) => setForm(p => ({ ...p, registrationDeadline: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Check-in Time (Thời gian điểm danh)</Label>
+                <Input type="datetime-local" value={form.checkInTime} onChange={(e) => setForm(p => ({ ...p, checkInTime: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Lobby Creation Time (Thời gian tạo lobby)</Label>
+                <Input type="datetime-local" value={form.lobbyCreationTime} onChange={(e) => setForm(p => ({ ...p, lobbyCreationTime: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Start Time *</Label>
+                <Input type="datetime-local" value={form.startTime} onChange={(e) => setForm(p => ({ ...p, startTime: e.target.value }))} />
               </div>
             </div>
 

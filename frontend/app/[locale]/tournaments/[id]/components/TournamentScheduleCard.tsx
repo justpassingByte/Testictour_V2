@@ -120,4 +120,3 @@ export function TournamentScheduleCard({ tournament }: TournamentScheduleCardPro
     </Card>
   )
 }
- 

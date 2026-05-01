@@ -112,9 +112,11 @@ export default function TournamentManagePage() {
       setTotalParticipants(p.total || 0)
       // Fetch reserves for intervention modal
       ReservePlayerAPI.listReserves(tournamentId).then(setReserves).catch(() => setReserves([]))
-      // Lightweight: only fetch top 3 for winner banner/podium instead of ALL participants
+            // Fetch all participants with prizes for results tab (podium + full prize table)
       if (t.status === 'COMPLETED') {
-        const topRes = await TournamentService.topParticipants(tournamentId, 3).catch(() => ({ participants: [] }))
+        const prizeStruct = t.prizeStructure as number[] | null;
+        const topCount = prizeStruct?.filter((pct: number) => pct > 0).length || 3;
+        const topRes = await TournamentService.topParticipants(tournamentId, Math.max(topCount, 3)).catch(() => ({ participants: [] }))
         setTopPlayers(topRes.participants || [])
       } else {
         setTopPlayers([])

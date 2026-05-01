@@ -205,7 +205,7 @@ export interface ITournamentTemplate {
   game: string;
   type: 'SINGLE_ELIMINATION' | 'DOUBLE_ELIMINATION' | 'ROUND_ROBIN' | 'SWISS';
   hostFeePercent?: number;
-  checkInTime?: number;
+  checkInTime?: string;
   registrationDeadline?: string;
   phases: IPhase[];
 }
@@ -231,4 +231,7 @@ export interface ITournament extends ITournamentTemplate {
   reservePlayersLimit?: number;
   absentFeePolicy?: string;
   reserveCount?: number;
+  // Schedule fields
+  checkInTime?: string;          // Thời gian điểm danh
+  lobbyCreationTime?: string;    // Thời gian tạo lobby
 }

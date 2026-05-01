@@ -269,7 +269,7 @@ export default class TournamentService {
     return result as any;
   }
 
-        static async create(data: {
+                static async create(data: {
     name: string;
     startTime: Date;
     maxPlayers: number;
@@ -277,6 +277,8 @@ export default class TournamentService {
     entryFee: number;
     entryType?: string;
     registrationDeadline: Date;
+    checkInTime?: Date;          // Thời gian điểm danh (check-in)
+    lobbyCreationTime?: Date;    // Thời gian tạo lobby
     description?: string;
     image?: string;
     region?: string;
