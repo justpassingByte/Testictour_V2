@@ -1,4 +1,4 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { Request, Response } from 'express';
 
 /* ------------------------------------------------------------------ */
@@ -36,7 +36,7 @@ export const loginLimiterByAccount = rateLimit({
   max: 5,
   keyGenerator: (req: Request) => {
     const login = req.body?.login;
-    return login ? `account:${String(login).toLowerCase().trim()}` : req.ip || 'unknown';
+    return login ? `account:${String(login).toLowerCase().trim()}` : ipKeyGenerator(req.ip || 'unknown');
   },
   standardHeaders: true,
   legacyHeaders: false,

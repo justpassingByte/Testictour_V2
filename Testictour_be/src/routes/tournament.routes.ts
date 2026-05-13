@@ -36,13 +36,7 @@ router.post('/auto', auth('admin'), TournamentController.createAutoTournament);
 router.put('/:id', auth('admin', 'partner'), TournamentController.update);
 router.delete('/:id', auth('admin', 'partner'), TournamentController.remove);
 
-// Image Upload Endpoint — explicit OPTIONS preflight so CORS headers are set before multer runs
-router.options('/:id/image', (req: Request, res: Response) => {
-  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cookie');
-  res.sendStatus(200);
-});
-
+// Image Upload Endpoint. OPTIONS preflight is handled by the global CORS middleware in app.ts.
 router.post('/:id/image', auth('admin', 'partner'), upload.single('image'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
