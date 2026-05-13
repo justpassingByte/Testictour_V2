@@ -11,6 +11,7 @@ import { ITournament } from "@/app/types/tournament"
 import { MiniTourLobby } from "@/app/stores/miniTourLobbyStore"
 import { useCurrency } from "@/app/contexts/currency-context"
 import { formatCurrency } from "@/lib/utils"
+import { resolveMediaUrl } from "@/app/lib/mediaUrl"
 
 import TournamentDirectoryClient from "./TournamentDirectoryClient"
 import { useTranslations } from 'next-intl';
@@ -233,7 +234,7 @@ function FeaturedTournamentCard({ tournament, index }: { tournament: ITournament
           <Image
             width={600}
             height={338}
-            src={tournament.image || defaultTFTImage}
+            src={resolveMediaUrl(tournament.image, defaultTFTImage)}
             alt={tournament.name}
             className="object-cover w-full h-full transition-transform duration-300 hover:scale-105"
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"

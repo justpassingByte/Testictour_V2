@@ -27,6 +27,7 @@ import { ITournament } from '@/app/types/tournament'
 import { useTournamentStore } from '@/app/stores/tournamentStore'
 import { useCurrency } from "@/app/contexts/currency-context";
 import { formatCurrency } from "@/lib/utils";
+import { resolveMediaUrl } from "@/app/lib/mediaUrl";
 
 interface TournamentsClientPageProps {
   initialTournaments: ITournament[]
@@ -311,7 +312,7 @@ function TournamentCard({ tournament, index }: { tournament: ITournament; index:
             <Image
               width={400}
               height={225}
-              src={tournament.image || "/TFT.jfif"}
+              src={resolveMediaUrl(tournament.image, "/TFT.jfif")}
               alt={tournament.name}
               className="object-cover w-full h-full transition-transform duration-300 hover:scale-105"
             />

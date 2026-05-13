@@ -21,6 +21,12 @@ const nextConfig = {
       },
       {
         protocol: 'https',
+        hostname: 'api.testictour.com',
+        port: '',
+        pathname: '/uploads/**',
+      },
+      {
+        protocol: 'https',
         hostname: 'web-production-2580b.up.railway.app',
         port: '',
         pathname: '/uploads/miniTourLobbies/**',

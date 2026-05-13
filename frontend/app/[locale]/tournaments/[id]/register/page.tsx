@@ -27,6 +27,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useUserStore } from "@/app/stores/userStore"
 import { useCurrency } from "@/app/contexts/currency-context"
 import { formatCurrency } from "@/lib/utils"
+import { resolveMediaUrl } from "@/app/lib/mediaUrl"
 
 // Mock regions
 // const regions = [
@@ -313,7 +314,7 @@ export default function TournamentRegistration({ params }: { params: { id: strin
         <Card className="overflow-hidden bg-card border border-border shadow-2xl">
           <div className="relative h-64 sm:h-80 w-full block">
             <Image
-              src={tournament.image?.trim() ? tournament.image : 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80'}
+              src={resolveMediaUrl(tournament.image, 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80')}
               alt={tournament.name}
               fill
               className="object-cover"

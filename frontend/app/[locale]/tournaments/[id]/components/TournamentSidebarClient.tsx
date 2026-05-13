@@ -24,6 +24,7 @@ import {
 import { useTranslations } from "next-intl"
 import { useCurrency } from "@/app/contexts/currency-context"
 import { formatCurrency } from "@/lib/utils"
+import { resolveMediaUrl } from "@/app/lib/mediaUrl"
 
 interface TournamentSidebarClientProps {
   initialTournament: ITournament;
@@ -285,7 +286,7 @@ export default function TournamentSidebarClient({ initialTournament }: Tournamen
           <Image
             width={800}
             height={450}
-            src={tournament.image || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80'}
+            src={resolveMediaUrl(tournament.image, 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80')}
             alt={tournament.name}
             className="object-cover w-full aspect-video"
             priority={true}

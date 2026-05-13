@@ -10,6 +10,7 @@ import { ITournament } from "@/app/types/tournament";
 import { useTranslations } from "next-intl";
 import { useCurrency } from "@/app/contexts/currency-context";
 import { formatCurrency } from "@/lib/utils";
+import { resolveMediaUrl } from "@/app/lib/mediaUrl";
 
 const defaultTFTImage = "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&q=80";
 
@@ -54,7 +55,7 @@ export function TournamentCard({ tournament, index }: { tournament: ITournament;
             <Image
               width={400}
               height={225}
-              src={tournament.image || defaultTFTImage}
+              src={resolveMediaUrl(tournament.image, defaultTFTImage)}
               alt={tournament.name}
               className="object-cover w-full h-full transition-transform duration-300 hover:scale-105"
               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
