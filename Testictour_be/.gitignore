@@ -37,3 +37,7 @@ Thumbs.db
 *.tmp
 *.swp
 .idea/
+
+# Uploaded files — keep folder structure but ignore actual files
+public/uploads/**/*
+!public/uploads/**/.gitkeep

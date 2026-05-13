@@ -243,9 +243,29 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
 
 app.use(cookieParser());
 app.use(cors({
-  origin: [process.env.FRONTEND_URL || 'http://localhost:3000', 'https://www.testictour.com', 'https://testictour.com', 'http://localhost:3000'],
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error(`CORS: Origin '${origin}' not allowed`));
+  },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: [
+    'Origin',
+    'X-Requested-With',
+    'Content-Type',
+    'Accept',
+    'Authorization',
+    'Cookie',
+  ],
+  exposedHeaders: ['Set-Cookie'],
+  optionsSuccessStatus: 200, // Some legacy browsers choke on 204
 }));
+// Handle preflight for all routes explicitly
+app.options('*', cors());
 app.use('/api/webhooks/payments/stripe', express.raw({ type: 'application/json' }));
 app.use(express.json({ limit: '50mb' })); // Re-enable JSON body parsing
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
