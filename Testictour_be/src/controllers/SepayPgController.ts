@@ -56,13 +56,12 @@ export default class SepayPgController {
 
       const checkoutURL = client.checkout.initCheckoutUrl();
 
-      // Retrieve amountVnd from transaction
-      let amountVnd = 10000;
-      if (transaction.reviewNotes && transaction.reviewNotes.includes('Exact pay:')) {
-         const match = transaction.reviewNotes.match(/Exact pay:\s*(\d+)/i);
-         if (match && match[1]) {
-             amountVnd = parseInt(match[1], 10);
-         }
+      // Read amountVnd directly from the transaction record.
+      // This is the exact entryFee stored at registration time — never use a hardcoded default.
+      const amountVnd = Math.round(transaction.amount);
+      if (!amountVnd || amountVnd <= 0) {
+        logger.error(`[SepayPG] Transaction ${transactionId} has invalid amount: ${transaction.amount}`);
+        return res.status(400).send('Transaction amount is invalid. Please contact support.');
       }
 
       const feUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
@@ -132,7 +131,7 @@ export default class SepayPgController {
     try {
       const { transactionId } = req.params;
 
-      logger.info(`[SepayPG IPN] Received for transaction ${transactionId}`);
+      logger.info(`[SepayPG IPN] Received for transaction ${transactionId}. Payload: ${JSON.stringify(req.body)}`);
 
       const transaction = await prisma.transaction.findUnique({ where: { id: transactionId } });
       if (!transaction) {
@@ -142,6 +141,30 @@ export default class SepayPgController {
       if (transaction.status === 'paid' || transaction.status === 'success') {
         return res.status(200).json({ success: true, message: 'Already processed' });
       }
+
+      // ── CRITICAL: Validate amount from IPN payload ────────────────────────
+      // Sepay PG IPN should provide the actual amount paid.
+      // Common field names: amount, order_amount, paid_amount — check all.
+      const ipnAmount = Number(
+        req.body?.amount ?? req.body?.order_amount ?? req.body?.paid_amount ?? 0
+      );
+      const requiredAmount = Math.round(transaction.amount);
+      const TOLERANCE_VND = 2000;
+
+      if (ipnAmount > 0 && ipnAmount < requiredAmount - TOLERANCE_VND) {
+        logger.warn(
+          `[SepayPG IPN] UNDERPAID for transaction ${transactionId}: received ${ipnAmount} VND, required ${requiredAmount} VND. Marking underpaid.`
+        );
+        await prisma.transaction.update({
+          where: { id: transactionId },
+          data: {
+            status: 'underpaid',
+            reviewNotes: `Underpaid via PG IPN: received ${ipnAmount} VND, required ${requiredAmount} VND.`,
+          },
+        });
+        return res.status(200).json({ success: false, message: 'Underpaid — participant not confirmed.' });
+      }
+      // ─────────────────────────────────────────────────────────────────────
 
       const providerEventId = `sepaypg_ipn_${transactionId}_${Date.now()}`;
       await ParticipantPaymentService.confirmEntryFeePayment(transaction.id, providerEventId);
@@ -205,23 +228,16 @@ export default class SepayPgController {
         return res.status(200).json({ success: true, message: 'Already confirmed', status: transaction.status });
       }
 
-      // If transaction is still pending, try to confirm it
-      // This handles both dev and production - the Sepay PG should have sent IPN
-      // but if it hasn't arrived yet, we'll process it here
+      // If transaction is still pending, do NOT auto-confirm without payment proof.
+      // The IPN from Sepay PG is the authoritative confirmation with amount verification.
+      // Auto-confirming here would bypass amount validation and allow underpayment.
       if (transaction.status === 'pending') {
-        const providerEventId = `sepaypg_confirm_${transaction.id}_${Date.now()}`;
-        
-        try {
-          await ParticipantPaymentService.confirmEntryFeePayment(transaction.id, providerEventId);
-          console.log(`[SepayPG ConfirmPending] Confirmed transaction ${transaction.id} for user ${userId}`);
-          return res.status(200).json({ success: true, transactionId: transaction.id });
-        } catch (confirmErr: any) {
-          logger.error(`[SepayPG ConfirmPending] Failed to confirm: ${confirmErr.message}`);
-          return res.status(400).json({ 
-            error: 'Payment verification pending', 
-            message: 'Hệ thống đang chờ phản hồi từ cổng thanh toán. Nếu bạn đã chuyển khoản thành công, vui lòng đợi trong giây lát để hệ thống cập nhật.' 
-          });
-        }
+        logger.info(`[SepayPG ConfirmPending] Transaction ${transaction.id} still pending — waiting for IPN from Sepay.`);
+        return res.status(202).json({
+          success: false,
+          status: 'pending',
+          message: 'Hệ thống đang chờ xác nhận từ cổng thanh toán. Vui lòng đợi trong giây lát để hệ thống cập nhật tự động.',
+        });
       }
 
       // Transaction is in another state (failed, expired, etc.)
