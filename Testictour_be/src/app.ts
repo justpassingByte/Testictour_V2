@@ -264,8 +264,25 @@ app.use(cors({
   exposedHeaders: ['Set-Cookie'],
   optionsSuccessStatus: 200, // Some legacy browsers choke on 204
 }));
-// Handle preflight for all routes explicitly
-app.options('*', cors());
+// Handle preflight for all routes explicitly — must use the same config as the main CORS middleware
+app.options('*', cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error(`CORS: Origin '${origin}' not allowed`));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: [
+    'Origin',
+    'X-Requested-With',
+    'Content-Type',
+    'Accept',
+    'Authorization',
+    'Cookie',
+  ],
+  optionsSuccessStatus: 200,
+}));
 app.use('/api/webhooks/payments/stripe', express.raw({ type: 'application/json' }));
 app.use(express.json({ limit: '50mb' })); // Re-enable JSON body parsing
 app.use(express.urlencoded({ limit: '50mb', extended: true }));

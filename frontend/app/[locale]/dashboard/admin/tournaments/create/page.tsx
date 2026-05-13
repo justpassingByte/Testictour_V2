@@ -121,10 +121,9 @@ export default function CreateTournamentPage() {
         carryOverScores: p.carryOverScores,
       }))
 
-      // Nếu nhập bằng VND, tự động quy đổi sang USD để gửi lên backend
-      // Backend luôn lưu entryFee dưới dạng USD
-      const entryFeeUsd = form.entryType === "VND" ? form.entryFee / usdToVndRate : form.entryFee
-      const customPrizePoolUsd = form.entryType === "VND" ? form.customPrizePool / usdToVndRate : form.customPrizePool
+      // VND mode: Backend lưu entryFee trực tiếp bằng VND — không cần quy đổi USD
+      const entryFeeVnd = form.entryType === "VND" ? form.entryFee : Math.round(form.entryFee * usdToVndRate)
+      const customPrizePoolVnd = form.entryType === "VND" ? form.customPrizePool : Math.round(form.customPrizePool * usdToVndRate)
 
       await TournamentService.create({
         name: form.name,
@@ -134,9 +133,9 @@ export default function CreateTournamentPage() {
         maxPlayers: form.maxPlayers,
         organizerId: currentUser?.id || "",
         roundsTotal: phases.reduce((sum, p) => sum + p.numberOfRounds, 0),
-        entryFee: entryFeeUsd,
-        entryType: "usd",
-        customPrizePool: customPrizePoolUsd > 0 ? customPrizePoolUsd : undefined,
+        entryFee: entryFeeVnd,
+        entryType: "vnd",
+        customPrizePool: customPrizePoolVnd > 0 ? customPrizePoolVnd : undefined,
         registrationDeadline: new Date(form.registrationDeadline),
         hostFeePercent: form.hostFeePercent,
         expectedParticipants: form.maxPlayers,
