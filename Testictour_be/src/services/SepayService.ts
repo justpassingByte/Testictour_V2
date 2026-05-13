@@ -114,7 +114,7 @@ export default class SepayService {
         return;
     }
 
-    logger.info(`[Sepay] Matched order ${orderToProcess.externalRefId} for amount ${payload.amountIn}`);
+    logger.info(`[Sepay] Matched order ${orderToProcess.externalRefId}. Amount received: ${payload.amountIn} VND, required: ${orderToProcess.amount} VND`);
 
     // Update order via OrderService
     const updatedOrder = await OrderService.markOrderPaid(
@@ -122,6 +122,32 @@ export default class SepayService {
         providerEventId, 
         payload.amountIn
     );
+
+    // ── Underpaid guard ──────────────────────────────────────────────────────
+    // markOrderPaid returns status='underpaid' when amountPaid < required amount.
+    // In that case we must NOT confirm the participant and must notify the player.
+    if (updatedOrder.status === 'underpaid') {
+      logger.warn(
+        `[Sepay] UNDERPAID — order ${updatedOrder.externalRefId}: received ${payload.amountIn} VND, required ${updatedOrder.amount} VND. Participant NOT confirmed.`
+      );
+
+      // Real-time notification to the player via socket
+      const io = (global as any).io;
+      if (io && updatedOrder.userId) {
+        io.to(`user:${updatedOrder.userId}`).emit('payment_notification', {
+          type: 'underpaid',
+          message: `Thanh toán chưa đủ: bạn đã chuyển ${payload.amountIn.toLocaleString('vi-VN')} VND nhưng cần ${updatedOrder.amount.toLocaleString('vi-VN')} VND. Vui lòng chuyển khoản phần còn thiếu với đúng nội dung chuyển khoản.`,
+          amountReceived: payload.amountIn,
+          amountRequired: updatedOrder.amount,
+          shortfall: updatedOrder.amount - payload.amountIn,
+          externalRefId: updatedOrder.externalRefId,
+          transactionId: updatedOrder.id,
+          sentAt: new Date().toISOString(),
+        });
+      }
+      return; // Stop here — do not confirm entry fee
+    }
+    // ────────────────────────────────────────────────────────────────────────
 
     // If order was an entry fee, trigger ParticipantPayment service
     if (updatedOrder.type === 'entry_fee' && updatedOrder.status === 'paid') {
