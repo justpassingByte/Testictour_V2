@@ -23,6 +23,24 @@ const upload = multer({ storage });
 
 const router = Router();
 
+const uploadAllowedOrigins = [
+  process.env.FRONTEND_URL || 'http://localhost:3000',
+  'https://www.testictour.com',
+  'https://testictour.com',
+  'http://localhost:3000',
+].filter(Boolean);
+
+const applyUploadCorsHeaders = (req: Request, res: Response) => {
+  const origin = req.headers.origin;
+  if (origin && uploadAllowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Vary', 'Origin');
+  }
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cookie');
+};
+
 // Public
 router.get('/', TournamentController.list);
 router.get('/my', auth('admin', 'partner'), TournamentController.myTournaments);
@@ -36,9 +54,15 @@ router.post('/auto', auth('admin'), TournamentController.createAutoTournament);
 router.put('/:id', auth('admin', 'partner'), TournamentController.update);
 router.delete('/:id', auth('admin', 'partner'), TournamentController.remove);
 
-// Image Upload Endpoint. OPTIONS preflight is handled by the global CORS middleware in app.ts.
+// Image Upload Endpoint.
+router.options('/:id/image', (req: Request, res: Response) => {
+  applyUploadCorsHeaders(req, res);
+  return res.sendStatus(204);
+});
+
 router.post('/:id/image', auth('admin', 'partner'), upload.single('image'), async (req: Request, res: Response, next: NextFunction) => {
   try {
+    applyUploadCorsHeaders(req, res);
     const { id } = req.params;
     if (!req.file) {
       console.error(`[ImageUpload] No file received for tournament ${id}. Content-Type: ${req.headers['content-type']}`);
