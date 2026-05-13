@@ -1,4 +1,4 @@
-import axios, { AxiosResponse, AxiosError, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosHeaders, AxiosResponse, AxiosError, InternalAxiosRequestConfig } from 'axios';
 
 const isServer = typeof window === 'undefined';
 const baseURL = isServer 
@@ -14,15 +14,30 @@ const api = axios.create({
 });
 
 
-// Add token to requests if available
+// Auto-remove Content-Type for FormData requests so the browser sets
+// multipart/form-data with the correct boundary automatically.
+// Without this, the axios default 'application/json' header overrides the FormData boundary.
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    // Let cookies handle authentication automatically
-    // No need to manually add Authorization header from localStorage
+    if (config.data instanceof FormData) {
+      // Delete from all header tiers so axios doesn't merge the instance default back in.
+      // AxiosHeaders needs its own delete API; plain object deletion is not enough there.
+      if (config.headers) {
+        if (config.headers instanceof AxiosHeaders) {
+          config.headers.delete('Content-Type');
+        } else {
+          delete (config.headers as any)['Content-Type'];
+          delete (config.headers as any)['content-type'];
+          delete (config.headers as any).post?.['Content-Type'];
+          delete (config.headers as any).post?.['content-type'];
+          delete (config.headers as any).common?.['Content-Type'];
+          delete (config.headers as any).common?.['content-type'];
+        }
+      }
+    }
     return config;
   },
   (error: AxiosError) => {
-    // We don't log request errors here as they will be handled by the response interceptor
     return Promise.reject(error);
   }
 );

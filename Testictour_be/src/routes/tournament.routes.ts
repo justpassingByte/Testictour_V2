@@ -36,18 +36,26 @@ router.post('/auto', auth('admin'), TournamentController.createAutoTournament);
 router.put('/:id', auth('admin', 'partner'), TournamentController.update);
 router.delete('/:id', auth('admin', 'partner'), TournamentController.remove);
 
-// Image Upload Endpoint (new)
+// Image Upload Endpoint — explicit OPTIONS preflight so CORS headers are set before multer runs
+router.options('/:id/image', (req: Request, res: Response) => {
+  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cookie');
+  res.sendStatus(200);
+});
+
 router.post('/:id/image', auth('admin', 'partner'), upload.single('image'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
     if (!req.file) {
-      return res.status(400).json({ success: false, message: 'No image uploaded' });
+      console.error(`[ImageUpload] No file received for tournament ${id}. Content-Type: ${req.headers['content-type']}`);
+      return res.status(400).json({ success: false, message: 'No image uploaded. Make sure the request is multipart/form-data.' });
     }
     const imageUrl = `/uploads/tournaments/${req.file.filename}`;
     const updated = await prisma.tournament.update({
       where: { id },
       data: { image: imageUrl }
     });
+    console.log(`[ImageUpload] Tournament ${id} image updated → ${imageUrl}`);
     res.json({ success: true, image: imageUrl, tournament: updated });
   } catch (error) {
     next(error);

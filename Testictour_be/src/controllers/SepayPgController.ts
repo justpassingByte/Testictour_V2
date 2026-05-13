@@ -83,6 +83,18 @@ export default class SepayPgController {
         cancel_url: cancelUrl,
       });
 
+      logger.info(`[SepayPG Debug] ${JSON.stringify({
+        stage: 'checkout_fields_created',
+        transactionId,
+        tournamentId: transaction.tournamentId,
+        transactionAmount: transaction.amount,
+        amountVnd,
+        formOrderAmount: (checkoutFormfields as any).order_amount,
+        formCurrency: (checkoutFormfields as any).currency,
+        invoice: transaction.externalRefId || transaction.id,
+        checkoutURL,
+      })}`);
+
       // On production, inject notify_url for server-to-server IPN
       const notifyUrlField = isProduction
         ? `<input type="hidden" name="notify_url" value="${apiUrl}/payments/sepay-pg/ipn/${transactionId}" />`

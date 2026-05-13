@@ -197,16 +197,9 @@ export default function TournamentManagePage() {
         const formData = new FormData()
         formData.append("image", selectedImage)
 
-        // Remove default application/json content-type so browser forms the multipart boundary safely
-        await api.post(`/tournaments/${tournamentId}/image`, formData, {
-          headers: {
-            "Content-Type": undefined
-          },
-          transformRequest: [(data, headers) => {
-            delete headers['Content-Type'];
-            return data;
-          }]
-        })
+        // Interceptor in apiConfig auto-removes Content-Type for FormData so the browser
+        // sets multipart/form-data with the correct boundary.
+        await api.post(`/tournaments/${tournamentId}/image`, formData)
       }
 
       const { budget, startTime, registrationDeadline, ...restForm } = editForm

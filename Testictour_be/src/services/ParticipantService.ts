@@ -132,6 +132,17 @@ export default class ParticipantService {
             // VND mode: entryFee đã là VND
       const amountVnd = Math.round(entryFee || 0);
 
+      logger.info(`[EntryFee Debug] ${JSON.stringify({
+        stage: 'before_transaction_create',
+        tournamentId,
+        participantId: participant.id,
+        provider,
+        tournamentEntryFee: tournament.entryFee,
+        resolvedEntryFee: entryFee,
+        amountVnd,
+        entryFeeType: typeof tournament.entryFee,
+      })}`);
+
       transaction = await prisma.transaction.create({
         data: {
           userId,
@@ -147,6 +158,17 @@ export default class ParticipantService {
           reviewNotes: `Phí đăng ký giải đấu ${tournamentId}: ${amountVnd} VND`,
         },
       });
+
+      logger.info(`[EntryFee Debug] ${JSON.stringify({
+        stage: 'after_transaction_create',
+        tournamentId,
+        participantId: participant.id,
+        transactionId: transaction.id,
+        transactionAmount: transaction.amount,
+        transactionCurrency: transaction.currency,
+        externalRefId: transaction.externalRefId,
+        paymentMethod: transaction.paymentMethod,
+      })}`);
 
       if (provider === 'stripe') {
         // Stripe cần USD — convert tạm

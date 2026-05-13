@@ -65,6 +65,11 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
     discordUrl: "",
   })
   
+  const parseVndInput = (value: string) => {
+    const digitsOnly = value.replace(/[^\d]/g, "");
+    return digitsOnly ? Number(digitsOnly) : 0;
+  };
+
     // entryFeeInVnd: nhập VND, khi đổi sẽ tự convert sang USD
     const [entryFeeVnd, setEntryFeeVnd] = useState("");
   const handleEntryFeeVndChange = (vndStr: string) => {
@@ -189,14 +194,14 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                     description: form.description,
                     region: form.region,
                     maxPlayers: form.maxPlayers,
-                    entryFee: parseInt(entryFeeVnd.replace(/,/g, '')) || 0, // ✅ VND
+                    entryFee: parseVndInput(entryFeeVnd), // VND
                     startTime: new Date(form.startTime).toISOString(),
                     registrationDeadline: new Date(form.registrationDeadline).toISOString(),
                     checkInTime: form.checkInTime ? new Date(form.checkInTime).toISOString() : undefined,
                     lobbyCreationTime: form.lobbyCreationTime ? new Date(form.lobbyCreationTime).toISOString() : undefined,
                     hostFeePercent: form.hostFeePercent,
                     expectedParticipants: form.maxPlayers,
-                    customPrizePool: parseInt(prizePoolVnd.replace(/,/g, '')) || 0, // ✅ VND
+                    customPrizePool: parseVndInput(prizePoolVnd), // VND
               prizeStructure,
         image: canCustomBrand ? (imageFile ? (imagePreview || form.image || undefined) : (form.image || undefined)) : '/images/default-tournament-banner.png',
         roundsTotal: phases.reduce((sum, p) => sum + p.numberOfRounds, 0),
@@ -528,7 +533,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                               />
                               {entryFeeVnd && (
                                 <p className="text-[9px] text-muted-foreground mt-0.5">
-                                  {new Intl.NumberFormat('vi-VN').format(parseFloat(entryFeeVnd.replace(/,/g, '')) || 0)} ₫
+                                  {new Intl.NumberFormat('vi-VN').format(parseVndInput(entryFeeVnd))} ₫
                                 </p>
                               )}
                             </div>
@@ -543,7 +548,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                               />
                               {form.entryFee > 0 && entryFeeVnd && (
                                 <p className="text-[9px] text-muted-foreground mt-1">
-                                  Min: {new Intl.NumberFormat('vi-VN').format(form.maxPlayers * (parseFloat(entryFeeVnd.replace(/,/g, '')) || 0))} ₫
+                                  Min: {new Intl.NumberFormat('vi-VN').format(form.maxPlayers * parseVndInput(entryFeeVnd))} ₫
                                 </p>
                               )}
                             </div>
@@ -553,8 +558,8 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
               </div>
                         </div>
                                                 {entryFeeVnd && (() => {
-                                                  const vndEntry = parseInt(entryFeeVnd.replace(/,/g, '')) || 0;
-                                                  const vndPool = parseInt(prizePoolVnd.replace(/,/g, '')) || 0;
+                                                  const vndEntry = parseVndInput(entryFeeVnd);
+                                                  const vndPool = parseVndInput(prizePoolVnd);
                                                   const hasCustomPool = vndPool > 0;
                                                   const grossFromEntry = form.maxPlayers * vndEntry;
                                                   const activePrizePool = hasCustomPool ? vndPool : grossFromEntry;
