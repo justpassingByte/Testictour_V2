@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense } from "react"
+import { Suspense, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Calendar, Clock, MapPin, ChevronRight, ArrowRight, Gamepad2, Users, Coins, DollarSign, Star } from "lucide-react"
@@ -12,6 +12,7 @@ import { MiniTourLobby } from "@/app/stores/miniTourLobbyStore"
 import { useCurrency } from "@/app/contexts/currency-context"
 import { formatCurrency } from "@/lib/utils"
 import { resolveMediaUrl } from "@/app/lib/mediaUrl"
+import { useTournamentStore } from "@/app/stores/tournamentStore"
 
 import TournamentDirectoryClient from "./TournamentDirectoryClient"
 import { useTranslations } from 'next-intl';
@@ -30,7 +31,14 @@ interface HomePageClientProps {
 }
 
 export default function HomePageClient({ tournaments, lobbies }: HomePageClientProps) {
-  const featuredTournaments = tournaments
+  const { tournaments: refreshedTournaments, fetchTournaments } = useTournamentStore()
+  const currentTournaments = refreshedTournaments.length > 0 ? refreshedTournaments : tournaments
+
+  useEffect(() => {
+    fetchTournaments()
+  }, [fetchTournaments])
+
+  const featuredTournaments = currentTournaments
     .filter((t) => t.status === "in_progress")
     .slice(0, 2)
 
@@ -104,7 +112,7 @@ export default function HomePageClient({ tournaments, lobbies }: HomePageClientP
                       <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
                     </div>
                     <span className="font-bold tracking-tight text-lg">
-                      {t('live_tournaments')}: <span className="text-primary ml-1">{tournaments.filter((t) => t.status === "in_progress").length}</span>
+                      {t('live_tournaments')}: <span className="text-primary ml-1">{currentTournaments.filter((t) => t.status === "in_progress").length}</span>
                     </span>
                   </div>
                 </div>
@@ -195,7 +203,7 @@ export default function HomePageClient({ tournaments, lobbies }: HomePageClientP
 
       {/* Tournament Directory - Client Component with Suspense */}
       <Suspense fallback={<TournamentDirectorySkeleton />}>
-        <TournamentDirectoryClient tournaments={tournaments} />
+        <TournamentDirectoryClient tournaments={currentTournaments} />
       </Suspense>
 
       {/* Call to Action */}
