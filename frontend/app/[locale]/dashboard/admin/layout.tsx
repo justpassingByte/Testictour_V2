@@ -34,6 +34,7 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
     
     { type: 'group', label: 'Engagement' },
     { label: "Achievements",  href: "/dashboard/admin/achievements", icon: Star },
+    { label: "Rewards",       href: "/dashboard/admin/rewards",      icon: Gift },
     { label: "Loyalty",       href: "/dashboard/admin/loyalty",      icon: Gift },
     
     { type: 'group', label: 'System' },

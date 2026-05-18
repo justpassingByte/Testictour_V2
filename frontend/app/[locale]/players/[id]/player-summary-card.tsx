@@ -1,6 +1,6 @@
 "use client";
 
-import { Trophy, Medal, Star, Clock, Calendar, BarChart3 } from "lucide-react";
+import { Trophy, Medal, Star, Clock, Calendar, BarChart3, Coins } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +13,7 @@ interface PlayerSummaryCardProps {
   lastActiveDate: string;
   joinedDate: string;
   eliminated: boolean;
+  flexCoins?: number;
 }
 
 export function PlayerSummaryCard({
@@ -22,6 +23,7 @@ export function PlayerSummaryCard({
   lastActiveDate,
   joinedDate,
   eliminated,
+  flexCoins,
 }: PlayerSummaryCardProps) {
   const t = useTranslations("common");
   return (
@@ -30,6 +32,15 @@ export function PlayerSummaryCard({
         <CardTitle>{t("player_summary")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {typeof flexCoins === "number" && (
+          <div className="flex justify-between items-center">
+            <div className="flex items-center text-sm">
+              <Coins className="mr-2 h-4 w-4 text-amber-500" />
+              <span className="text-muted-foreground">Flex coin:</span>
+            </div>
+            <span className="font-semibold text-amber-500">{flexCoins.toLocaleString()}</span>
+          </div>
+        )}
         <div className="flex justify-between items-center">
           <div className="flex items-center text-sm">
             <Trophy className="mr-2 h-4 w-4 text-muted-foreground" />

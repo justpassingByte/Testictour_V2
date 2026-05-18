@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import {
   Gift, Plus, Pencil, Trash2, Loader2, Search,
-  Coins, Trophy, Award, Star, DollarSign, Calendar, Eye, EyeOff
+  Coins, Trophy, Award, Star, DollarSign, Calendar, Eye, EyeOff, ImageIcon, Upload, X
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -44,6 +44,52 @@ const TYPE_CONFIG: Record<string, { label: string; icon: any; color: string }> =
   prize: { label: "Prize", icon: Trophy, color: "emerald" },
 }
 
+const SAMPLE_REWARDS = [
+  {
+    title: "Áo TesTicTour Limited",
+    description: "Áo merch TesTicTour cho người chơi đổi bằng Flex coin.",
+    type: "prize",
+    value: 1200,
+    currency: "coins",
+    imageUrl: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=900&q=80",
+    maxRedemptions: 30,
+  },
+  {
+    title: "Khung Avatar Neon",
+    description: "Khung avatar hiển thị trong profile và leaderboard.",
+    type: "badge",
+    value: 450,
+    currency: "coins",
+    imageUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=900&q=80",
+    maxRedemptions: null,
+  },
+  {
+    title: "Vé MiniTour Premium",
+    description: "Một lượt vào lobby MiniTour premium không mất phí.",
+    type: "bonus",
+    value: 800,
+    currency: "coins",
+    imageUrl: "https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=900&q=80",
+    maxRedemptions: 100,
+  },
+  {
+    title: "Voucher Merch 50K",
+    description: "Voucher giảm giá khi mua merch hoặc vật phẩm sự kiện.",
+    type: "custom",
+    value: 600,
+    currency: "coins",
+    imageUrl: "https://images.unsplash.com/photo-1607083206968-13611e3d76db?auto=format&fit=crop&w=900&q=80",
+    maxRedemptions: 50,
+  },
+]
+
+function mediaUrl(url?: string | null) {
+  if (!url) return ""
+  if (/^https?:\/\//i.test(url) || url.startsWith("data:")) return url
+  const apiBase = (api.defaults.baseURL || "").replace(/\/api\/?$/, "")
+  return `${apiBase}${url.startsWith("/") ? url : `/${url}`}`
+}
+
 export default function PartnerRewardTab() {
   const { currency: displayCurrency, usdToVndRate } = useCurrency()
   const [rewards, setRewards] = useState<PartnerReward[]>([])
@@ -53,6 +99,8 @@ export default function PartnerRewardTab() {
   const [editTarget, setEditTarget] = useState<PartnerReward | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<PartnerReward | null>(null)
   const [saving, setSaving] = useState(false)
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const [seeding, setSeeding] = useState(false)
 
   const emptyForm = {
     title: "", description: "", type: "custom", value: 0, currency: "coins",
@@ -116,6 +164,35 @@ export default function PartnerRewardTab() {
       toast({ title: "Save Failed", description: err.response?.data?.error || err.message, variant: "destructive" })
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleImageUpload = async (file?: File) => {
+    if (!file) return
+    setUploadingImage(true)
+    try {
+      const data = new FormData()
+      data.append("image", file)
+      const res = await api.post("/partner/rewards/upload-image", data)
+      setForm(prev => ({ ...prev, imageUrl: res.data?.imageUrl || "" }))
+      toast({ title: "Image Uploaded" })
+    } catch (err: any) {
+      toast({ title: "Upload Failed", description: err.message, variant: "destructive" })
+    } finally {
+      setUploadingImage(false)
+    }
+  }
+
+  const seedSampleRewards = async () => {
+    setSeeding(true)
+    try {
+      const created = await Promise.all(SAMPLE_REWARDS.map((reward) => api.post("/partner/rewards", reward)))
+      setRewards(prev => [...created.map(res => res.data.data), ...prev])
+      toast({ title: "Mock Rewards Created", description: "Đã tạo vài reward mẫu để test trang đổi quà." })
+    } catch (err: any) {
+      toast({ title: "Seed Failed", description: err.message, variant: "destructive" })
+    } finally {
+      setSeeding(false)
     }
   }
 
@@ -183,9 +260,15 @@ export default function PartnerRewardTab() {
           </h2>
           <p className="text-muted-foreground text-sm">Create and manage custom rewards for your tournament participants.</p>
         </div>
-        <Button onClick={openCreate} className="bg-gradient-to-r from-violet-600 to-cyan-600 shrink-0">
-          <Plus className="mr-2 h-4 w-4" /> New Reward
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={seedSampleRewards} variant="outline" disabled={seeding} className="shrink-0">
+            {seeding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Star className="mr-2 h-4 w-4" />}
+            Mock Rewards
+          </Button>
+          <Button onClick={openCreate} className="bg-gradient-to-r from-violet-600 to-cyan-600 shrink-0">
+            <Plus className="mr-2 h-4 w-4" /> New Reward
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -237,6 +320,11 @@ export default function PartnerRewardTab() {
 
             return (
               <Card key={reward.id} className={`bg-gradient-to-br from-${cfg.color}-500/10 to-${cfg.color}-600/5 border-${cfg.color}-500/20 hover:border-${cfg.color}-500/40 transition-all ${!reward.isActive ? 'opacity-50' : ''}`}>
+                {reward.imageUrl && (
+                  <div className="h-32 overflow-hidden rounded-t-lg bg-muted">
+                    <img src={mediaUrl(reward.imageUrl)} alt={reward.title} className="h-full w-full object-cover" />
+                  </div>
+                )}
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-3">
@@ -314,6 +402,38 @@ export default function PartnerRewardTab() {
             <div className="space-y-2">
               <Label>Description</Label>
               <Textarea value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} rows={2} placeholder="How can players earn this?" />
+            </div>
+            <div className="space-y-2">
+              <Label>Reward Image</Label>
+              {form.imageUrl ? (
+                <div className="relative overflow-hidden rounded-md border border-white/10 bg-muted">
+                  <img src={mediaUrl(form.imageUrl)} alt="Reward preview" className="h-36 w-full object-cover" />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="icon"
+                    className="absolute right-2 top-2 h-7 w-7"
+                    onClick={() => setForm(p => ({ ...p, imageUrl: "" }))}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex h-24 items-center justify-center rounded-md border border-dashed border-white/15 bg-muted/30 text-muted-foreground">
+                  <ImageIcon className="mr-2 h-5 w-5" />
+                  No image selected
+                </div>
+              )}
+              <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                <Input value={form.imageUrl} onChange={e => setForm(p => ({ ...p, imageUrl: e.target.value }))} placeholder="Image URL or upload a file" />
+                <Button type="button" variant="outline" disabled={uploadingImage} asChild>
+                  <label className="cursor-pointer">
+                    {uploadingImage ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                    Upload
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e.target.files?.[0])} />
+                  </label>
+                </Button>
+              </div>
             </div>
             <div className="grid gap-4 md:grid-cols-3">
               <div className="space-y-2">

@@ -3,8 +3,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
-import { Shield, Camera, Image as ImageIcon, Coins } from "lucide-react";
-import { useState } from "react";
+import { Shield, Camera, Image as ImageIcon } from "lucide-react";
 import { useUserStore } from "@/app/stores/userStore";
 import { useTranslations } from "next-intl";
 
@@ -19,7 +18,6 @@ interface PlayerHeaderProps {
   avatarUrl?: string;
   backgroundUrl?: string;
   userId?: string;
-  flexCoins?: number;
 }
 
 function getRankBadgeStyle(rank: string) {
@@ -41,7 +39,6 @@ export function PlayerHeader({
   avatarUrl,
   backgroundUrl,
   userId,
-  flexCoins,
 }: PlayerHeaderProps) {
   const t = useTranslations("common");
   const { currentUser } = useUserStore();
@@ -78,12 +75,6 @@ export function PlayerHeader({
         {/* Rank badge floating */}
         <div className="absolute top-4 right-4">
           <div className="flex items-center gap-2">
-            {typeof flexCoins === "number" && (
-              <Badge className="text-sm px-3 py-1 font-bold shadow-lg bg-amber-500/90 text-black border-none">
-                <Coins className="h-3.5 w-3.5 mr-1.5" />
-                {flexCoins.toLocaleString()} Flex coin
-              </Badge>
-            )}
             <Badge className={`text-sm px-3 py-1 font-bold shadow-lg ${getRankBadgeStyle(rank)}`}>
               <Shield className="h-3.5 w-3.5 mr-1.5" />
               {rank}

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import {
   Trophy, Star, Coins, Target, Flame, Zap, Crown, Medal, Gift,
   CheckCircle2, Clock, Lock, Sword, Users, Gamepad2, ChevronRight,
-  Sparkles, Shield, Award, TrendingUp, Loader2, RefreshCw, BarChart3
+  Sparkles, Shield, Award, TrendingUp, Loader2, RefreshCw, BarChart3, ShoppingCart
 } from "lucide-react"
 import { useTranslations } from 'next-intl'
 import Link from "next/link"
@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
 import api from "@/app/lib/apiConfig"
 import { useUserStore } from "@/app/stores/userStore"
+import { toast } from "@/components/ui/use-toast"
 
 // ─── Types ───
 interface PlayerStats {
@@ -29,6 +30,81 @@ interface PlayerStats {
   totalPoints: number
   rank?: string
 }
+
+interface CatalogReward {
+  id: string
+  title: string
+  description?: string | null
+  type: string
+  value: number
+  currency: string
+  imageUrl?: string | null
+  maxRedemptions?: number | null
+  currentRedemptions: number
+  validUntil?: string | null
+  partner?: { id: string; username: string }
+  isMock?: boolean
+}
+
+interface RewardRedemption {
+  id: string
+  rewardId: string
+  redeemedAt: string
+  reward: CatalogReward
+}
+
+function isFlexCoinCurrency(currency: string) {
+  return ["coins", "coin", "fcoin", "f_coin", "flex", "flex_coin", "flexcoin"].includes(currency.toLowerCase())
+}
+
+function mediaUrl(url?: string | null) {
+  if (!url) return ""
+  if (/^https?:\/\//i.test(url) || url.startsWith("data:")) return url
+  const apiBase = (api.defaults.baseURL || "").replace(/\/api\/?$/, "")
+  return `${apiBase}${url.startsWith("/") ? url : `/${url}`}`
+}
+
+const MOCK_CATALOG_REWARDS: CatalogReward[] = [
+  {
+    id: "mock-shirt",
+    title: "Áo TesTicTour Limited",
+    description: "Mock reward áo merch để xem giao diện đổi quà.",
+    type: "prize",
+    value: 1200,
+    currency: "coins",
+    imageUrl: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=900&q=80",
+    maxRedemptions: 30,
+    currentRedemptions: 7,
+    partner: { id: "mock", username: "TesTicTour" },
+    isMock: true,
+  },
+  {
+    id: "mock-frame",
+    title: "Khung Avatar Neon",
+    description: "Mock reward cosmetic hiển thị trong profile.",
+    type: "badge",
+    value: 450,
+    currency: "coins",
+    imageUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=900&q=80",
+    maxRedemptions: null,
+    currentRedemptions: 18,
+    partner: { id: "mock", username: "TesTicTour" },
+    isMock: true,
+  },
+  {
+    id: "mock-ticket",
+    title: "Vé MiniTour Premium",
+    description: "Mock reward một lượt vào lobby premium.",
+    type: "bonus",
+    value: 800,
+    currency: "coins",
+    imageUrl: "https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=900&q=80",
+    maxRedemptions: 100,
+    currentRedemptions: 21,
+    partner: { id: "mock", username: "TesTicTour" },
+    isMock: true,
+  },
+]
 
 // ─── Loyalty Tier System ───
 const loyaltyTiers = [
@@ -136,10 +212,14 @@ function getRarityColor(rarity: string) {
 // ─────────────────────────────────────────────────────────────
 export default function LoyaltyClient() {
   const t = useTranslations('common')
-  const { currentUser } = useUserStore()
+  const { currentUser, fetchUser } = useUserStore()
   const [activeTab, setActiveTab] = useState("quests")
   const [stats, setStats] = useState<PlayerStats | null>(null)
+  const [catalogRewards, setCatalogRewards] = useState<CatalogReward[]>([])
+  const [redemptions, setRedemptions] = useState<RewardRedemption[]>([])
   const [loading, setLoading] = useState(false)
+  const [rewardsLoading, setRewardsLoading] = useState(false)
+  const [redeemingId, setRedeemingId] = useState<string | null>(null)
   const [error, setError] = useState(false)
 
   // Compute player coins from total points (1 tournament point = 1 coin)
@@ -155,6 +235,11 @@ export default function LoyaltyClient() {
   const TierIcon = playerTier.icon
   const achievements = buildAchievements(stats)
   const unlockedCount = achievements.filter(a => a.unlocked).length
+  const flexCoins = currentUser?.balance?.coins ?? 0
+  const isSignedIn = !!currentUser?.id
+  const redeemedIds = new Set(redemptions.map(r => r.rewardId))
+  const usingMockRewards = catalogRewards.length === 0
+  const displayRewards = usingMockRewards ? MOCK_CATALOG_REWARDS : catalogRewards
 
   // Fetch real stats
   const fetchStats = useCallback(async () => {
@@ -174,6 +259,40 @@ export default function LoyaltyClient() {
   useEffect(() => {
     fetchStats()
   }, [fetchStats])
+
+  const fetchRewardCatalog = useCallback(async () => {
+    setRewardsLoading(true)
+    try {
+      const [catalogRes, redemptionRes] = await Promise.all([
+        api.get("/partner/rewards/catalog"),
+        isSignedIn ? api.get("/partner/rewards/redemptions/me") : Promise.resolve({ data: { data: [] } }),
+      ])
+      setCatalogRewards(catalogRes.data?.data || [])
+      setRedemptions(redemptionRes.data?.data || [])
+    } catch (err: any) {
+      toast({ title: "Không tải được reward", description: err.message, variant: "destructive" })
+    } finally {
+      setRewardsLoading(false)
+    }
+  }, [isSignedIn])
+
+  useEffect(() => {
+    fetchRewardCatalog()
+  }, [fetchRewardCatalog])
+
+  const redeemReward = async (reward: CatalogReward) => {
+    setRedeemingId(reward.id)
+    try {
+      await api.post(`/partner/rewards/${reward.id}/redeem`)
+      toast({ title: "Đổi quà thành công", description: reward.title })
+      await fetchUser()
+      await fetchRewardCatalog()
+    } catch (err: any) {
+      toast({ title: "Đổi quà thất bại", description: err.message, variant: "destructive" })
+    } finally {
+      setRedeemingId(null)
+    }
+  }
 
   return (
     <div className="container py-10 space-y-8">
@@ -312,12 +431,21 @@ export default function LoyaltyClient() {
 
       {/* ─── Main Tab Content ─── */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 h-12 bg-black/40 backdrop-blur-md border border-white/10 text-white/70">
-          <TabsTrigger value="quests" className="flex items-center gap-2 data-[state=active]:bg-white/10 data-[state=active]:text-white">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 bg-black/40 backdrop-blur-md border border-white/10 text-white/70 md:h-12 md:grid-cols-4">
+          <TabsTrigger value="quests" className="flex items-center gap-2 text-xs sm:text-sm data-[state=active]:bg-white/10 data-[state=active]:text-white">
             <Sword className="h-4 w-4" />
             {t('quests_tab', { defaultValue: 'Quests' })}
           </TabsTrigger>
-          <TabsTrigger value="achievements" className="flex items-center gap-2 data-[state=active]:bg-white/10 data-[state=active]:text-white">
+          <TabsTrigger value="redeem" className="flex items-center gap-2 text-xs sm:text-sm data-[state=active]:bg-white/10 data-[state=active]:text-white">
+            <Gift className="h-4 w-4" />
+            {t('redeem', { defaultValue: 'Đổi quà' })}
+            {displayRewards.length > 0 && (
+              <Badge className="ml-1 h-4 px-1 text-[10px] bg-amber-500/20 text-amber-400 border-amber-500/30">
+                {displayRewards.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="achievements" className="flex items-center gap-2 text-xs sm:text-sm data-[state=active]:bg-white/10 data-[state=active]:text-white">
             <Award className="h-4 w-4" />
             {t('achievements_tab', { defaultValue: 'Achievements' })}
             {currentUser && unlockedCount > 0 && (
@@ -326,7 +454,7 @@ export default function LoyaltyClient() {
               </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="history" className="flex items-center gap-2 data-[state=active]:bg-white/10 data-[state=active]:text-white">
+          <TabsTrigger value="history" className="flex items-center gap-2 text-xs sm:text-sm data-[state=active]:bg-white/10 data-[state=active]:text-white">
             <Clock className="h-4 w-4" />
             {t('reward_history_tab', { defaultValue: 'History' })}
           </TabsTrigger>
@@ -365,6 +493,79 @@ export default function LoyaltyClient() {
               ))}
             </div>
           </section>
+        </TabsContent>
+
+        {/* ===================== REDEEM TAB ===================== */}
+        <TabsContent value="redeem" className="space-y-6 mt-6">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h2 className="text-xl font-bold text-white drop-shadow-md">Đổi quà</h2>
+              <p className="text-sm text-white/80 drop-shadow">
+                {usingMockRewards
+                  ? "Đang hiển thị mock reward. Vào admin/partner để tạo reward thật."
+                  : "Chọn reward do admin hoặc partner tạo, đổi trực tiếp bằng Flex coin."}
+              </p>
+            </div>
+            <Badge variant="outline" className="text-amber-400 border-amber-400/30 bg-amber-400/5 font-bold">
+              <Coins className="h-3 w-3 mr-1" />
+              {flexCoins.toLocaleString()} Flex coin
+            </Badge>
+          </div>
+
+          {rewardsLoading ? (
+            <Card className="bg-card/95 dark:bg-card/40 shadow-sm backdrop-blur-lg border border-white/20">
+              <CardContent className="py-12 text-center text-muted-foreground">
+                <Loader2 className="mx-auto mb-2 h-8 w-8 animate-spin" />
+                Đang tải reward...
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {displayRewards.map((reward) => {
+                const redeemed = redeemedIds.has(reward.id)
+                const soldOut = reward.maxRedemptions !== null && reward.maxRedemptions !== undefined && reward.currentRedemptions >= reward.maxRedemptions
+                const canRedeem = !reward.isMock && !!currentUser && isFlexCoinCurrency(reward.currency) && flexCoins >= reward.value && !redeemed && !soldOut
+
+                return (
+                  <Card key={reward.id} className="overflow-hidden bg-card/95 dark:bg-card/40 shadow-sm backdrop-blur-lg border border-white/20">
+                    {reward.imageUrl && (
+                      <div className="h-32 bg-muted">
+                        <img src={mediaUrl(reward.imageUrl)} alt={reward.title} className="h-full w-full object-cover" />
+                      </div>
+                    )}
+                    <CardContent className="pt-5 pb-4 space-y-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="font-bold">{reward.title}</h3>
+                          <div className="mt-1 flex flex-wrap gap-2">
+                            <Badge variant="secondary">{reward.type}</Badge>
+                            {reward.partner?.username && <Badge variant="outline">{reward.partner.username}</Badge>}
+                            {reward.isMock && <Badge variant="outline" className="border-dashed">Mock</Badge>}
+                          </div>
+                        </div>
+                        {redeemed && <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />}
+                      </div>
+
+                      {reward.description && <p className="text-sm text-muted-foreground">{reward.description}</p>}
+
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Chi phí</span>
+                        <span className="font-bold text-amber-500">
+                          <Coins className="mr-1 inline h-4 w-4" />
+                          {reward.value.toLocaleString()} Flex coin
+                        </span>
+                      </div>
+
+                      <Button className="w-full" disabled={!canRedeem || redeemingId === reward.id} onClick={() => redeemReward(reward)}>
+                        {redeemingId === reward.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : redeemed ? <CheckCircle2 className="mr-2 h-4 w-4" /> : <ShoppingCart className="mr-2 h-4 w-4" />}
+                        {reward.isMock ? "Mẫu hiển thị" : !currentUser ? "Đăng nhập để đổi" : redeemed ? "Đã đổi" : soldOut ? "Hết quà" : flexCoins < reward.value ? "Không đủ Flex coin" : "Đổi quà"}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </div>
+          )}
         </TabsContent>
 
         {/* ===================== ACHIEVEMENTS TAB ===================== */}

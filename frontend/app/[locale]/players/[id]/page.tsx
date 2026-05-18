@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { Award, ChevronRight, Coins, Gift } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
@@ -10,8 +10,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 import { usePlayerStore } from "@/app/stores/playerStore";
+import { useUserStore } from "@/app/stores/userStore";
+import api from "@/app/lib/apiConfig";
 
 import { PlayerTournamentList } from "./player-tournament-list";
 import { PlayerMatchHistoryTable } from "./player-match-history-table";
@@ -21,9 +24,26 @@ import { PlayerUpcomingMatchesCard } from "./player-upcoming-matches-card";
 import { PlayerHeader } from "./player-header";
 import { useTranslations } from "next-intl";
 
+interface RedeemedReward {
+  id: string;
+  rewardId: string;
+  redeemedAt: string;
+  reward?: {
+    title: string;
+    description?: string | null;
+    type: string;
+    value: number;
+    currency: string;
+    partner?: { username: string };
+  };
+}
+
 export default function PlayerPage() {
   const t = useTranslations("common");
   const [isPageLoading, setIsPageLoading] = useState(true);
+  const [redeemedRewards, setRedeemedRewards] = useState<RedeemedReward[]>([]);
+  const [isRewardsLoading, setIsRewardsLoading] = useState(false);
+  const { currentUser } = useUserStore();
   const { 
     player,
     playerTournaments,
@@ -54,6 +74,27 @@ export default function PlayerPage() {
       loadPlayerData();
     }
   }, [playerId, fetchPlayer, fetchPlayerTournaments, fetchPlayerMatchesSummary]);
+
+  useEffect(() => {
+    const loadRedeemedRewards = async () => {
+      if (!currentUser?.id || currentUser.id !== playerId) {
+        setRedeemedRewards([]);
+        return;
+      }
+
+      setIsRewardsLoading(true);
+      try {
+        const res = await api.get("/partner/rewards/redemptions/me");
+        setRedeemedRewards(res.data?.data || []);
+      } catch {
+        setRedeemedRewards([]);
+      } finally {
+        setIsRewardsLoading(false);
+      }
+    };
+
+    loadRedeemedRewards();
+  }, [currentUser?.id, playerId]);
 
   // Real-time: listen for profile/tournament updates via Socket.IO
   useEffect(() => {
@@ -228,7 +269,6 @@ export default function PlayerPage() {
             puuid={player.user?.puuid}
             riotGameTag={player.user?.riotGameTag}
             userId={player.user?.id}
-            flexCoins={player.user?.balance?.coins}
           />
 
           <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1">
@@ -256,10 +296,51 @@ export default function PlayerPage() {
 
                 <TabsContent value="achievements" className="mt-6">
                   <h2 className="text-2xl font-bold mb-4">{t("achievements")}</h2>
-                  <div className="text-center py-12 text-muted-foreground bg-card/30 rounded-lg border border-white/5">
-                    <span className="text-4xl mb-4 block">🏆</span>
-                    <p>{t("achievements_dev_desc")}</p>
-                    <p className="text-sm">{t("achievements_dev_subdesc")}</p>
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <div className="text-center py-12 text-muted-foreground bg-card/30 rounded-lg border border-white/5">
+                      <Award className="mx-auto mb-4 h-10 w-10 opacity-60" />
+                      <p>{t("achievements_dev_desc")}</p>
+                      <p className="text-sm">{t("achievements_dev_subdesc")}</p>
+                    </div>
+
+                    <div className="bg-card/30 rounded-lg border border-white/5 p-4">
+                      <div className="mb-4 flex items-center justify-between gap-3">
+                        <div>
+                          <h3 className="font-semibold">Reward đã quy đổi</h3>
+                          <p className="text-sm text-muted-foreground">Các phần quà đã đổi bằng Flex coin.</p>
+                        </div>
+                        <Badge variant="outline">{redeemedRewards.length}</Badge>
+                      </div>
+
+                      {isRewardsLoading ? (
+                        <div className="py-8 text-center text-sm text-muted-foreground">Đang tải reward...</div>
+                      ) : redeemedRewards.length === 0 ? (
+                        <div className="py-8 text-center text-sm text-muted-foreground">
+                          <Gift className="mx-auto mb-2 h-8 w-8 opacity-50" />
+                          Chưa có reward nào được quy đổi.
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {redeemedRewards.map((item) => (
+                            <div key={item.id} className="rounded-md border border-white/10 bg-background/40 p-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <div className="font-medium">{item.reward?.title || "Reward"}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {new Date(item.redeemedAt).toLocaleDateString()}
+                                    {item.reward?.partner?.username ? ` - ${item.reward.partner.username}` : ""}
+                                  </div>
+                                </div>
+                                <Badge className="shrink-0 bg-amber-500/10 text-amber-500 border-amber-500/30" variant="outline">
+                                  <Coins className="mr-1 h-3 w-3" />
+                                  {item.reward?.value?.toLocaleString?.() || 0}
+                                </Badge>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </TabsContent>
               </Tabs>
@@ -275,6 +356,7 @@ export default function PlayerPage() {
             lastActiveDate={lastActiveDate}
             joinedDate={player.user?.createdAt ? new Date(player.user.createdAt).toLocaleDateString() : "N/A"}
             eliminated={player.eliminated}
+            flexCoins={player.user?.balance?.coins}
           />
           <PlayerUpcomingMatchesCard playerId={player.user?.id || player.id || playerId} />
         </div>
