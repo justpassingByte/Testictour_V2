@@ -82,6 +82,12 @@ export function LobbyActionCard({
   const readyCount = readyPlayerIds.length;
   const isPlaying = lobby.status === 'IN_PROGRESS';
   const { formatted: timeLeft, remaining } = useCountdown(phaseStartedAt, phaseDurationMs, isPlaying);
+  const isCoinEntry = lobby.entryType === 'coins' || lobby.entryType === 'coin';
+  const formatEntryAmount = (amount: number) => {
+    if (!amount) return 'Free';
+    if (isCoinEntry) return `${amount.toLocaleString('vi-VN')} Coin`;
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(amount);
+  };
 
   const isParticipant = (lobby.participants || []).some(p => p.userId === currentUserId);
   const isReady = readyPlayerIds.includes(currentUserId);
@@ -117,11 +123,11 @@ export function LobbyActionCard({
             <div className="pt-2">
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Entry Fee:</span>
-                <span className="font-medium"><Coins className="inline h-4 w-4 mr-1" />{lobby.entryFee}</span>
+                <span className="font-medium"><Coins className="inline h-4 w-4 mr-1" />{formatEntryAmount(lobby.entryFee)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Prize Pool:</span>
-                <span className="font-bold"><Coins className="inline h-4 w-4 mr-1" />{lobby.prizePool}</span>
+                <span className="font-bold"><Coins className="inline h-4 w-4 mr-1" />{formatEntryAmount(lobby.prizePool)}</span>
               </div>
             </div>
 

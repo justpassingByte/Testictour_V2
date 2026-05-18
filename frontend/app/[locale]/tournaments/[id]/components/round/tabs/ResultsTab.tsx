@@ -189,8 +189,19 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
               {sortedPlayers.map((player, index) => {
                 const rank = index + 1
                 const isTournamentCompleted = tournament.status === 'COMPLETED'
-                const prizeStructure = tournament.prizeStructure as number[] | null
-                const hasPrize = isTournamentCompleted && prizeStructure && rank <= prizeStructure.length && (prizeStructure[rank - 1] || 0) > 0
+                const rawPrizeStructure: any = tournament.prizeStructure
+                const cashPrizeStructure = rawPrizeStructure && !Array.isArray(rawPrizeStructure) && rawPrizeStructure.cash
+                  ? rawPrizeStructure.cash
+                  : rawPrizeStructure
+                const flexCoinPrizeStructure = rawPrizeStructure && !Array.isArray(rawPrizeStructure) && rawPrizeStructure.flexCoin
+                  ? rawPrizeStructure.flexCoin
+                  : {}
+                const cashPercent = Array.isArray(cashPrizeStructure)
+                  ? (cashPrizeStructure[rank - 1] || 0)
+                  : (cashPrizeStructure?.[String(rank)] || 0)
+                const normalizedCashPercent = cashPercent > 1 ? cashPercent / 100 : cashPercent
+                const flexCoinPrize = Number(flexCoinPrizeStructure?.[String(rank)] || 0)
+                const hasPrize = isTournamentCompleted && (normalizedCashPercent > 0 || flexCoinPrize > 0)
                 const displayStatus = hasPrize ? "rewarded" : (isTournamentCompleted && player.status === "advanced" ? "completed" : player.status)
 
                 return (
@@ -249,10 +260,19 @@ export function ResultsTab({ round, tournament, allPlayers, numMatches }: Result
                       >
                         {displayStatus === "pending" ? t("awaiting") : displayStatus === "completed" ? t("finished") : t(displayStatus as any)}
                       </Badge>
-                                            {hasPrize && prizeStructure && (
-                        <span className="text-xs font-bold text-amber-400">
-                          🏆 {displayMoney(((prizeStructure[rank - 1] / 100) * (tournament.budget || 0)))}
-                        </span>
+                      {hasPrize && (
+                        <>
+                        {normalizedCashPercent > 0 && (
+                          <span className="text-xs font-bold text-amber-400">
+                            {displayMoney(normalizedCashPercent * (tournament.budget || 0))}
+                          </span>
+                        )}
+                        {flexCoinPrize > 0 && (
+                          <span className="text-xs font-bold text-amber-400">
+                            +{flexCoinPrize.toLocaleString()} F coin
+                          </span>
+                        )}
+                        </>
                       )}
                     </div>
                   </TableCell>

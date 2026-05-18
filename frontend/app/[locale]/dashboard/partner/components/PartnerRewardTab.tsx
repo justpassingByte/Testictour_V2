@@ -55,7 +55,7 @@ export default function PartnerRewardTab() {
   const [saving, setSaving] = useState(false)
 
   const emptyForm = {
-    title: "", description: "", type: "custom", value: 0, currency: displayCurrency.toLowerCase(),
+    title: "", description: "", type: "custom", value: 0, currency: "coins",
     imageUrl: "", maxRedemptions: "", validFrom: "", validUntil: "",
   }
   const [form, setForm] = useState(emptyForm)
@@ -157,6 +157,9 @@ export default function PartnerRewardTab() {
     if (normalizedCurrency === "VND") {
       const displayValue = displayCurrency === "USD" ? value / usdToVndRate : value
       return formatCurrency(displayValue, displayCurrency)
+    }
+    if (["COINS", "FCOIN", "FLEX_COIN", "FLEXCOIN"].includes(normalizedCurrency)) {
+      return `${value.toLocaleString()} Flex coin`
     }
     return `${value} ${rewardCurrency}`
   }
@@ -290,7 +293,7 @@ export default function PartnerRewardTab() {
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{editTarget ? "Edit Reward" : "New Reward"}</DialogTitle>
-            <DialogDescription>Create a custom reward for your tournament participants.</DialogDescription>
+            <DialogDescription>Create a reward that players can redeem with Flex coin.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid gap-4 md:grid-cols-2">
@@ -314,7 +317,7 @@ export default function PartnerRewardTab() {
             </div>
             <div className="grid gap-4 md:grid-cols-3">
               <div className="space-y-2">
-                <Label>Value</Label>
+                <Label>Cost</Label>
                 <Input type="number" min={0} value={form.value} onChange={e => setForm(p => ({ ...p, value: parseFloat(e.target.value) || 0 }))} />
               </div>
               <div className="space-y-2">
@@ -322,7 +325,7 @@ export default function PartnerRewardTab() {
                 <Select value={form.currency} onValueChange={v => setForm(p => ({ ...p, currency: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="coins">Coins</SelectItem>
+                    <SelectItem value="coins">Flex coin</SelectItem>
                     <SelectItem value="usd">USD</SelectItem>
                     <SelectItem value="vnd">VND</SelectItem>
                   </SelectContent>

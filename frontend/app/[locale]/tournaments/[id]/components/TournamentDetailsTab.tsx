@@ -37,12 +37,17 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
 
   // ── Dynamic Prize Ranks (with default fallback) ─────────────────────
   const getPrizeRanks = (): string[] => {
-    const ps = tournament.prizeStructure;
+    const ps = getCashPrizeStructure();
+    const flex = getFlexCoinPrizeStructure();
+    const flexRanks = Object.keys(flex || {});
     if (ps && Object.keys(ps).length > 0) {
-      if (Array.isArray(ps)) {
-        return ps.map((_, i) => String(i + 1));
-      }
-      return Object.keys(ps).sort((a, b) => Number(a) - Number(b));
+      const cashRanks = Array.isArray(ps)
+        ? ps.map((_, i) => String(i + 1))
+        : Object.keys(ps);
+      return Array.from(new Set([...cashRanks, ...flexRanks])).sort((a, b) => Number(a) - Number(b));
+    }
+    if (flexRanks.length > 0) {
+      return flexRanks.sort((a, b) => Number(a) - Number(b));
     }
     // Default: 4 ranks with 40/30/20/10
     return ['1', '2', '3', '4'];
@@ -50,7 +55,7 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
 
   // Get prize percentage for a given rank with fallback
   const getPrizePercentage = (rank: string): number => {
-    const ps = tournament.prizeStructure;
+    const ps = getCashPrizeStructure();
     const defaultPercentages: Record<string, number> = { '1': 0.4, '2': 0.3, '3': 0.2, '4': 0.1 };
     
     if (!ps || Object.keys(ps).length === 0) {
@@ -64,6 +69,22 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
     return raw > 1 ? raw / 100 : raw;
   };
 
+  const getCashPrizeStructure = () => {
+    const ps: any = tournament.prizeStructure;
+    if (ps && !Array.isArray(ps) && typeof ps === "object" && ps.cash) {
+      return ps.cash;
+    }
+    return ps;
+  };
+
+  const getFlexCoinPrizeStructure = (): Record<string, number> => {
+    const ps: any = tournament.prizeStructure;
+    if (ps && !Array.isArray(ps) && typeof ps === "object" && ps.flexCoin) {
+      return ps.flexCoin;
+    }
+    return {};
+  };
+
   const rankSuffix = (rank: string) => {
     const num = parseInt(rank);
     if (isNaN(num)) return rank;
@@ -74,6 +95,7 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
   };
 
   const prizeRanks = getPrizeRanks();
+  const flexCoinPrizeStructure = getFlexCoinPrizeStructure();
   const isTrusted = (tournament as any).organizer?.partnerSubscription?.plan === 'PRO' || (tournament as any).organizer?.partnerSubscription?.plan === 'ENTERPRISE';
   const isEscrow = !tournament.isCommunityMode && !isTrusted;
 
@@ -287,16 +309,26 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
             {prizeRanks.map(rank => {
               const totalPrizePool = tournament.budget || 0;
               const prizePercentage = getPrizePercentage(rank);
+              const flexCoinAmount = Number(flexCoinPrizeStructure[rank] || 0);
               
-              if (prizePercentage === 0) return null;
+              if (prizePercentage === 0 && flexCoinAmount === 0) return null;
 
               const prizeAmount = totalPrizePool * prizePercentage;
 
               return (
                 <Card key={rank} className="flex flex-col items-center justify-center p-4 border shadow-sm bg-muted/40 text-center">
                   <span className="text-lg font-bold text-yellow-500">{rankSuffix(rank)}</span>
-                  <span className="text-xs text-muted-foreground">{(prizePercentage * 100).toFixed(1)}%</span>
-                  <span className="text-md font-medium">{displayMoney(prizeAmount)}</span>
+                  {prizePercentage > 0 && (
+                    <>
+                      <span className="text-xs text-muted-foreground">{(prizePercentage * 100).toFixed(1)}%</span>
+                      <span className="text-md font-medium">{displayMoney(prizeAmount)}</span>
+                    </>
+                  )}
+                  {flexCoinAmount > 0 && (
+                    <span className="text-xs font-semibold text-amber-500">
+                      +{flexCoinAmount.toLocaleString()} F coin
+                    </span>
+                  )}
                 </Card>
               );
             })}

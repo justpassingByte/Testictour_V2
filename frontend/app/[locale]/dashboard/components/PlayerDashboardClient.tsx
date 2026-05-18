@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { ChevronRight, Trophy, Medal, Star, Clock, Calendar, BarChart3, Users, Target, TrendingUp, Gift, Timer, Play } from "lucide-react"
+import { ChevronRight, Trophy, Medal, Star, Clock, Calendar, BarChart3, Users, Target, TrendingUp, Gift, Timer, Play, Coins } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -145,6 +145,10 @@ export default function PlayerDashboardClient({ user: player }: PlayerDashboardC
                     <h1 className="text-3xl font-bold">{player.username}</h1>
                     <Badge variant="outline" className="bg-primary/20 text-primary">
                       Level {player.level || 1}
+                    </Badge>
+                    <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/30">
+                      <Coins className="mr-1 h-3 w-3" />
+                      {(player.balance?.coins || 0).toLocaleString()} Flex coin
                     </Badge>
                   </div>
                   <div className="flex items-center space-x-2 mb-4">

@@ -80,7 +80,13 @@ export default {
         riotGameTag: true,
         puuid: true,
         region: true,
-        discordId: true
+        discordId: true,
+        balance: {
+          select: {
+            amount: true,
+            coins: true,
+          }
+        }
       }
     });
 

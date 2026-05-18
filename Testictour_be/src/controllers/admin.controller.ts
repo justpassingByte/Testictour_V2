@@ -90,6 +90,7 @@ export const getAllUsers = asyncHandler(async (req: Request, res: Response) => {
         balance: {
           select: {
             amount: true,
+            coins: true,
           },
         },
         partnerSubscription: {
@@ -106,6 +107,7 @@ export const getAllUsers = asyncHandler(async (req: Request, res: Response) => {
   const transformedUsers = users.map(user => ({
     ...user,
     balance: user.balance?.amount || 0,
+    coins: user.balance?.coins || 0,
     subscriptionPlan: user.partnerSubscription?.plan || null,
     partnerSubscription: undefined,
   }));
@@ -131,6 +133,7 @@ export const getUserDetail = asyncHandler(async (req: Request, res: Response, ne
       balance: {
         select: {
           amount: true,
+          coins: true,
           updatedAt: true,
         }
 
@@ -152,6 +155,7 @@ export const getUserDetail = asyncHandler(async (req: Request, res: Response, ne
     ...user,
     password: undefined, // Remove password for security
     balance: user.balance?.amount || 0, // Flatten balance
+    coins: user.balance?.coins || 0,
   };
 
   res.status(200).json(userDetail);
@@ -223,7 +227,7 @@ export const updateUser = asyncHandler(async (req: Request, res: Response, next:
       riotGameTag: true,
       region: true,
       balance: {
-        select: { amount: true, updatedAt: true },
+        select: { amount: true, coins: true, updatedAt: true },
       },
       createdAt: true,
       rank: true,
@@ -248,6 +252,7 @@ export const updateUser = asyncHandler(async (req: Request, res: Response, next:
     ...updatedUser,
     password: undefined, // Ensure password is not returned
     balance: updatedUser.balance?.amount || 0, // Flatten balance
+    coins: updatedUser.balance?.coins || 0,
   };
 
   res.status(200).json(userDetail);
@@ -338,12 +343,21 @@ export const updateTransactionStatus = asyncHandler(async (req: Request, res: Re
 
 export const depositToUser = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
   const { id } = req.params;
-  const { amount } = req.body;
+  const { amount, currency = 'vnd', type = 'deposit', note } = req.body;
 
   const depositAmount = Number(amount);
+  const normalizedCurrency = String(currency).toLowerCase();
+  const normalizedType = String(type).toLowerCase();
 
   if (!amount || isNaN(depositAmount) || depositAmount <= 0) {
     return next(new ApiError(400, 'Số tiền nạp không hợp lệ'));
+  }
+
+  if (!['vnd', 'coins'].includes(normalizedCurrency)) {
+    return next(new ApiError(400, 'Invalid balance currency'));
+  }
+  if (!['deposit', 'withdraw'].includes(normalizedType)) {
+    return next(new ApiError(400, 'Invalid transaction type'));
   }
 
   const user = await prisma.user.findUnique({ where: { id } });
@@ -353,12 +367,24 @@ export const depositToUser = asyncHandler(async (req: Request, res: Response, ne
 
   // Sử dụng transaction để đảm bảo tính toàn vẹn dữ liệu
   const updatedUserWithDetails = await prisma.$transaction(async (tx) => {
+    const balanceField = normalizedCurrency === 'coins' ? 'coins' : 'amount';
+    const isWithdraw = normalizedType === 'withdraw';
+    const balance = await tx.balance.upsert({
+      where: { userId: id },
+      update: {},
+      create: { userId: id, amount: 0, coins: 0 },
+    });
+
+    if (isWithdraw && Number((balance as any)[balanceField] || 0) < depositAmount) {
+      throw new ApiError(400, 'Insufficient balance');
+    }
+
     // 1. Cập nhật số dư
     await tx.balance.update({
       where: { userId: id },
       data: {
-        amount: {
-          increment: depositAmount,
+        [balanceField]: {
+          [isWithdraw ? 'decrement' : 'increment']: depositAmount,
         },
       },
     });
@@ -367,9 +393,12 @@ export const depositToUser = asyncHandler(async (req: Request, res: Response, ne
     await tx.transaction.create({
       data: {
         userId: id,
-        type: 'deposit',
+        type: normalizedType,
+        currency: normalizedCurrency,
         amount: depositAmount,
         status: 'success',
+        refId: `admin-balance-${normalizedCurrency}-${Date.now()}`,
+        ...(note !== undefined && { reviewNotes: String(note) }),
       },
     });
 
@@ -377,7 +406,7 @@ export const depositToUser = asyncHandler(async (req: Request, res: Response, ne
     const updatedUser = await tx.user.findUnique({
       where: { id },
       include: {
-        balance: { select: { amount: true, updatedAt: true } },
+        balance: { select: { amount: true, coins: true, updatedAt: true } },
         transactions: { orderBy: { createdAt: 'desc' } },
         playerMatchSummaries: true,
         userTournamentSummaries: true,
@@ -393,6 +422,7 @@ export const depositToUser = asyncHandler(async (req: Request, res: Response, ne
       ...updatedUser,
       password: undefined,
       balance: updatedUser.balance?.amount || 0,
+      coins: updatedUser.balance?.coins || 0,
     };
   });
 

@@ -27,6 +27,18 @@ function getPrizeDistributionObject(distributionString?: string): Record<string,
   }
 }
 
+function normalizeMiniTourEntryType(entryType?: string): 'vnd' | 'coins' | 'free' {
+  const normalized = String(entryType || 'vnd').trim().toLowerCase();
+  if (['coin', 'coins', 'fcoin', 'flex_coin', 'flexcoin'].includes(normalized)) return 'coins';
+  if (['vnd', 'vnđ', 'vietnam_dong', 'usd'].includes(normalized)) return 'vnd';
+  if (normalized === 'free') return 'free';
+  throw new ApiError(400, 'Entry type must be VND or coins.');
+}
+
+function isCoinEntryType(entryType?: string): boolean {
+  return normalizeMiniTourEntryType(entryType) === 'coins';
+}
+
 // Configure Multer for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -74,7 +86,8 @@ export const createMiniTourLobby = asyncHandler(async (req: Request, res: Respon
   const parsedTotalMatches = totalMatches ? Number(totalMatches) : 3; // Default to 3 matches
 
   const maxPlayersNum = Number(maxPlayers); // Explicitly convert to number
-  const entryFeeNum = Number(entryFee); // Explicitly convert to number
+  const normalizedEntryType = normalizeMiniTourEntryType(entryType);
+  const entryFeeNum = normalizedEntryType === 'free' ? 0 : Number(entryFee); // Explicitly convert to number
 
   const customLogoUrl = req.file ? `/uploads/miniTourLobbies/${req.file.filename}` : null; // Get uploaded file path
 
@@ -163,7 +176,7 @@ export const createMiniTourLobby = asyncHandler(async (req: Request, res: Respon
       image: customLogoUrl, // Use the uploaded image URL
       maxPlayers: maxPlayersNum, // Use the converted number
       entryFee: entryFeeNum, // Use the converted number
-      entryType,
+      entryType: normalizedEntryType,
       prizePool: 0, // Initial prizePool is 0, updated on participant join
       gameMode,
       skillLevel,
@@ -297,7 +310,8 @@ export const updateMiniTourLobby = asyncHandler(async (req: Request, res: Respon
   const parsedPrivateMode = privateMode === 'true';
   const parsedTotalMatches = totalMatches ? Number(totalMatches) : 3; // Default to 3 matches
   const maxPlayersNum = Number(maxPlayers);
-  const entryFeeNum = Number(entryFee);
+  const normalizedEntryType = normalizeMiniTourEntryType(entryType ?? lobby.entryType);
+  const entryFeeNum = normalizedEntryType === 'free' ? 0 : Number(entryFee);
   const customLogoUrl = req.file ? `/uploads/miniTourLobbies/${req.file.filename}` : lobby.customLogoUrl;
 
   const dataToUpdate: any = {
@@ -305,7 +319,7 @@ export const updateMiniTourLobby = asyncHandler(async (req: Request, res: Respon
     description: description || lobby.description,
     maxPlayers: !isNaN(maxPlayersNum) ? maxPlayersNum : lobby.maxPlayers,
     entryFee: !isNaN(entryFeeNum) ? entryFeeNum : lobby.entryFee,
-    entryType: entryType || lobby.entryType,
+    entryType: normalizedEntryType,
     gameMode: gameMode || lobby.gameMode,
     skillLevel: skillLevel || lobby.skillLevel,
     theme: theme || lobby.theme,
@@ -438,7 +452,7 @@ export const joinMiniTourLobby = asyncHandler(async (req: Request, res: Response
       });
     }
 
-    const isCoinEntry = lobby.entryType === 'coins';
+    const isCoinEntry = isCoinEntryType(lobby.entryType);
     const userWallet = isCoinEntry ? userBalance.coins : userBalance.amount;
 
     if (userWallet < lobby.entryFee) {
@@ -480,7 +494,7 @@ export const joinMiniTourLobby = asyncHandler(async (req: Request, res: Response
     // 5. Ghi lại giao dịch chính cho người dùng
     await prisma.transaction.create({
       data: {
-        userId: userId, type: 'entry_fee', currency: lobby.entryType, amount: -lobby.entryFee, status: 'success', refId: id,
+        userId: userId, type: 'entry_fee', currency: normalizeMiniTourEntryType(lobby.entryType), amount: -lobby.entryFee, status: 'success', refId: id,
       },
     });
 
@@ -553,7 +567,7 @@ export const startMiniTourLobbyInternal = async (id: string) => {
     if (isInfinite && lobby.matches.length > 0 && lobby.entryFee > 0) {
       // Need to deduct entry fee for all players for Match N
       for (const p of lobby.participants) {
-        const isCoinEntry = lobby.entryType === 'coins';
+        const isCoinEntry = isCoinEntryType(lobby.entryType);
         const userBalance = await tx.balance.findUnique({ where: { userId: p.userId } });
         const userWallet = isCoinEntry ? userBalance?.coins || 0 : userBalance?.amount || 0;
 
@@ -592,7 +606,7 @@ export const startMiniTourLobbyInternal = async (id: string) => {
 
         await tx.transaction.create({
           data: {
-            userId: p.userId, type: 'entry_fee', currency: lobby.entryType, amount: -lobby.entryFee, status: 'success', refId: id,
+            userId: p.userId, type: 'entry_fee', currency: normalizeMiniTourEntryType(lobby.entryType), amount: -lobby.entryFee, status: 'success', refId: id,
           }
         });
 
@@ -791,7 +805,7 @@ export const leaveMiniTourLobby = asyncHandler(async (req: Request, res: Respons
       throw new ApiError(400, 'Cannot leave a lobby that has already started or finished.');
     }
 
-    const isCoinEntry = miniTourLobby.entryType === 'coins';
+    const isCoinEntry = isCoinEntryType(miniTourLobby.entryType);
     
     // 2. Refund the entry fee to the user's balance
     const refundData = isCoinEntry ? { coins: { increment: miniTourLobby.entryFee } } : { amount: { increment: miniTourLobby.entryFee } };
@@ -805,7 +819,7 @@ export const leaveMiniTourLobby = asyncHandler(async (req: Request, res: Respons
       data: {
         userId: userId,
         type: 'entry_fee_refund',
-        currency: miniTourLobby.entryType,
+        currency: normalizeMiniTourEntryType(miniTourLobby.entryType),
         amount: miniTourLobby.entryFee,
         status: 'success',
         refId: id, // Reference to the lobby ID

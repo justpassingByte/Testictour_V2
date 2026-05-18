@@ -2860,13 +2860,15 @@ export default class RoundService {
     logger.debug(`Calculating prizes for tournament ${tournamentId}. Total revenue: ${financials.aggregates.totalEntryRevenue}, Prize pool: ${prizePool}`);
 
     const customStructure = tournament.prizeStructure;
-    const hasCustomStructure = customStructure && (
-      (Array.isArray(customStructure) && customStructure.length > 0) ||
-      (typeof customStructure === 'object' && !Array.isArray(customStructure) && Object.keys(customStructure as object).length > 0)
+    const cashStructure = PrizeCalculationService.getCashPrizeStructure(customStructure);
+    const flexCoinStructure = PrizeCalculationService.getFlexCoinPrizeStructure(customStructure);
+    const hasCustomStructure = cashStructure && (
+      (Array.isArray(cashStructure) && cashStructure.length > 0) ||
+      (typeof cashStructure === 'object' && !Array.isArray(cashStructure) && Object.keys(cashStructure as object).length > 0)
     );
 
     const structureToUse = hasCustomStructure
-      ? customStructure
+      ? cashStructure
       : PrizeCalculationService.getDynamicPrizeDistribution(participantCount);
 
     // Use the PrizeCalculationService to get the optimized distribution
@@ -2909,6 +2911,57 @@ export default class RoundService {
         where: { id: prize.participantId },
         data: { rewarded: true },
       });
+    }
+
+    const flexCoinRanks = Object.keys(flexCoinStructure).sort((a, b) => Number(a) - Number(b));
+    for (const rankKey of flexCoinRanks) {
+      const rank = Number(rankKey);
+      const flexCoinAmount = Number(flexCoinStructure[rankKey] || 0);
+      const participantRecord = winners[rank - 1];
+
+      if (!participantRecord || flexCoinAmount <= 0 || participantRecord.rewarded) {
+        continue;
+      }
+
+      const existingFlexCoinPayout = await tx.transaction.count({
+        where: {
+          userId: participantRecord.userId,
+          type: 'reward',
+          currency: 'coins',
+          refId: `${tournamentId}:flexcoin:${rank}`,
+          status: 'success',
+        }
+      });
+
+      if (existingFlexCoinPayout > 0) {
+        logger.info(`Participant ${participantRecord.id} already has a Flex coin reward for tournament ${tournamentId}. Skipping.`);
+        continue;
+      }
+
+      await tx.balance.upsert({
+        where: { userId: participantRecord.userId },
+        update: { coins: { increment: flexCoinAmount } },
+        create: { userId: participantRecord.userId, amount: 0, coins: flexCoinAmount },
+      });
+
+      await tx.transaction.create({
+        data: {
+          userId: participantRecord.userId,
+          type: 'reward',
+          currency: 'coins',
+          amount: flexCoinAmount,
+          status: 'success',
+          refId: `${tournamentId}:flexcoin:${rank}`,
+          tournamentId,
+        }
+      });
+
+      if (!participantRecord.rewarded) {
+        await tx.participant.update({
+          where: { id: participantRecord.id },
+          data: { rewarded: true },
+        });
+      }
     }
 
     // Đảm bảo tất cả rounds, lobbies và roundOutcomes đều được đánh dấu completed khi tournament kết thúc

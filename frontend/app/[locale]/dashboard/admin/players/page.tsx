@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Search, ArrowUpDown, Loader2, Users, Trophy, Target, TrendingUp, Wallet, History, DollarSign } from "lucide-react"
+import { Search, ArrowUpDown, Loader2, Users, Trophy, Target, TrendingUp, Wallet, History, Coins } from "lucide-react"
 import api from "@/app/lib/apiConfig"
 import { useTranslations } from "next-intl"
 
@@ -25,7 +25,8 @@ interface PlayerDetail {
   rank?: string
   isActive: boolean
   createdAt: string
-  balance?: { amount: number }
+  balance?: number | { amount: number; coins?: number }
+  coins?: number
   totalMatchesPlayed: number
   averagePlacement: number
   topFourRate: number
@@ -53,6 +54,10 @@ export default function AdminPlayersPage() {
   const [detailLoading, setDetailLoading] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editForm, setEditForm] = useState<any>({})
+  const [balanceCurrency, setBalanceCurrency] = useState<"vnd" | "coins">("vnd")
+  const [balanceType, setBalanceType] = useState<"deposit" | "withdraw">("deposit")
+  const [balanceAmount, setBalanceAmount] = useState("")
+  const [balanceUpdating, setBalanceUpdating] = useState(false)
 
   useEffect(() => {
     setRoleFilter("")
@@ -93,6 +98,43 @@ export default function AdminPlayersPage() {
     }
   }
 
+  const getVndBalance = (player: PlayerDetail | null) => {
+    if (!player) return 0
+    return typeof player.balance === "number" ? player.balance : player.balance?.amount || 0
+  }
+  const getCoinBalance = (player: PlayerDetail | null) => {
+    if (!player) return 0
+    return typeof player.balance === "number" ? player.coins || 0 : player.balance?.coins ?? player.coins ?? 0
+  }
+  const formatVnd = (value: number) => new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(value)
+  const formatBalanceAmount = (value: number, currency: "vnd" | "coins") =>
+    currency === "coins" ? `${value.toLocaleString("vi-VN")} Coin` : formatVnd(value)
+
+  const handleBalanceUpdate = async () => {
+    if (!selectedPlayer) return
+    const amount = Number(balanceAmount)
+    if (!amount || Number.isNaN(amount) || amount <= 0) {
+      alert("Please enter a valid amount")
+      return
+    }
+
+    setBalanceUpdating(true)
+    try {
+      await api.post(`/admin/users/${selectedPlayer.id}/deposit`, {
+        amount,
+        currency: balanceCurrency,
+        type: balanceType,
+      })
+      const res = await api.get(`/admin/users/${selectedPlayer.id}`)
+      setSelectedPlayer(res.data)
+      setBalanceAmount("")
+    } catch (error: any) {
+      alert(error?.response?.data?.message || error?.message || "Failed to update balance")
+    } finally {
+      setBalanceUpdating(false)
+    }
+  }
+
   const filteredUsers = users
     .filter((u) => {
       const matchesSearch =
@@ -128,7 +170,8 @@ export default function AdminPlayersPage() {
     })
 
   const statCards = selectedPlayer ? [
-    { label: t("balance", { defaultValue: "Balance" }), value: `${(selectedPlayer.balance?.amount || 0).toLocaleString()} đ`, icon: Wallet, color: "emerald" },
+    { label: "VND Balance", value: formatVnd(getVndBalance(selectedPlayer)), icon: Wallet, color: "emerald" },
+    { label: "Coin Balance", value: `${getCoinBalance(selectedPlayer).toLocaleString("vi-VN")} Coin`, icon: Coins, color: "amber" },
     { label: t("matches", { defaultValue: "Matches" }), value: selectedPlayer.totalMatchesPlayed || 0, icon: Target, color: "blue" },
     { label: t("avg_placement", { defaultValue: "Avg Place" }), value: selectedPlayer.averagePlacement || "N/A", icon: TrendingUp, color: "amber" },
     { label: t("first_place_rate", { defaultValue: "1st Rate" }), value: `${selectedPlayer.firstPlaceRate || 0}%`, icon: Trophy, color: "violet" },
@@ -368,6 +411,51 @@ export default function AdminPlayersPage() {
                   </CardContent>
                 </Card>
 
+                <Card className="bg-card/60 border-white/10">
+                  <CardContent className="p-4 space-y-4">
+                    <div>
+                      <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Balance Update</h4>
+                      <p className="text-xs text-muted-foreground">
+                        Current: {formatVnd(getVndBalance(selectedPlayer))} / {getCoinBalance(selectedPlayer).toLocaleString("vi-VN")} Coin
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Select value={balanceCurrency} onValueChange={(value: "vnd" | "coins") => setBalanceCurrency(value)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="vnd">VND</SelectItem>
+                          <SelectItem value="coins">Coin</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select value={balanceType} onValueChange={(value: "deposit" | "withdraw") => setBalanceType(value)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="deposit">Add</SelectItem>
+                          <SelectItem value="withdraw">Subtract</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        type="number"
+                        min="1"
+                        step="1"
+                        placeholder={balanceCurrency === "coins" ? "Coin amount" : "VND amount"}
+                        value={balanceAmount}
+                        onChange={(e) => setBalanceAmount(e.target.value)}
+                      />
+                      <Button onClick={handleBalanceUpdate} disabled={balanceUpdating || !balanceAmount}>
+                        {balanceUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Update"}
+                      </Button>
+                    </div>
+                    {balanceAmount && (
+                      <p className="text-xs text-muted-foreground">
+                        {balanceType === "deposit" ? "Add" : "Subtract"} {formatBalanceAmount(Number(balanceAmount) || 0, balanceCurrency)}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+
                 {/* Recent Transactions */}
                 {selectedPlayer.transactions && selectedPlayer.transactions.length > 0 && (
                   <div className="space-y-3">
@@ -384,10 +472,11 @@ export default function AdminPlayersPage() {
                           {(() => {
                             // Amount may already be negative (debit) in DB
                             const raw = tx.amount
-                            const isCredit = tx.type === 'deposit' || tx.type === 'reward' || tx.type === 'prize' || raw > 0
+                            const isCredit = tx.type === 'deposit' || tx.type === 'reward' || tx.type === 'prize' || tx.type === 'refund'
+                            const txCurrency = tx.currency === 'coins' ? 'coins' : 'vnd'
                             return (
                               <span className={isCredit ? 'text-green-400 font-medium' : 'text-red-400 font-medium'}>
-                                {isCredit ? '+' : '-'}{Math.abs(raw).toLocaleString()} đ
+                                {isCredit ? '+' : '-'}{formatBalanceAmount(Math.abs(raw), txCurrency)}
                               </span>
                             )
                           })()}

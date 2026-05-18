@@ -16,6 +16,12 @@ import { useTranslations } from "next-intl"
 
 function LobbyCard({ lobby }: { lobby: MiniTourLobby }) {
   const t = useTranslations("common");
+  const isCoinEntry = lobby.entryType === "coins" || lobby.entryType === "coin";
+  const formatEntryAmount = (amount: number) => {
+    if (!amount) return "Free";
+    if (isCoinEntry) return `${amount.toLocaleString("vi-VN")} Coin`;
+    return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(amount);
+  };
   const getStatusColor = (status: string) => {
     switch (status) {
       case "WAITING":
@@ -88,15 +94,15 @@ function LobbyCard({ lobby }: { lobby: MiniTourLobby }) {
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">{t('entry_fee')}:</span>
             <span className="font-medium">
-              {lobby.entryType === "coins" ? (
+              {isCoinEntry ? (
                 <span className="flex items-center">
                   <Coins className="mr-1 h-3 w-3" />
-                  {lobby.entryFee}
+                  {formatEntryAmount(lobby.entryFee)}
                 </span>
               ) : (
                 <span className="flex items-center">
                   <DollarSign className="mr-1 h-3 w-3" />
-                  {lobby.entryFee}
+                  {formatEntryAmount(lobby.entryFee)}
                 </span>
               )}
             </span>
@@ -105,8 +111,8 @@ function LobbyCard({ lobby }: { lobby: MiniTourLobby }) {
             <span className="text-muted-foreground">{t('prize_pool')}:</span>
             <span className="font-medium">
               <span className="flex items-center">
-                <Coins className="mr-1 h-3 w-3" />
-                {lobby.prizePool}
+                {isCoinEntry ? <Coins className="mr-1 h-3 w-3" /> : <DollarSign className="mr-1 h-3 w-3" />}
+                {formatEntryAmount(lobby.prizePool)}
               </span>
             </span>
           </div>
@@ -161,13 +167,14 @@ export function LobbyList({ initialLobbies }: { initialLobbies: MiniTourLobby[] 
   const [sortBy, setSortBy] = useState<string>("rating")
 
   const filteredLobbies = initialLobbies.filter((lobby) => {
+    const normalizedEntryType = lobby.entryType === "usd" ? "vnd" : lobby.entryType.toLowerCase()
     const matchesSearch =
       lobby.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (lobby.description && lobby.description.toLowerCase().includes(searchQuery.toLowerCase()))
     const matchesGameMode =
       selectedGameMode === "all" || lobby.gameMode.toLowerCase() === selectedGameMode.toLowerCase()
     const matchesEntryType =
-      selectedEntryType === "all" || lobby.entryType.toLowerCase() === selectedEntryType.toLowerCase()
+      selectedEntryType === "all" || normalizedEntryType === selectedEntryType.toLowerCase()
 
     return matchesSearch && matchesGameMode && matchesEntryType
   })
@@ -221,7 +228,7 @@ export function LobbyList({ initialLobbies }: { initialLobbies: MiniTourLobby[] 
             <SelectContent>
               <SelectItem value="all">{t('all_types')}</SelectItem>
               <SelectItem value="coins">{t('coins')}</SelectItem>
-              <SelectItem value="usd">{t('usd')}</SelectItem>
+              <SelectItem value="vnd">VND</SelectItem>
             </SelectContent>
           </Select>
           <Select value={sortBy} onValueChange={setSortBy}>

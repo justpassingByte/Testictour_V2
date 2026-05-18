@@ -62,7 +62,7 @@ export interface IRoundOutcome {
   }
 }
 
-export type PrizeStructure = Record<string, number>;
+export type PrizeStructure = any;
 
 export interface IAdvancementConditionTopN {
   type: "top_n_scores";

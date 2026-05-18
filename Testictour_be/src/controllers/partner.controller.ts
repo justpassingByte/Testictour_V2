@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import StripeService from '../services/StripeService';
 import { Request, Response, NextFunction } from 'express';
+import ApiError from '../utils/ApiError';
 
 const prisma = new PrismaClient();
 
@@ -409,6 +410,7 @@ export default {
                     isActive: user.isActive,
                     balance: user.balance ? {
                         amount: user.balance.amount,
+                        coins: user.balance.coins,
                         updatedAt: user.balance.updatedAt.toISOString(),
                     } : null,
                 },
@@ -539,55 +541,72 @@ export default {
     // POST /partner/transaction
     async processTransaction(req: Request, res: Response, next: NextFunction) {
         try {
-            const { playerId, userId: bodyUserId, amount, type } = req.body; // frontend sends playerId
+            const { playerId, userId: bodyUserId, amount, type, currency = 'vnd', description } = req.body; // frontend sends playerId
             const userId = playerId || bodyUserId; // accept either field
             const partnerId = (req as any).user.id;
+            const userRole = (req as any).user.role;
+            const transactionAmount = Number(amount);
+            const normalizedType = String(type).toLowerCase();
+            const normalizedCurrency = String(currency).toLowerCase();
+
+            if (!userId) {
+                return res.status(400).json({ success: false, message: 'Player is required' });
+            }
+            if (isNaN(transactionAmount) || transactionAmount <= 0) {
+                return res.status(400).json({ success: false, message: 'Invalid amount' });
+            }
+            if (!['deposit', 'withdraw'].includes(normalizedType)) {
+                return res.status(400).json({ success: false, message: 'Invalid transaction type' });
+            }
+            if (!['vnd', 'coins'].includes(normalizedCurrency)) {
+                return res.status(400).json({ success: false, message: 'Invalid balance currency' });
+            }
 
             const result = await prisma.$transaction(async (tx) => {
+                const partner = await tx.user.findUnique({ where: { id: partnerId } });
+                const player = await tx.user.findUnique({ where: { id: userId } });
+
+                if (!partner || !player) {
+                    throw new ApiError(404, 'Partner or player not found');
+                }
+                if (userRole !== 'admin' && player.referrer !== partner.username) {
+                    throw new ApiError(403, 'Player does not belong to this partner');
+                }
+
+                const balanceField = normalizedCurrency === 'coins' ? 'coins' : 'amount';
+                const isWithdraw = normalizedType === 'withdraw';
+
                 // Ensure user has a balance record
                 const userBalance = await tx.balance.upsert({
                     where: { userId },
                     update: {},
-                    create: { userId, amount: 0 },
+                    create: { userId, amount: 0, coins: 0 },
                 });
 
-                if (type === 'deposit') {
-                    // Deposit to user's balance
-                    await tx.balance.update({
-                        where: { userId },
-                        data: { amount: { increment: amount } },
-                    });
-
-                    // Create transaction record
-                    await tx.transaction.create({
-                        data: {
-                            userId,
-                            type: 'deposit',
-                            amount,
-                            status: 'success',
-                            refId: `partner-${partnerId}`,
-                        },
-                    });
-                } else if (type === 'withdraw') {
-                    if (userBalance.amount < amount) {
-                        throw new Error('Insufficient balance');
-                    }
-
-                    await tx.balance.update({
-                        where: { userId },
-                        data: { amount: { decrement: amount } },
-                    });
-
-                    await tx.transaction.create({
-                        data: {
-                            userId,
-                            type: 'reward',
-                            amount: -amount,
-                            status: 'success',
-                            refId: `partner-withdraw-${partnerId}`,
-                        },
-                    });
+                if (isWithdraw && Number((userBalance as any)[balanceField] || 0) < transactionAmount) {
+                    throw new ApiError(400, 'Insufficient balance');
                 }
+
+                await tx.balance.update({
+                    where: { userId },
+                    data: {
+                        [balanceField]: {
+                            [isWithdraw ? 'decrement' : 'increment']: transactionAmount,
+                        },
+                    },
+                });
+
+                await tx.transaction.create({
+                    data: {
+                        userId,
+                        type: normalizedType,
+                        currency: normalizedCurrency,
+                        amount: transactionAmount,
+                        status: 'success',
+                        refId: `partner-balance-${normalizedCurrency}-${partnerId}`,
+                        ...(description !== undefined && { reviewNotes: String(description) }),
+                    },
+                });
 
                 return tx.balance.findUnique({ where: { userId } });
             });

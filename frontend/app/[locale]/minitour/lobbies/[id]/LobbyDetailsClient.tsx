@@ -82,7 +82,7 @@ export function LobbyDetailsClient({ initialLobby }: LobbyDetailsClientProps) {
     };
   }, [id, lobby, fetchLobby, toast]);
 
-  const isCoinEntry = lobby?.entryType === 'coins';
+  const isCoinEntry = lobby?.entryType === 'coins' || lobby?.entryType === 'coin';
   const userCoins = currentUser?.balance ? (isCoinEntry ? currentUser.balance.coins : currentUser.balance.amount) : 0;
 
   const { mainButtonText, mainButtonDisabled, mainButtonAction, secondaryActions } = useLobbyActions({

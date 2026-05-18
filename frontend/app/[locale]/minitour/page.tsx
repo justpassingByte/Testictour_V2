@@ -15,6 +15,8 @@ export const metadata = {
     "Explore and join custom MiniTour lobbies, compete with other players, earn coins, and win prizes. High-stakes and casual games available.",
 }
 
+export const dynamic = "force-dynamic"
+
 const getLobbies = cache(async (): Promise<MiniTourLobby[]> => {
   try {
     const response = await api.get("/minitour-lobbies")

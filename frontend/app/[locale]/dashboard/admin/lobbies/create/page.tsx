@@ -4,7 +4,7 @@ import type React from "react"
 import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
-import { ChevronRight, Upload, Palette, Settings, Users, DollarSign, Trophy, Save, Trash2 } from "lucide-react"
+import { ChevronRight, Upload, Palette, Settings, Users, DollarSign, Trophy, Save, Trash2, Coins } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -37,7 +37,7 @@ export default function CreateOrEditLobbyPage() {
     maxPlayers: 8,
     gameMode: "",
     entryFee: 0,
-    entryType: "coins",
+    entryType: "vnd",
     prizeDistribution: "standard",
     theme: "default",
     rules: "",
@@ -190,6 +190,14 @@ export default function CreateOrEditLobbyPage() {
       setSelectedImage(file)
       setImagePreview(URL.createObjectURL(file))
     }
+  }
+
+  const formatEntryAmount = (amount: number) => {
+    if (!amount) return "Free"
+    if (lobbyData.entryType === "coins") {
+      return `${amount.toLocaleString("vi-VN")} Coin`
+    }
+    return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(amount)
   }
 
   return (
@@ -392,7 +400,7 @@ export default function CreateOrEditLobbyPage() {
                 <CardContent className="space-y-6">
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="entryType">Entry Type</Label>
+                      <Label htmlFor="entryType">Entry Currency</Label>
                       <Select
                         value={lobbyData.entryType}
                         onValueChange={(value) => setLobbyData({ ...lobbyData, entryType: value })}
@@ -401,22 +409,31 @@ export default function CreateOrEditLobbyPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="coins">Coins</SelectItem>
-                          <SelectItem value="usd">USD</SelectItem>
-                          <SelectItem value="free">Free</SelectItem>
+                          <SelectItem value="vnd">VND</SelectItem>
+                          <SelectItem value="coins">Coin</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="entryFee">Entry Fee</Label>
-                      <Input
-                        id="entryFee"
-                        type="number"
-                        placeholder="0"
-                        value={lobbyData.entryFee}
-                        onChange={(e) => setLobbyData({ ...lobbyData, entryFee: Number.parseInt(e.target.value) || 0 })}
-                        disabled={lobbyData.entryType === "free"}
-                      />
+                      <Label htmlFor="entryFee">Entry Fee ({lobbyData.entryType === "coins" ? "Coin" : "VND"})</Label>
+                      <div className="relative">
+                        {lobbyData.entryType === "coins" ? (
+                          <Coins className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        ) : (
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">₫</span>
+                        )}
+                        <Input
+                          id="entryFee"
+                          type="number"
+                          min="0"
+                          step="1"
+                          placeholder={lobbyData.entryType === "coins" ? "100" : "50000"}
+                          value={lobbyData.entryFee}
+                          onChange={(e) => setLobbyData({ ...lobbyData, entryFee: Number.parseInt(e.target.value) || 0 })}
+                          className="pl-9"
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground">{formatEntryAmount(lobbyData.entryFee)}</p>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="partnerRevenueShare">Partner Share (%)</Label>
@@ -475,7 +492,7 @@ export default function CreateOrEditLobbyPage() {
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground italic">
-                      * Ví dụ: Nếu phí là 100 coins và share là 20%, bạn nhận 20 coins, prize pool là 80 coins.
+                      * Ví dụ: Nếu phí là {formatEntryAmount(lobbyData.entryFee || 100000)} và share là 20%, bạn nhận 20%, phần còn lại vào prize pool.
                     </p>
                   </div>
                 </CardContent>
@@ -661,11 +678,11 @@ export default function CreateOrEditLobbyPage() {
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Entry Type:</span>
-                          <span className="capitalize">{lobbyData.entryType}</span>
+                          <span>{lobbyData.entryType === "coins" ? "Coin" : "VND"}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Entry Fee:</span>
-                          <span>{lobbyData.entryFee || "Free"}</span>
+                          <span>{formatEntryAmount(lobbyData.entryFee)}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Prize Distribution:</span>

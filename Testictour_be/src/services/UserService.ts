@@ -68,6 +68,7 @@ export default class UserService {
     
     const user = await prisma.user.findUnique({
       where: isEmail ? { email: login } : { username: login },
+      include: { balance: { select: { amount: true, coins: true } } },
     });
 
     if (!user) throw new ApiError(401, 'Invalid credentials');
@@ -86,7 +87,11 @@ export default class UserService {
       riotGameTag: user.riotGameTag,
       puuid: user.puuid,
       discordId: user.discordId,
-      region: user.region
+      region: user.region,
+      balance: user.balance ? {
+        amount: user.balance.amount,
+        coins: user.balance.coins,
+      } : undefined
     }, token };
   }
 

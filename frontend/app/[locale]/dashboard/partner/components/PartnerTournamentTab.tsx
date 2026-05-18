@@ -108,6 +108,12 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
     "3": 20,
     "4": 10,
   })
+  const [flexCoinDistribution, setFlexCoinDistribution] = useState<Record<string, number>>({
+    "1": 0,
+    "2": 0,
+    "3": 0,
+    "4": 0,
+  })
 
     const [phases, setPhases] = useState([
         { name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "top_n_scores", advancementValue: 4, matchesPerRound: 1, carryOverScores: false, pointsMapping: [8, 7, 6, 5, 4, 3, 2, 1] }
@@ -184,10 +190,18 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
         pointsMapping: p.pointsMapping,
       }))
 
-            // Chuyển đổi prizeDistribution từ phần trăm sang tỷ lệ decimal
-      const prizeStructure = Object.fromEntries(
+      const cashPrizeStructure = Object.fromEntries(
         Object.entries(prizeDistribution).map(([rank, percent]) => [rank, percent / 100])
       );
+      const flexCoinPrizeStructure = Object.fromEntries(
+        Object.entries(flexCoinDistribution)
+          .map(([rank, amount]) => [rank, Math.max(0, Number(amount) || 0)] as [string, number])
+          .filter(([, amount]) => amount > 0)
+      );
+      const prizeStructure = {
+        cash: cashPrizeStructure,
+        flexCoin: flexCoinPrizeStructure,
+      };
 
             await api.post('/tournaments', {
                     name: form.name,
@@ -242,6 +256,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
       setPrizePoolVnd("")
             setSponsors([])
             setPrizeDistribution({ "1": 40, "2": 30, "3": 20, "4": 10 })
+            setFlexCoinDistribution({ "1": 0, "2": 0, "3": 0, "4": 0 })
             setPhases([{ name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "top_n_scores", advancementValue: 4, matchesPerRound: 1, carryOverScores: false, pointsMapping: [8, 7, 6, 5, 4, 3, 2, 1] }])
       setImageFile(null)
       setImagePreview(null)
@@ -751,6 +766,19 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                          />
                          <span className="text-sm font-bold text-muted-foreground">%</span>
                        </div>
+                       <div className="flex items-center gap-1">
+                         <Input
+                           type="number"
+                           min={0}
+                           value={flexCoinDistribution[rank] ?? 0}
+                           onChange={(e) => {
+                             const val = parseFloat(e.target.value) || 0;
+                             setFlexCoinDistribution(prev => ({ ...prev, [rank]: Math.max(0, val) }));
+                           }}
+                           className="bg-black/40 text-center font-bold"
+                         />
+                         <span className="text-[11px] font-bold text-amber-400 whitespace-nowrap">F coin</span>
+                       </div>
                      </div>
                    ))}
                  </div>
@@ -764,6 +792,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                        if (numRanks < 8) {
                          const nextRank = numRanks + 1;
                          setPrizeDistribution(prev => ({ ...prev, [nextRank.toString()]: 0 }));
+                         setFlexCoinDistribution(prev => ({ ...prev, [nextRank.toString()]: 0 }));
                        }
                      }}
                      disabled={Object.keys(prizeDistribution).length >= 8}
@@ -782,6 +811,11 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                          const newDist = { ...prizeDistribution };
                          delete newDist[lastKey];
                          setPrizeDistribution(newDist);
+                         setFlexCoinDistribution(prev => {
+                           const next = { ...prev };
+                           delete next[lastKey];
+                           return next;
+                         });
                        }
                      }}
                      disabled={Object.keys(prizeDistribution).length <= 1}
@@ -799,6 +833,10 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                    )}
                  </div>
                </div>
+            </div>
+
+            <div className="-mt-3 px-4 text-xs text-amber-400">
+              F coin pool: {Object.values(flexCoinDistribution).reduce((a, b) => a + b, 0).toLocaleString()} Flex coin
             </div>
 
                         {/* Config Phases */}

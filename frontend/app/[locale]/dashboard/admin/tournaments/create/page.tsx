@@ -74,6 +74,8 @@ export default function CreateTournamentPage() {
   const [phases, setPhases] = useState<PhaseFormData[]>([
     { name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "top_n_scores", advancementValue: 4, matchesPerRound: 1, carryOverScores: false, lobbyAssignment: "none" }
   ])
+  const [prizeDistribution, setPrizeDistribution] = useState<Record<string, number>>({ "1": 40, "2": 30, "3": 20, "4": 10 })
+  const [flexCoinDistribution, setFlexCoinDistribution] = useState<Record<string, number>>({ "1": 0, "2": 0, "3": 0, "4": 0 })
 
   const updateForm = (field: string, value: any) => {
     setForm(prev => ({ ...prev, [field]: value }))
@@ -138,6 +140,14 @@ export default function CreateTournamentPage() {
         customPrizePool: customPrizePoolVnd > 0 ? customPrizePoolVnd : undefined,
         registrationDeadline: new Date(form.registrationDeadline),
         hostFeePercent: form.hostFeePercent,
+        prizeStructure: {
+          cash: Object.fromEntries(Object.entries(prizeDistribution).map(([rank, percent]) => [rank, percent / 100])),
+          flexCoin: Object.fromEntries(
+            Object.entries(flexCoinDistribution)
+              .map(([rank, amount]) => [rank, Math.max(0, Number(amount) || 0)] as [string, number])
+              .filter(([, amount]) => amount > 0)
+          ),
+        },
         expectedParticipants: form.maxPlayers,
         config: { phases: phaseConfigs as any },
         isCommunityMode: form.isCommunityMode,
@@ -365,6 +375,51 @@ export default function CreateTournamentPage() {
                 {formatCurrency(estimatedPrizePoolVnd, "VND")}
               </strong>
               {" "}<span className="text-xs opacity-70">({formatCurrency(estimatedPrizePoolVnd / usdToVndRate, "USD")})</span>{" "}(at full registration)
+            </div>
+
+            <div className="border border-white/10 rounded-lg p-4 space-y-3">
+              <div>
+                <h3 className="font-semibold text-amber-400">Prize Distribution</h3>
+                <p className="text-xs text-muted-foreground">Configure cash percentage and F coin for each rank.</p>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {Object.entries(prizeDistribution).map(([rank, percent]) => (
+                  <div key={rank} className="space-y-2">
+                    <Label className="text-xs font-bold uppercase">#{rank}</Label>
+                    <div className="flex items-center gap-1">
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={percent}
+                        onChange={(e) => setPrizeDistribution(prev => ({ ...prev, [rank]: Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)) }))}
+                        className="text-center font-bold"
+                      />
+                      <span className="text-sm font-bold text-muted-foreground">%</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Input
+                        type="number"
+                        min={0}
+                        value={flexCoinDistribution[rank] ?? 0}
+                        onChange={(e) => setFlexCoinDistribution(prev => ({ ...prev, [rank]: Math.max(0, parseFloat(e.target.value) || 0) }))}
+                        className="text-center font-bold"
+                      />
+                      <span className="text-[11px] font-bold text-amber-400 whitespace-nowrap">F coin</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-xs">
+                <span>
+                  Cash total: <strong className={Object.values(prizeDistribution).reduce((a, b) => a + b, 0) === 100 ? "text-emerald-400" : "text-red-400"}>
+                    {Object.values(prizeDistribution).reduce((a, b) => a + b, 0)}%
+                  </strong>
+                </span>
+                <span className="text-amber-400">
+                  F coin pool: {Object.values(flexCoinDistribution).reduce((a, b) => a + b, 0).toLocaleString()} Flex coin
+                </span>
+              </div>
             </div>
             
           </CardContent>

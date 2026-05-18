@@ -24,6 +24,8 @@ services:
     restart: unless-stopped
     ports:
       - "4000:4000"
+    volumes:
+      - backend-uploads:/app/public/uploads
     environment:
       - PORT=4000
       - NODE_ENV=production
@@ -122,3 +124,4 @@ networks:
 volumes:
   redis-data:
   postgres-data:
+  backend-uploads:

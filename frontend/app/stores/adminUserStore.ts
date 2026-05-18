@@ -9,6 +9,7 @@ export interface AdminUser {
   email: string;
   role: string;
   balance: number;
+  coins?: number;
   isActive?: boolean;
   subscriptionPlan?: string | null;
   subscriptionStatus?: string | null;
@@ -115,7 +116,7 @@ interface AdminUserState {
   updateTransactionStatus: (id: string, status: string, note?: string) => Promise<void>;
   banUser: (id: string) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
-  deposit: (userId: string, amount: number) => Promise<void>;
+  deposit: (userId: string, amount: number, currency?: "vnd" | "coins", type?: "deposit" | "withdraw", note?: string) => Promise<void>;
 }
 
 export const useAdminUserStore = create<AdminUserState>((set, get) => ({
@@ -220,10 +221,10 @@ export const useAdminUserStore = create<AdminUserState>((set, get) => ({
       await get().fetchUsers();
     }
   },
-  deposit: async (userId, amount) => {
+  deposit: async (userId, amount, currency = "vnd", type = "deposit", note) => {
     set({ loading: true });
     try {
-      const res = await api.post(`/admin/users/${userId}/deposit`, { amount });
+      const res = await api.post(`/admin/users/${userId}/deposit`, { amount, currency, type, note });
       set({ selectedUserDetail: res.data, loading: false });
       // If it was a partner, we might need to update selectedPartnerDetail balance too
       const currentPartner = get().selectedPartnerDetail;

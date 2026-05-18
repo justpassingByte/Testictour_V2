@@ -350,13 +350,13 @@ export default class ParticipantService {
         }
       }
 
-      const customStructure = tournament.prizeStructure;
+      const PrizeCalculationService = (await import('./PrizeCalculationService')).default;
+      const customStructure = PrizeCalculationService.getCashPrizeStructure(tournament.prizeStructure);
       const hasCustomStructure = customStructure && (
         (Array.isArray(customStructure) && customStructure.length > 0) ||
         (typeof customStructure === 'object' && !Array.isArray(customStructure) && Object.keys(customStructure as object).length > 0)
       );
 
-      const PrizeCalculationService = (await import('./PrizeCalculationService')).default;
       const structureToUse = hasCustomStructure
         ? customStructure
         : PrizeCalculationService.getDynamicPrizeDistribution(participantCount);

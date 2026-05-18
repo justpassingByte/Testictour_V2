@@ -201,6 +201,13 @@ const commonUserSelect = {
   tournamentsWon: true,
   totalPrizeWon: true,
   lastUpdatedStats: true,
+  balance: {
+    select: {
+      amount: true,
+      coins: true,
+      updatedAt: true,
+    }
+  },
 };
 
 // Controller

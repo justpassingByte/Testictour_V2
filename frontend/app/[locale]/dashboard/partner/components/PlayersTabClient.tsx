@@ -55,6 +55,7 @@ interface PlayerDetail {
     isActive: boolean
     balance: {
       amount: number
+      coins?: number
       updatedAt: string
     } | null
   }
@@ -100,6 +101,7 @@ interface Transaction {
   userId: string
   type: 'deposit' | 'withdraw' | 'reward' | 'entry_fee' | 'refund'
   amount: number
+  currency?: 'vnd' | 'coins'
   status: 'pending' | 'success' | 'failed' | 'completed'
   refId?: string
   createdAt: string
@@ -120,6 +122,7 @@ export default function PlayersTabClient({ players: initialPlayers, currentBalan
   const [openAddModal, setOpenAddModal] = useState(false)
   const [openTransactionModal, setOpenTransactionModal] = useState(false)
   const [transactionType, setTransactionType] = useState<'deposit' | 'withdraw'>('deposit')
+  const [transactionCurrency, setTransactionCurrency] = useState<'vnd' | 'coins'>('vnd')
   const [transactionAmount, setTransactionAmount] = useState('')
   const [transactionDescription, setTransactionDescription] = useState('')
   const [selectedPlayer, setSelectedPlayer] = useState<PartnerPlayer | null>(null)
@@ -135,6 +138,13 @@ export default function PlayersTabClient({ players: initialPlayers, currentBalan
   useEffect(() => {
     setLocalPlayers(initialPlayers)
   }, [initialPlayers])
+
+  const formatVnd = (value: number) => new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(value)
+  const formatBalanceAmount = (value: number, currency: "vnd" | "coins") =>
+    currency === "coins" ? `${value.toLocaleString("vi-VN")} Coin` : formatVnd(value)
+  const getSelectedBalance = () => transactionCurrency === "coins"
+    ? playerDetail?.player.balance?.coins || 0
+    : playerDetail?.player.balance?.amount || 0
 
   const refreshPlayers = async () => {
     // If viewing as admin (partnerId is present), rely on parent update or just don't fetch from partner endpoint
@@ -320,6 +330,7 @@ export default function PlayersTabClient({ players: initialPlayers, currentBalan
       const response = await api.post('/partner/transaction', {
         playerId: selectedPlayer.id,
         type: transactionType,
+        currency: transactionCurrency,
         amount,
         description: transactionDescription
       });
@@ -616,7 +627,10 @@ export default function PlayersTabClient({ players: initialPlayers, currentBalan
                         <div>
                           <p className="text-sm text-emerald-200 font-medium">Balance</p>
                           <p className="text-2xl font-bold text-white">
-                            ${playerDetail.player.balance?.amount || 0}
+                            {formatVnd(playerDetail.player.balance?.amount || 0)}
+                          </p>
+                          <p className="text-xs text-emerald-100/80">
+                            {(playerDetail.player.balance?.coins || 0).toLocaleString("vi-VN")} Coin
                           </p>
                         </div>
                         <Wallet className="h-8 w-8 text-emerald-400" />
@@ -777,7 +791,7 @@ export default function PlayersTabClient({ players: initialPlayers, currentBalan
                     <div className="flex justify-between">
                       <span className="text-sm font-medium">Balance:</span>
                       <span className="text-sm font-bold text-green-400">
-                        ${playerDetail.player.balance?.amount || 0}
+                        {formatVnd(playerDetail.player.balance?.amount || 0)} / {(playerDetail.player.balance?.coins || 0).toLocaleString("vi-VN")} Coin
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -963,7 +977,7 @@ export default function PlayersTabClient({ players: initialPlayers, currentBalan
                                 <div className="text-right">
                                   <span className={`text-lg font-bold ${isPositive ? 'text-emerald-400' : 'text-rose-400'
                                     }`}>
-                                    {isPositive ? '+' : '-'}${Math.abs(transaction.amount).toFixed(2)}
+                                    {isPositive ? '+' : '-'}{formatBalanceAmount(Math.abs(transaction.amount), transaction.currency === 'coins' ? 'coins' : 'vnd')}
                                   </span>
                                 </div>
                               </div>
@@ -1035,21 +1049,34 @@ export default function PlayersTabClient({ players: initialPlayers, currentBalan
                 </Avatar>
                 <span className="font-medium text-white">{selectedPlayer?.username}</span>
                 <span className="text-sm text-slate-400 ml-auto">
-                  Current Balance: ${playerDetail?.player.balance?.amount || 0}
+                  Current: {formatBalanceAmount(getSelectedBalance(), transactionCurrency)}
                 </span>
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="amount" className="text-slate-300">Amount ($)</Label>
+              <Label htmlFor="currency" className="text-slate-300">Balance Type</Label>
+              <Select value={transactionCurrency} onValueChange={(value: "vnd" | "coins") => setTransactionCurrency(value)}>
+                <SelectTrigger id="currency" className="bg-slate-700 border-slate-600 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="vnd">VND</SelectItem>
+                  <SelectItem value="coins">Coin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="amount" className="text-slate-300">Amount ({transactionCurrency === 'coins' ? 'Coin' : 'VND'})</Label>
               <Input
                 id="amount"
                 type="number"
-                placeholder="0.00"
+                placeholder={transactionCurrency === 'coins' ? '100' : '50000'}
                 value={transactionAmount}
                 onChange={(e) => setTransactionAmount(e.target.value)}
-                min="0.01"
-                step="0.01"
+                min="1"
+                step="1"
                 className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 focus:border-emerald-500"
               />
             </div>
@@ -1076,10 +1103,12 @@ export default function PlayersTabClient({ players: initialPlayers, currentBalan
                 <div className="flex justify-between items-center mt-3">
                   <span className="text-sm font-medium text-slate-300">New Balance:</span>
                   <span className={`font-bold text-lg ${transactionType === 'deposit' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    ${transactionType === 'deposit'
-                      ? ((playerDetail?.player.balance?.amount || 0) + parseFloat(transactionAmount)).toFixed(2)
-                      : ((playerDetail?.player.balance?.amount || 0) - parseFloat(transactionAmount)).toFixed(2)
-                    }
+                    {formatBalanceAmount(
+                      transactionType === 'deposit'
+                        ? getSelectedBalance() + parseFloat(transactionAmount)
+                        : getSelectedBalance() - parseFloat(transactionAmount),
+                      transactionCurrency
+                    )}
                   </span>
                 </div>
               </div>

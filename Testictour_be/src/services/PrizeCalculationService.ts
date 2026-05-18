@@ -3,6 +3,33 @@ import logger from '../utils/logger';
 type PrizeStructure = Record<string, number>; // e.g. { '1': 400000, '2': 300000, ... }
 
 export default class PrizeCalculationService {
+  static getCashPrizeStructure(prizeStructure: any): any {
+    if (
+      prizeStructure &&
+      !Array.isArray(prizeStructure) &&
+      typeof prizeStructure === 'object' &&
+      prizeStructure.cash
+    ) {
+      return prizeStructure.cash;
+    }
+
+    return prizeStructure;
+  }
+
+  static getFlexCoinPrizeStructure(prizeStructure: any): PrizeStructure {
+    if (
+      prizeStructure &&
+      !Array.isArray(prizeStructure) &&
+      typeof prizeStructure === 'object' &&
+      prizeStructure.flexCoin &&
+      typeof prizeStructure.flexCoin === 'object'
+    ) {
+      return prizeStructure.flexCoin as PrizeStructure;
+    }
+
+    return {};
+  }
+
   /**
    * Adjusts the prize structure percentages so that total payout <= totalDistributablePrizePool,
    * prioritizing top ranks. This function does NOT calculate fees.
@@ -58,7 +85,8 @@ export default class PrizeCalculationService {
     // Calculate prize for each eligible participant based on their position
     const distribution: Array<{ participantId: string; amount: number; rank: number }> = [];
     
-    const isArray = Array.isArray(prizeStructure);
+    const cashPrizeStructure = this.getCashPrizeStructure(prizeStructure);
+    const isArray = Array.isArray(cashPrizeStructure);
     
     for (let i = 0; i < sortedParticipants.length; i++) {
       const participant = sortedParticipants[i];
@@ -66,8 +94,8 @@ export default class PrizeCalculationService {
       
       // Check if this rank/position gets a prize according to structure
       const prizePercentage = isArray 
-        ? (prizeStructure as any)[i] 
-        : prizeStructure[rank.toString()];
+        ? (cashPrizeStructure as any)[i] 
+        : cashPrizeStructure?.[rank.toString()];
 
       if (prizePercentage !== undefined && prizePercentage !== null) {
         const normalizedPercentage = prizePercentage > 1 ? prizePercentage / 100 : prizePercentage;

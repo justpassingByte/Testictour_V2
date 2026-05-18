@@ -87,8 +87,8 @@ export function useLobbyActions({
     mainButtonDisabled = true;
     mainButtonAction = undefined;
   } else if (userCoins < entryFee) {
-    const isCoinParams = lobby?.entryType === 'coins';
-    mainButtonText = isCoinParams ? 'Not Enough Coins' : 'Not Enough Funds';
+    const isCoinParams = lobby?.entryType === 'coins' || lobby?.entryType === 'coin';
+    mainButtonText = isCoinParams ? 'Not Enough Coins' : 'Not Enough VND';
     mainButtonDisabled = true;
     mainButtonAction = undefined;
   } else {
