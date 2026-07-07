@@ -59,7 +59,7 @@ export default function CreateTournamentPage() {
     entryType: "VND", // "VND" or "USD" - the currency that host/admin enters
     customPrizePool: 0,
     hostFeePercent: 0.1,
-    platformFeePercent: 0,
+    platformFeeOverride: "",
     startTime: "",
     registrationDeadline: "",
     checkInTime: "",
@@ -119,6 +119,12 @@ export default function CreateTournamentPage() {
     setPhases(prev => prev.map((p, i) => i === index ? { ...p, [field]: value } : p))
   }
 
+  const DEFAULT_PLATFORM_FEE_PERCENT = 0.05
+
+  const effectivePlatformFeePercent = form.platformFeeOverride.trim() !== ""
+    ? (parseFloat(form.platformFeeOverride) || 0) / 100
+    : DEFAULT_PLATFORM_FEE_PERCENT
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.name || !form.startTime || !form.registrationDeadline) {
@@ -162,7 +168,7 @@ export default function CreateTournamentPage() {
         registrationDeadline: new Date(form.registrationDeadline),
         checkInTime: form.checkInTime ? new Date(form.checkInTime) : undefined,
         hostFeePercent: form.hostFeePercent,
-        platformFeePercent: form.platformFeePercent > 0 ? form.platformFeePercent : undefined,
+        platformFeePercent: form.platformFeeOverride.trim() !== "" ? effectivePlatformFeePercent : undefined,
         prizeStructure: {
           cash: Object.fromEntries(Object.entries(prizeDistribution).map(([rank, percent]) => [rank, percent / 100])),
           flexCoin: Object.fromEntries(
@@ -193,7 +199,7 @@ export default function CreateTournamentPage() {
   const effectiveCustomPrizeVnd = form.entryType === "VND" ? form.customPrizePool : form.customPrizePool * usdToVndRate
   const estimatedPrizePoolVnd = form.customPrizePool > 0
     ? effectiveCustomPrizeVnd
-    : (form.maxPlayers * effectiveEntryFeeVnd * (1 - form.hostFeePercent));
+    : (form.maxPlayers * effectiveEntryFeeVnd * (1 - form.hostFeePercent - effectivePlatformFeePercent));
 
   return (
     <div className="p-6 lg:p-8 space-y-6 max-w-4xl">
@@ -393,32 +399,60 @@ export default function CreateTournamentPage() {
                   )}
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="hostFeePercent">Host Fee (decimal)</Label>
-                <Input id="hostFeePercent" type="number" min={0} max={1} step={0.01} value={form.hostFeePercent} onChange={(e) => updateForm("hostFeePercent", parseFloat(e.target.value) || 0)} />
-                <p className="text-[10px] text-muted-foreground">0.10 = 10% deducted from entry-fee pool.</p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="platformFeePercent">Platform Fee Override (decimal)</Label>
-                <Input
-                  id="platformFeePercent"
-                  type="number"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={form.platformFeePercent}
-                  onChange={(e) => updateForm("platformFeePercent", parseFloat(e.target.value) || 0)}
-                  placeholder="Use plan default if 0"
-                />
-                <p className="text-[10px] text-muted-foreground">0 = use subscription plan. 0.05 = 5% platform fee.</p>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="hostFeePercent">Host Fee (%)</Label>
+                  <Input
+                    id="hostFeePercent"
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.1}
+                    value={(form.hostFeePercent * 100).toFixed(1).replace(/\.0$/, "")}
+                    onChange={(e) => updateForm("hostFeePercent", (parseFloat(e.target.value) || 0) / 100)}
+                  />
+                  <p className="text-[10px] text-muted-foreground">Phần trăm trích từ pool cho host / partner.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="platformFeePercent" className="flex items-center gap-1">
+                    Platform Fee (%)
+                    <span className="text-[10px] font-normal text-muted-foreground">
+                      (mặc định: {(DEFAULT_PLATFORM_FEE_PERCENT * 100).toFixed(1)}%)
+                    </span>
+                  </Label>
+                  <Input
+                    id="platformFeePercent"
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.1}
+                    placeholder={(DEFAULT_PLATFORM_FEE_PERCENT * 100).toFixed(1)}
+                    value={form.platformFeeOverride}
+                    onChange={(e) => updateForm("platformFeeOverride", e.target.value)}
+                  />
+                  <p className="text-[10px] text-muted-foreground">Để trống = dùng mặc định plan. Nhập để override.</p>
+                </div>
               </div>
             </div>
             
-            <div className="text-sm text-muted-foreground bg-violet-500/5 border border-violet-500/10 rounded-lg p-3">
-              Estimated prize pool: <strong className="text-violet-400">
-                {formatCurrency(estimatedPrizePoolVnd, "VND")}
-              </strong>
-              {" "}<span className="text-xs opacity-70">({formatCurrency(estimatedPrizePoolVnd / usdToVndRate, "USD")})</span>{" "}(at full registration)
+            <div className="text-sm text-muted-foreground bg-violet-500/5 border border-violet-500/10 rounded-lg p-3 space-y-1">
+              <div className="flex justify-between">
+                <span>Gross pool (full registration):</span>
+                <strong>{formatCurrency(form.customPrizePool > 0 ? effectiveCustomPrizeVnd : form.maxPlayers * effectiveEntryFeeVnd, "VND")}</strong>
+              </div>
+              <div className="flex justify-between text-red-400/90">
+                <span>− Platform ({(effectivePlatformFeePercent * 100).toFixed(1)}%):</span>
+                <span>{formatCurrency((form.customPrizePool > 0 ? effectiveCustomPrizeVnd : form.maxPlayers * effectiveEntryFeeVnd) * effectivePlatformFeePercent, "VND")}</span>
+              </div>
+              <div className="flex justify-between text-red-400/90">
+                <span>− Host ({(form.hostFeePercent * 100).toFixed(1)}%):</span>
+                <span>{formatCurrency((form.customPrizePool > 0 ? effectiveCustomPrizeVnd : form.maxPlayers * effectiveEntryFeeVnd) * form.hostFeePercent, "VND")}</span>
+              </div>
+              <div className="flex justify-between pt-1 border-t border-violet-500/20 font-semibold text-violet-400">
+                <span>Net prize pool:</span>
+                <span>{formatCurrency(estimatedPrizePoolVnd, "VND")}</span>
+              </div>
+              <span className="text-xs opacity-70 block">({formatCurrency(estimatedPrizePoolVnd / usdToVndRate, "USD")})</span>
             </div>
 
             <div className="border border-white/10 rounded-lg p-4 space-y-3">

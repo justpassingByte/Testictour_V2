@@ -96,6 +96,7 @@ export default function TournamentManagePage() {
     entryFee: 0,
     budget: 0,
     hostFeePercent: 0.1,
+    platformFeeOverride: "",
     status: "",
     startTime: "",
     registrationDeadline: "",
@@ -132,6 +133,7 @@ export default function TournamentManagePage() {
         entryFee: t.entryFee,
         budget: (t as any).escrowRequiredAmount > 0 ? (t as any).escrowRequiredAmount : t.budget || 0,
         hostFeePercent: t.hostFeePercent || 0.1,
+        platformFeeOverride: t.platformFeePercent != null ? String((t.platformFeePercent * 100).toFixed(1).replace(/\.0$/, "")) : "",
         status: t.status,
         startTime: t.startTime ? new Date(t.startTime).toISOString().slice(0, 16) : "",
         registrationDeadline: (t as any).registrationDeadline ? new Date((t as any).registrationDeadline).toISOString().slice(0, 16) : "",
@@ -218,10 +220,13 @@ export default function TournamentManagePage() {
         await api.post(`/tournaments/${tournamentId}/image`, formData)
       }
 
-      const { budget, startTime, registrationDeadline, checkInTime, ...restForm } = editForm
+      const { budget, startTime, registrationDeadline, checkInTime, platformFeeOverride, ...restForm } = editForm
       const payload: any = { 
         ...restForm, 
         customPrizePool: budget,
+        platformFeePercent: platformFeeOverride.trim() !== ""
+          ? (parseFloat(platformFeeOverride) || 0) / 100
+          : null,
         startTime: startTime ? new Date(startTime).toISOString() : undefined,
         registrationDeadline: registrationDeadline ? new Date(registrationDeadline).toISOString() : undefined,
         checkInTime: checkInTime ? new Date(checkInTime).toISOString() : null,
@@ -1308,8 +1313,30 @@ export default function TournamentManagePage() {
                   <Input type="number" value={editForm.budget} onChange={(e) => setEditForm(p => ({ ...p, budget: parseFloat(e.target.value) }))} placeholder="Auto calc if 0" disabled={isLocked} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Host Fee %</Label>
-                  <Input type="number" step="0.01" min="0" max="1" value={editForm.hostFeePercent} onChange={(e) => setEditForm(p => ({ ...p, hostFeePercent: parseFloat(e.target.value) }))} disabled={isLocked} />
+                  <Label>Host Fee (%)</Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    value={(editForm.hostFeePercent * 100).toFixed(1).replace(/\.0$/, "")}
+                    onChange={(e) => setEditForm(p => ({ ...p, hostFeePercent: (parseFloat(e.target.value) || 0) / 100 }))}
+                    disabled={isLocked}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Platform Fee (%)</Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    placeholder="5 (plan default)"
+                    value={editForm.platformFeeOverride}
+                    onChange={(e) => setEditForm(p => ({ ...p, platformFeeOverride: e.target.value }))}
+                    disabled={isLocked}
+                  />
+                  <p className="text-[10px] text-muted-foreground">Để trống = dùng plan default.</p>
                 </div>
               </div>
 

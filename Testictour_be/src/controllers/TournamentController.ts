@@ -201,6 +201,13 @@ const TournamentController = {
     try {
       // Partner can only update own tournaments
       await ensureOwnership(req, req.params.id);
+      if (req.body.platformFeePercent !== undefined && req.body.platformFeePercent !== null) {
+        const fee = parseFloat(req.body.platformFeePercent);
+        if (Number.isNaN(fee) || fee < 0 || fee > 1) {
+          throw new ApiError(400, 'platformFeePercent must be a number between 0 and 1');
+        }
+        req.body.platformFeePercent = fee;
+      }
       const tournament = await TournamentService.update(req.params.id, req.body);
       res.json({ tournament });
     } catch (err) {
