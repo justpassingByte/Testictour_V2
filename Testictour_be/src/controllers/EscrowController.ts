@@ -60,7 +60,7 @@ const EscrowController = {
         hostFeePercent: tournament.hostFeePercent,
         organizer: tournament.organizer,
       },
-      platformFeePercent: planConfig?.platformFeePercent ?? 0.05,
+      platformFeePercent: tournament.platformFeePercent ?? planConfig?.platformFeePercent ?? 0.05,
     });
   }),
 

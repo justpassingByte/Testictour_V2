@@ -77,6 +77,24 @@ export default class MatchService {
 
     if (!match) throw new ApiError(404, 'Match not found');
 
+    const lobbyParticipantIds = Array.isArray((match as any).lobby?.participants)
+      ? ((match as any).lobby.participants as any[])
+          .map((p) => (typeof p === 'string' ? p : p?.userId))
+          .filter(Boolean)
+      : [];
+
+    const lobbyUsers = lobbyParticipantIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: lobbyParticipantIds } },
+          select: {
+            id: true,
+            riotGameName: true,
+            username: true,
+            puuid: true,
+          },
+        })
+      : [];
+
     // Get tournament info
     const tournament = await prisma.tournament.findUnique({
       where: { id: match.lobby.round.phase.tournamentId },
@@ -113,6 +131,7 @@ export default class MatchService {
       phase: (match as any).lobby.round.phase,
       tournament,
       results: (match as any).matchResults,
+      lobbyParticipants: lobbyUsers,
     };
   }
   static async fullDetails(matchId: string) {
@@ -137,7 +156,11 @@ export default class MatchService {
       return match.matchData;
     }
   }
-    static async updateResults(matchId: string, data: any) {
+    static async updateResults(matchId: string, data: any, actor?: { id: string; role: string }) {
+    if (!Array.isArray(data) || data.length === 0) {
+      throw new ApiError(400, 'Results payload must be a non-empty array');
+    }
+
     // Update match results, recalculate points, update participant score
     // data: [{ userId, placement, points }]
     return prisma.$transaction(async (tx: any) => {
@@ -156,6 +179,16 @@ export default class MatchService {
       });
       if (!match) throw new ApiError(404, 'Match not found');
       const tournamentId = match.lobby.round.phase.tournamentId;
+
+      if (actor?.role === 'partner') {
+        const tournament = await tx.tournament.findUnique({
+          where: { id: tournamentId },
+          select: { organizerId: true },
+        });
+        if (!tournament || tournament.organizerId !== actor.id) {
+          throw new ApiError(403, 'You can only update results for your own tournaments.');
+        }
+      }
 
             // Get old results to compute score adjustments
       const oldResults = await tx.matchResult.findMany({ where: { matchId } });
@@ -182,6 +215,11 @@ export default class MatchService {
           }
         }
       }
+
+      await tx.match.update({
+        where: { id: matchId },
+        data: { fetchedAt: new Date() },
+      });
 
       // Update summaries after edit
       try {

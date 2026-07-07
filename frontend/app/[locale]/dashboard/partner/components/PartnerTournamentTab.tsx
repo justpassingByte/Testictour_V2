@@ -43,6 +43,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
   const [createOpen, setCreateOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [platformFeePercent, setPlatformFeePercent] = useState(0.05)
+  const [platformFeeOverride, setPlatformFeeOverride] = useState<string>("")
 
   const canCreate = subscriptionPlan === 'PRO' || subscriptionPlan === 'ENTERPRISE' || subscriptionPlan === 'STARTER'
   const canCustomBrand = subscriptionPlan === 'PRO' || subscriptionPlan === 'ENTERPRISE'
@@ -114,6 +115,20 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
     "3": 0,
     "4": 0,
   })
+  const [physicalPrizes, setPhysicalPrizes] = useState<Record<string, string>>({
+    "1": "",
+    "2": "",
+    "3": "",
+    "4": "",
+  })
+
+  const effectivePlatformFeePercent = (() => {
+    const parsed = parseFloat(platformFeeOverride);
+    if (platformFeeOverride.trim() !== "" && !Number.isNaN(parsed)) {
+      return Math.min(1, Math.max(0, parsed / 100));
+    }
+    return platformFeePercent;
+  })();
 
     const [phases, setPhases] = useState([
         { name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "top_n_scores", advancementValue: 4, matchesPerRound: 1, carryOverScores: false, pointsMapping: [8, 7, 6, 5, 4, 3, 2, 1] }
@@ -198,9 +213,15 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
           .map(([rank, amount]) => [rank, Math.max(0, Number(amount) || 0)] as [string, number])
           .filter(([, amount]) => amount > 0)
       );
+      const physicalPrizeStructure = Object.fromEntries(
+        Object.entries(physicalPrizes)
+          .map(([rank, label]) => [rank, label.trim()] as [string, string])
+          .filter(([, label]) => label.length > 0)
+      );
       const prizeStructure = {
         cash: cashPrizeStructure,
         flexCoin: flexCoinPrizeStructure,
+        ...(Object.keys(physicalPrizeStructure).length > 0 ? { physical: physicalPrizeStructure } : {}),
       };
 
             await api.post('/tournaments', {
@@ -217,6 +238,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                     expectedParticipants: form.maxPlayers,
                     customPrizePool: parseVndInput(prizePoolVnd), // VND
               prizeStructure,
+              platformFeePercent: platformFeeOverride.trim() !== "" ? effectivePlatformFeePercent : undefined,
         image: canCustomBrand ? (imageFile ? (imagePreview || form.image || undefined) : (form.image || undefined)) : '/images/default-tournament-banner.png',
         roundsTotal: phases.reduce((sum, p) => sum + p.numberOfRounds, 0),
         config: { phases: phaseConfigs },
@@ -257,6 +279,8 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
             setSponsors([])
             setPrizeDistribution({ "1": 40, "2": 30, "3": 20, "4": 10 })
             setFlexCoinDistribution({ "1": 0, "2": 0, "3": 0, "4": 0 })
+            setPhysicalPrizes({ "1": "", "2": "", "3": "", "4": "" })
+            setPlatformFeeOverride("")
             setPhases([{ name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "top_n_scores", advancementValue: 4, matchesPerRound: 1, carryOverScores: false, pointsMapping: [8, 7, 6, 5, 4, 3, 2, 1] }])
       setImageFile(null)
       setImagePreview(null)
@@ -518,7 +542,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
             </div>
 
                         {/* Players & Fees */}
-            <div className="grid gap-4 md:grid-cols-5 bg-white/5 p-4 rounded border border-white/10">
+            <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6 bg-white/5 p-4 rounded border border-white/10">
               <div className="space-y-2">
                 <Label>Max Players</Label>
                 <Select value={form.maxPlayers.toString()} onValueChange={(v) => setForm(p => ({ ...p, maxPlayers: parseInt(v) }))}>
@@ -571,6 +595,22 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                 <Label>Host Fee (%)</Label>
                 <Input type="number" min={0} max={10} step={0.1} value={(form.hostFeePercent * 100).toFixed(1).replace(/\.0$/, '')} onChange={(e) => setForm(p => ({ ...p, hostFeePercent: (parseFloat(e.target.value) || 0) / 100 }))} />
               </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1">
+                  Platform Fee (%)
+                  <span className="text-[10px] font-normal text-muted-foreground">(plan default: {(platformFeePercent * 100).toFixed(1)}%)</span>
+                </Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.1}
+                  placeholder={(platformFeePercent * 100).toFixed(1)}
+                  value={platformFeeOverride}
+                  onChange={(e) => setPlatformFeeOverride(e.target.value)}
+                />
+                <p className="text-[9px] text-muted-foreground">Leave blank to use your plan default.</p>
+              </div>
                         </div>
                                                 {entryFeeVnd && (() => {
                                                   const vndEntry = parseVndInput(entryFeeVnd);
@@ -578,7 +618,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                                                   const hasCustomPool = vndPool > 0;
                                                   const grossFromEntry = form.maxPlayers * vndEntry;
                                                   const activePrizePool = hasCustomPool ? vndPool : grossFromEntry;
-                                                  const platformAmount = activePrizePool * platformFeePercent;
+                                                  const platformAmount = activePrizePool * effectivePlatformFeePercent;
                                                   const hostAmount = activePrizePool * form.hostFeePercent;
                                                   const netPool = activePrizePool - platformAmount - hostAmount;
 
@@ -591,7 +631,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                                                         <span className="font-semibold text-white">{formatVnd(activePrizePool)}</span>
                                                       </div>
                                                       <div className="flex justify-between items-center text-red-400">
-                                                        <span>Platform Fee ({(platformFeePercent * 100).toFixed(1)}%):</span>
+                                                        <span>Platform Fee ({(effectivePlatformFeePercent * 100).toFixed(1)}%):</span>
                                                         <span>-{formatVnd(platformAmount)}</span>
                                                       </div>
                                                       <div className="flex justify-between items-center text-red-400">
@@ -742,7 +782,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                <div className="p-3 border-b border-white/10 bg-black/20 flex flex-col sm:flex-row items-center justify-between">
                  <div className="mb-2 sm:mb-0">
                     <h3 className="font-bold text-amber-400">Prize Distribution (Tỷ lệ phần thưởng)</h3>
-                    <p className="text-xs text-muted-foreground">Nhập % thưởng cho từng thứ hạng (tổng = 100%)</p>
+                    <p className="text-xs text-muted-foreground">Nhập % thưởng tiền mặt, F coin, hoặc phần thưởng vật lý cho từng thứ hạng (tổng % = 100%)</p>
                  </div>
                </div>
                <div className="p-4">
@@ -779,6 +819,12 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                          />
                          <span className="text-[11px] font-bold text-amber-400 whitespace-nowrap">F coin</span>
                        </div>
+                       <Input
+                         placeholder="Physical prize (e.g. RTX 4090)"
+                         value={physicalPrizes[rank] ?? ""}
+                         onChange={(e) => setPhysicalPrizes(prev => ({ ...prev, [rank]: e.target.value }))}
+                         className="bg-black/40 text-xs h-8"
+                       />
                      </div>
                    ))}
                  </div>
@@ -793,6 +839,7 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                          const nextRank = numRanks + 1;
                          setPrizeDistribution(prev => ({ ...prev, [nextRank.toString()]: 0 }));
                          setFlexCoinDistribution(prev => ({ ...prev, [nextRank.toString()]: 0 }));
+                         setPhysicalPrizes(prev => ({ ...prev, [nextRank.toString()]: "" }));
                        }
                      }}
                      disabled={Object.keys(prizeDistribution).length >= 8}
@@ -812,6 +859,11 @@ export default function PartnerTournamentTab({ subscriptionPlan }: PartnerTourna
                          delete newDist[lastKey];
                          setPrizeDistribution(newDist);
                          setFlexCoinDistribution(prev => {
+                           const next = { ...prev };
+                           delete next[lastKey];
+                           return next;
+                         });
+                         setPhysicalPrizes(prev => {
                            const next = { ...prev };
                            delete next[lastKey];
                            return next;

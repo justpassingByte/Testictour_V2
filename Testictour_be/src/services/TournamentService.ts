@@ -30,6 +30,14 @@ export default class TournamentService {
     return fee;
   }
 
+  /** Tournament-level override takes precedence over subscription plan config. */
+  static async resolvePlatformFeePercent(tournament: { organizerId: string; platformFeePercent?: number | null }): Promise<number> {
+    if (tournament.platformFeePercent != null && !Number.isNaN(tournament.platformFeePercent)) {
+      return tournament.platformFeePercent;
+    }
+    return this.getPlatformFeePercent(tournament.organizerId);
+  }
+
                 static async calculateNetPrizePool(
     tournament: any, 
     counts: { registered: number, reserve: number, absent: number },
@@ -47,7 +55,7 @@ export default class TournamentService {
     let standardPool = grossPool;
     
         const hostFeePercent = tournament.hostFeePercent || 0;
-        const platformFeePercent = await this.getPlatformFeePercent(tournament.organizerId);
+        const platformFeePercent = await this.resolvePlatformFeePercent(tournament);
 
                 const netPrizePool = standardPool * (1 - hostFeePercent - platformFeePercent);
         return Math.round(netPrizePool); // Đã là VND
@@ -293,6 +301,7 @@ export default class TournamentService {
     sponsors?: any;
     reservePlayersLimit?: number;
     absentFeePolicy?: string;
+    platformFeePercent?: number;
   }) {
     let templateData: any = {};
     let finalStartTime = data.startTime;
@@ -583,7 +592,7 @@ export default class TournamentService {
             const actualCount = await db.participant.count({ where: { tournamentId } });
       const entryFee = (tournament as any).entryFee || 0;
       const hostFeePercent = (tournament as any).hostFeePercent || 0.1;
-      const platformFeePercent = await this.getPlatformFeePercent(tournament.organizerId);
+      const platformFeePercent = await this.resolvePlatformFeePercent(tournament);
       const dynamicPrizeStructure = PrizeCalculationService.getDynamicPrizeDistribution(actualCount);
       
       const totalCollected = actualCount * entryFee;

@@ -35,12 +35,12 @@ const router = express.Router();
 
 console.log("Defining miniTourLobby routes.");
 
-router.route('/').post(auth('partner'), upload.single('customLogo'), createMiniTourLobby).get(getMiniTourLobbies);
+router.route('/').post(auth('partner', 'admin'), upload.single('customLogo'), createMiniTourLobby).get(getMiniTourLobbies);
 router
   .route('/:id')
   .get(getMiniTourLobbyById)
-  .put(auth('partner'), upload.single('customLogo'), updateMiniTourLobby)
-  .delete(auth('partner'), deleteMiniTourLobby);
+  .put(auth('partner', 'admin'), upload.single('customLogo'), updateMiniTourLobby)
+  .delete(auth('partner', 'admin'), deleteMiniTourLobby);
 router.route('/:id/join').post(auth(), joinMiniTourLobby);
 router.route('/:id/start').post(auth(), startMiniTourLobby);
 router.route('/:id/fetch-result').post(auth(), fetchMiniTourLobbyResult);

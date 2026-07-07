@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import ParticipantService from '../services/ParticipantService';
 import asyncHandler from '../lib/asyncHandler';
+import ApiError from '../utils/ApiError';
+import { prisma } from '../services/prisma';
 
 const getHistory = asyncHandler(async (req: Request, res: Response) => {
     const participantId = req.params.id;
@@ -16,6 +18,29 @@ export const ParticipantController = {
         const contactInfo = additionalInformation || discordId;
         const result = await ParticipantService.join(req.params.tournamentId, (req as any).user.id, contactInfo, referralSource, joinAsReserve);
         res.json(result);
+      } catch (err) {
+        next(err);
+      }
+    },
+    async guestJoin(req: Request, res: Response, next: NextFunction) {
+      try {
+        const { guestName, email, discordId, additionalInformation, referralSource, joinAsReserve } = req.body || {};
+        const contactInfo = additionalInformation || discordId;
+        const result = await ParticipantService.guestJoin(req.params.tournamentId, guestName, email, contactInfo, referralSource, joinAsReserve);
+        res.json(result);
+      } catch (err) {
+        next(err);
+      }
+    },
+    async adminAssign(req: Request, res: Response, next: NextFunction) {
+      try {
+        const { userId, joinAsReserve } = req.body || {};
+        if (!userId) {
+          return res.status(400).json({ message: 'userId is required' });
+        }
+
+        const participant = await ParticipantService.adminAssign(req.params.tournamentId, userId, joinAsReserve);
+        res.status(201).json({ participant });
       } catch (err) {
         next(err);
       }
@@ -49,12 +74,35 @@ export const ParticipantController = {
     },
     async update(req: Request, res: Response, next: NextFunction) {
       try {
+        const user = req.user!;
+        if (user.role === 'partner') {
+          const participant = await prisma.participant.findUnique({
+            where: { id: req.params.participantId },
+            include: { tournament: { select: { organizerId: true } } },
+          });
+          if (!participant) throw new ApiError(404, 'Participant not found');
+          if (participant.tournament.organizerId !== user.id) {
+            throw new ApiError(403, 'You can only manage participants in your own tournaments.');
+          }
+        }
         const participant = await ParticipantService.update(req.params.participantId, req.body);
         res.json({ participant });
       } catch (err) {
         next(err);
       }
     },
+    checkIn: asyncHandler(async (req: Request, res: Response) => {
+      const user = req.user!;
+      const { checkedIn } = req.body ?? {};
+      const participant = await ParticipantService.checkIn(
+        req.params.tournamentId,
+        req.params.participantId,
+        user.id,
+        user.role,
+        checkedIn
+      );
+      res.json({ participant });
+    }),
     async remove(req: Request, res: Response, next: NextFunction) {
       try {
         await ParticipantService.remove(req.params.participantId);

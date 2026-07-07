@@ -47,6 +47,7 @@ export default function TournamentRegistration({ params }: { params: { id: strin
   const [tournament, setTournament] = useState<ITournament | null>(null)
   const [summonerName, setSummonerName] = useState("")
   const [gameTag, setGameTag] = useState("")
+  const [email, setEmail] = useState("")
   const [loadingTournament, setLoadingTournament] = useState(true)
   const [tournamentError, setTournamentError] = useState("")
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle")
@@ -133,8 +134,8 @@ export default function TournamentRegistration({ params }: { params: { id: strin
   }
 
   const handleSubmit = async () => {
-    if (!summonerInfo || !tournament || !additionalInformation.trim()) {
-      setErrorMessage("Please enter your additional contact information before registering.")
+    if ((!currentUser && (!summonerName.trim() || !email.trim())) || (currentUser && !summonerInfo) || !tournament || !additionalInformation.trim()) {
+      setErrorMessage("Please fill all required fields before registering.")
       return
     }
 
@@ -142,7 +143,12 @@ export default function TournamentRegistration({ params }: { params: { id: strin
     setErrorMessage("")
 
     try {
-      const result = await ParticipantService.join(tournament.id, additionalInformation.trim(), referralSource, joinAsReserve)
+      let result;
+      if (!currentUser) {
+        result = await ParticipantService.guestJoin(tournament.id, summonerName.trim(), email.trim(), additionalInformation.trim(), referralSource, joinAsReserve)
+      } else {
+        result = await ParticipantService.join(tournament.id, additionalInformation.trim(), referralSource, joinAsReserve)
+      }
 
       console.log('[REGISTER DEBUG] join result:', JSON.stringify(result))
 
@@ -433,13 +439,20 @@ export default function TournamentRegistration({ params }: { params: { id: strin
                   <div className="space-y-3">
                     <Label htmlFor="summoner-name" className="text-base font-semibold">{t("summoner_name")} <span className="text-red-500">*</span></Label>
                     <div className="flex space-x-2 w-full">
-                      <Input id="summoner-name" value={summonerName || t("no_riot_account_linked")} readOnly className="flex-1 bg-muted" />
-                      <Input id="game-tag" value={gameTag} readOnly placeholder="#TAG" className="w-24 bg-muted" />
+                      <Input id="summoner-name" value={summonerName || (currentUser ? t("no_riot_account_linked") : "")} onChange={e => !currentUser && setSummonerName(e.target.value)} readOnly={!!currentUser} placeholder={!currentUser ? "In-game name" : ""} className="flex-1 bg-muted" />
+                      <Input id="game-tag" value={gameTag} onChange={e => !currentUser && setGameTag(e.target.value)} readOnly={!!currentUser} placeholder="#TAG" className="w-24 bg-muted" />
                     </div>
-                    {!currentUser?.riotGameName && (
+                    {currentUser && !currentUser.riotGameName && (
                       <p className="text-sm text-red-500 mt-1">You need to link your Riot account in your profile before registering.</p>
                     )}
                   </div>
+
+                  {!currentUser && (
+                    <div className="space-y-3">
+                      <Label htmlFor="email" className="text-base font-semibold">Email <span className="text-red-500">*</span></Label>
+                      <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="your@email.com" className="w-full bg-card" required />
+                    </div>
+                  )}
 
                   <div className="space-y-3">
                     <Label htmlFor="region-select" className="text-base font-semibold">{t("region")} <span className="text-red-500">*</span></Label>
@@ -627,7 +640,7 @@ export default function TournamentRegistration({ params }: { params: { id: strin
                 <Link href={`/tournaments/${params.id}`}>{t("cancel")}</Link>
               </Button>
               <Button size="lg" onClick={handleSubmit} disabled={
-                !currentUser?.riotGameName || !additionalInformation.trim() || status === "loading" || 
+                (currentUser && !currentUser.riotGameName) || (!currentUser && (!summonerName.trim() || !email.trim())) || !additionalInformation.trim() || status === "loading" || 
                 ((tournament.registered || 0) >= tournament.maxPlayers && !joinAsReserve && (tournament.reservePlayersLimit || 0) > 0)
               }>
                 {status === "loading" ? (

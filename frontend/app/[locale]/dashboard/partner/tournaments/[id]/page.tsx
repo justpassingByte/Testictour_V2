@@ -39,7 +39,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import ReserveManagementTab from '@/components/ReserveManagementTab'
 import LobbyInterventionModal from '@/components/LobbyInterventionModal'
 import { MatchDetailModal } from '@/components/match/MatchDetailModal'
-import { ReservePlayerAPI } from '@/app/services/ParticipantService'
+import { ReservePlayerAPI, ParticipantService } from '@/app/services/ParticipantService'
+import { Switch } from "@/components/ui/switch"
 import { Swords, ChevronDown } from 'lucide-react'
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType }> = {
@@ -77,6 +78,7 @@ export default function TournamentManagePage() {
   const [syncing, setSyncing] = useState(false)
   const [removeDialog, setRemoveDialog] = useState<{ open: boolean; participant: IParticipant | null }>({ open: false, participant: null })
   const [roundControlLoading, setRoundControlLoading] = useState<Record<string, boolean>>({})
+  const [forceStartingAll, setForceStartingAll] = useState(false)
 
     // Lobby Intervention Modal state
   const [interventionModal, setInterventionModal] = useState<{ open: boolean; lobby: any | null }>({ open: false, lobby: null })
@@ -330,6 +332,27 @@ export default function TournamentManagePage() {
     }
   };
 
+  const handleForceStartAllLobbies = async () => {
+    if (!window.confirm('Force-start TẤT CẢ lobby đang chờ? Bỏ qua check-in và ready check.')) return;
+    setForceStartingAll(true);
+    try {
+      const result = await TournamentService.forceStartAllLobbies(tournamentId);
+      toast({
+        title: `✅ Đã start ${result.startedCount} lobby`,
+        description: result.failedCount > 0 ? `${result.failedCount} lobby thất bại.` : 'Tất cả lobby pre-PLAYING đã chuyển sang PLAYING.',
+      });
+      await refresh();
+    } catch (error: any) {
+      toast({
+        title: 'Force start thất bại',
+        description: error?.response?.data?.message || error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setForceStartingAll(false);
+    }
+  };
+
   const handleSync = async () => {
     setSyncing(true)
     try {
@@ -364,6 +387,23 @@ export default function TournamentManagePage() {
     }
   }
 
+  const handleToggleCheckIn = async (participant: IParticipant, checkedIn: boolean) => {
+    try {
+      await ParticipantService.checkIn(tournamentId, participant.id, checkedIn)
+      toast({
+        title: "Check-in Updated",
+        description: `${participant.inGameName || participant.user?.username || "Player"} marked as ${checkedIn ? "checked in" : "not checked in"}.`,
+      })
+      await refresh()
+    } catch (error: any) {
+      toast({
+        title: "Failed",
+        description: error?.response?.data?.message || "Could not update check-in status.",
+        variant: "destructive",
+      })
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
@@ -387,6 +427,9 @@ export default function TournamentManagePage() {
   const registeredCount = tournament.registered || totalParticipants
   const fillPercent = tournament.maxPlayers > 0 ? (registeredCount / tournament.maxPlayers) * 100 : 0
   const prizePool = (tournament.budget || 0);
+  const hasBracket = tournament.phases?.some(p =>
+    p.rounds?.some(r => r.lobbies && r.lobbies.length > 0)
+  ) ?? false
 
   return (
     <div className="p-6 lg:p-8 space-y-6">
@@ -432,6 +475,19 @@ export default function TournamentManagePage() {
             {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             <span className="hidden sm:inline ml-2">{t("sync")}</span>
           </Button>
+          {hasBracket && tournament.status !== 'COMPLETED' && tournament.status !== 'CANCELLED' && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-orange-500/40 text-orange-400 hover:bg-orange-500/10"
+              onClick={handleForceStartAllLobbies}
+              disabled={forceStartingAll}
+              title="Force-start tất cả lobby đang chờ"
+            >
+              {forceStartingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+              <span className="hidden sm:inline ml-2">Force Start All</span>
+            </Button>
+          )}
           {tournament.status !== 'in_progress' && tournament.status !== 'COMPLETED' && (
             <Button
               size="sm"
@@ -646,6 +702,7 @@ export default function TournamentManagePage() {
                       <TableHead>{t("region")}</TableHead>
                       <TableHead>{t("source")}</TableHead>
                       <TableHead>{t("total_score")}</TableHead>
+                      <TableHead>Check-in</TableHead>
                       <TableHead>{t("status")}</TableHead>
                       <TableHead className="text-right">{t("action")}</TableHead>
                     </TableRow>
@@ -694,6 +751,12 @@ export default function TournamentManagePage() {
                         <TableCell><Badge variant="outline" className="text-[10px]">{p.region || 'VN'}</Badge></TableCell>
                         <TableCell className="text-xs text-muted-foreground capitalize">{p.referralSource || 'Unknown'}</TableCell>
                         <TableCell className="font-semibold">{p.scoreTotal || 0}</TableCell>
+                        <TableCell>
+                          <Switch
+                            checked={Boolean(p.checkedIn)}
+                            onCheckedChange={(checked) => handleToggleCheckIn(p, checked)}
+                          />
+                        </TableCell>
                         <TableCell>
                           <Badge variant="outline" className={p.eliminated ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-green-500/10 text-green-400 border-green-500/20'}>
                             {p.eliminated ? t('eliminated') : t('active')}

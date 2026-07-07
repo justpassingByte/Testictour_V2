@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { TournamentLobbyButton } from "./TournamentLobbyButton"
-import * as htmlToImage from "html-to-image"
+import { TournamentCheckInButton } from "./TournamentCheckInButton"
 import { toast } from "sonner"
 import api from "@/app/lib/apiConfig"
 import {
@@ -54,8 +54,6 @@ export default function TournamentSidebarClient({ initialTournament }: Tournamen
   }
   const currentStatus = statusMapping[tournament.status] || { text: tournament.status, color: "" }
 
-  const [loadingExportBracket, setLoadingExportBracket] = useState(false)
-  const [loadingExportScoreboard, setLoadingExportScoreboard] = useState(false)
   const [loadingExportPlayers, setLoadingExportPlayers] = useState(false)
   const { currentUser } = useUserStore()
   const [isUserRegistered, setIsUserRegistered] = useState(false)
@@ -88,164 +86,6 @@ export default function TournamentSidebarClient({ initialTournament }: Tournamen
     URL.revokeObjectURL(url)
   }
 
-  const handleExportBracket = async (e: React.MouseEvent) => {
-    e.preventDefault()
-    setLoadingExportBracket(true)
-    try {
-      window.dispatchEvent(new CustomEvent('export_bracket_start', { detail: { tournament } }))
-      await new Promise(resolve => setTimeout(resolve, 800)) // Wait for DOM re-render with all lobbies expanded
-      const el = document.getElementById('bracket-export-target')
-      if (!el) {
-        toast.error(t("bracket") + " " + t("not_found") + " - " + t("please_navigate_to_bracket_tab"))
-        window.dispatchEvent(new Event('export_bracket_end'))
-        return
-      }
-      const dataUrl = await htmlToImage.toPng(el, { 
-        backgroundColor: '#0f172a',
-        skipFonts: true,
-        pixelRatio: 2,
-        cacheBust: true,
-      })
-      const link = document.createElement('a')
-      link.download = `bracket_${tournament.id}.png`
-      link.href = dataUrl
-      link.click()
-      toast.success(t("bracket") + " " + t("exported_successfully"))
-    } catch (error) {
-      console.error(error)
-      toast.error(t("export") + " " + t("failed"))
-    } finally {
-      window.dispatchEvent(new Event('export_bracket_end'))
-      setLoadingExportBracket(false)
-    }
-  }
-
-  const handleExportScoreboard = async (e: React.MouseEvent) => {
-    e.preventDefault()
-    setLoadingExportScoreboard(true)
-    try {
-      const res = await api.get(`/tournaments/${tournament.id}/scoreboard-export`)
-      const data = res.data
-      if (!data.success || !data.phases) throw new Error("Invalid scoreboard export data")
-
-      let csvContent = ""
-      csvContent += `TOURNAMENT: ${data.tournamentName}\n`
-      csvContent += `Status: ${data.tournamentStatus}\n\n`
-
-      data.phases.forEach((phase: any) => {
-        csvContent += `═══════════════════════════════════════════════════════════════\n`
-        csvContent += `${phase.phaseName.toUpperCase()} (Phase ${phase.phaseNumber})\n`
-        csvContent += `═══════════════════════════════════════════════════════════════\n\n`
-        
-        phase.groups.forEach((group: any) => {
-          csvContent += `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n`
-          csvContent += `BẢNG ${group.groupLetter}\n`
-          csvContent += `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`
-
-          group.lobbies.forEach((lobby: any) => {
-            csvContent += `  Lobby: ${lobby.lobbyName} (Trạng thái: ${lobby.state})\n`
-            csvContent += `  ${'─'.repeat(80)}\n`
-
-            if (lobby.matches && lobby.matches.length > 0 && lobby.matches[0].results && lobby.matches[0].results.length > 0) {
-              // Collect all unique players across all matches
-              const allPlayerEntries: Record<string, { username: string; riotId: string; matchResults: Record<number, { placement: number; points: number }>; totalPoints: number }> = {}
-
-              lobby.matches.forEach((match: any, matchIdx: number) => {
-                match.results.forEach((r: any) => {
-                  const key = r.userId
-                  if (!allPlayerEntries[key]) {
-                    const riotId = r.riotGameName && r.riotGameTag ? `${r.riotGameName}#${r.riotGameTag}` : ''
-                    allPlayerEntries[key] = {
-                      username: r.username,
-                      riotId,
-                      matchResults: {},
-                      totalPoints: 0,
-                    }
-                  }
-                  allPlayerEntries[key].matchResults[matchIdx + 1] = {
-                    placement: r.placement,
-                    points: r.points,
-                  }
-                  allPlayerEntries[key].totalPoints += r.points
-                })
-              })
-
-              // Build header row
-              let headerRow = 'In-Game Name,Riot ID'
-              lobby.matches.forEach((_: any, matchIdx: number) => {
-                headerRow += `,Match ${matchIdx + 1} Placement,Match ${matchIdx + 1} Points`
-              })
-              headerRow += ',Total Points\n'
-              csvContent += `  ${headerRow}`
-
-              // Sort players by totalPoints descending
-              const sortedPlayers = Object.values(allPlayerEntries).sort((a: any, b: any) => b.totalPoints - a.totalPoints)
-
-              sortedPlayers.forEach((player: any) => {
-                let row = `"${player.username}","${player.riotId}"`
-                lobby.matches.forEach((_: any, matchIdx: number) => {
-                  const mr = player.matchResults[matchIdx + 1]
-                  if (mr) {
-                    row += `,${mr.placement},${mr.points}`
-                  } else {
-                    row += `,,`
-                  }
-                })
-                row += `,${player.totalPoints}\n`
-                csvContent += `  ${row}`
-              })
-            } else {
-              csvContent += `  (Chưa có dữ liệu trận đấu)\n`
-            }
-            csvContent += `\n`
-          })
-        })
-      })
-
-      // Overall Summary
-      csvContent += `═══════════════════════════════════════════════════════════════\n`
-      csvContent += `TỔNG HỢP ĐIỂM TOÀN GIẢI\n`
-      csvContent += `═══════════════════════════════════════════════════════════════\n\n`
-
-      const overallTotals: Record<string, { username: string; riotId: string; totalPoints: number; matches: number }> = {}
-      data.phases.forEach((phase: any) => {
-        phase.groups.forEach((group: any) => {
-          group.lobbies.forEach((lobby: any) => {
-            if (lobby.matches) {
-              lobby.matches.forEach((match: any) => {
-                if (match.results) {
-                  match.results.forEach((r: any) => {
-                    const key = r.userId
-                    if (!overallTotals[key]) {
-                      const riotId = r.riotGameName && r.riotGameTag ? `${r.riotGameName}#${r.riotGameTag}` : ''
-                      overallTotals[key] = { username: r.username, riotId, totalPoints: 0, matches: 0 }
-                    }
-                    overallTotals[key].totalPoints += r.points
-                    overallTotals[key].matches += 1
-                  })
-                }
-              })
-            }
-          })
-        })
-      })
-
-      const sortedTotals = Object.values(overallTotals).sort((a: any, b: any) => b.totalPoints - a.totalPoints)
-      csvContent += `Rank,In-Game Name,Riot ID,Total Points,Matches Played\n`
-      sortedTotals.forEach((player: any, idx: number) => {
-        csvContent += `${idx + 1},"${player.username}","${player.riotId}",${player.totalPoints},${player.matches}\n`
-      })
-
-      downloadCSV(csvContent, `scoreboard_${tournament.id}.csv`)
-      toast.success(t("export_scoreboard") + " " + t("exported_successfully"))
-    } catch (error) {
-      console.error(error)
-      toast.error(t("export") + " " + t("failed"))
-    } finally {
-      setLoadingExportScoreboard(false)
-    }
-  }
-
   const handleExportPlayers = async (e: React.MouseEvent) => {
     e.preventDefault()
     setLoadingExportPlayers(true)
@@ -270,10 +110,10 @@ export default function TournamentSidebarClient({ initialTournament }: Tournamen
       })
 
       downloadCSV(csvContent, `participants_${tournament.id}.csv`)
-      toast.success(t("player_list") + " " + t("exported_successfully"))
+      toast.success(t("export_players_success"))
     } catch (error) {
       console.error(error)
-      toast.error(t("export") + " " + t("failed"))
+      toast.error(t("export_failed"))
     } finally {
       setLoadingExportPlayers(false)
     }
@@ -376,10 +216,13 @@ export default function TournamentSidebarClient({ initialTournament }: Tournamen
             )}
             {(tournament.status === "UPCOMING" || tournament.status === "pending" || tournament.status === "REGISTRATION") && (
               isUserRegistered ? (
-                <Button disabled className="w-full bg-green-600/20 text-green-500 border-green-500/30 hover:bg-green-600/20">
-                  <CheckCircle2 className="mr-2 h-4 w-4" />
-                  {t("already_registered") || "Already Registered"}
-                </Button>
+                <>
+                  <Button disabled className="w-full bg-green-600/20 text-green-500 border-green-500/30 hover:bg-green-600/20">
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                    {t("already_registered") || "Already Registered"}
+                  </Button>
+                  <TournamentCheckInButton tournament={tournament} />
+                </>
               ) : (tournament.registered || 0) >= tournament.maxPlayers ? (
                 <Button disabled className="w-full">
                   {t("tournament_full") || "Tournament Full"}
@@ -399,12 +242,6 @@ export default function TournamentSidebarClient({ initialTournament }: Tournamen
           <CardTitle className="text-lg">{t("quick_links")}</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3">
-          <a href="#" onClick={handleExportBracket} className="flex items-center text-sm font-medium text-muted-foreground hover:text-primary transition-all duration-200 hover:translate-x-1 p-2 hover:bg-primary/5 rounded-md -mx-2">
-            <Download className="mr-2 h-4 w-4" /> {loadingExportBracket ? "..." : t("bracket")}
-          </a>
-          <a href="#" onClick={handleExportScoreboard} className="flex items-center text-sm font-medium text-muted-foreground hover:text-primary transition-all duration-200 hover:translate-x-1 p-2 hover:bg-primary/5 rounded-md -mx-2">
-            <Download className="mr-2 h-4 w-4" /> {loadingExportScoreboard ? "..." : t("export_scoreboard")}
-          </a>
           <a href="#" onClick={handleExportPlayers} className="flex items-center text-sm font-medium text-muted-foreground hover:text-primary transition-all duration-200 hover:translate-x-1 p-2 hover:bg-primary/5 rounded-md -mx-2">
             <Download className="mr-2 h-4 w-4" /> {loadingExportPlayers ? "..." : t("player_list")}
           </a>

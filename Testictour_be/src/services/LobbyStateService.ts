@@ -133,7 +133,6 @@ export default class LobbyStateService {
 
     logger.info(`LobbyStateService: lobby ${lobbyId} ${from} → ${to}`);
 
-    // Side effects per target state
     if (to === LOBBY_STATE.PLAYING) {
       // matchStartedAt = now (used by the worker to calculate elapsed time)
       await prisma.lobby.update({
@@ -156,6 +155,11 @@ export default class LobbyStateService {
       } else {
         logger.warn(`LobbyStateService: fetchMatchDataQueue not available — match won't be auto-polled for lobby ${lobbyId}`);
       }
+    }
+
+    if (to === LOBBY_STATE.STARTING) {
+      await LobbyTimerService.cancelTransition(lobbyId);
+      await LobbyTimerService.scheduleTransition(lobbyId, LOBBY_STATE.PLAYING, PHASE_DURATIONS_MS[LOBBY_STATE.STARTING]);
     }
 
     if (to === LOBBY_STATE.FINISHED || to === LOBBY_STATE.ADMIN_INTERVENTION) {
@@ -201,29 +205,27 @@ export default class LobbyStateService {
    * Toggle a player's ready state. Protected by:
    * - 3s per-player cooldown (Redis TTL)
    * - Distributed lock on quorum check (Redis NX)
-   * - State guard (only in READY_CHECK)
+   * - State guard (WAITING / READY_CHECK / GRACE_PERIOD)
+   *
+   * Quorum → STARTING → PLAYING triggers fetchMatchData auto-polling.
    */
   static async toggleReady(lobbyId: string, userId: string): Promise<LobbyStateSnapshot> {
     const redis = await getRedis();
 
-    // 1. Check cooldown
     const onCooldown = await redis.get(READY_COOLDOWN_KEY(lobbyId, userId));
     if (onCooldown) throw new Error('Ready toggle on cooldown (3s)');
 
-    // 2. Acquire distributed lock
     const lockKey = LOCK_KEY(lobbyId);
     const lockToken = await acquireRedisLock(redis, lockKey, 10000);
     if (!lockToken) throw new Error('Could not acquire lobby lock — retry in a moment');
 
     try {
-      // 3. Check lobby state
       const lobby = await prisma.lobby.findUnique({ where: { id: lobbyId } });
       if (!lobby) throw new Error(`Lobby ${lobbyId} not found`);
       if (![LOBBY_STATE.WAITING, LOBBY_STATE.READY_CHECK, LOBBY_STATE.GRACE_PERIOD].includes(lobby.state as any)) {
         throw new Error(`Cannot toggle ready in state: ${lobby.state}`);
       }
 
-      // 4. Toggle in Redis Set
       const isMember = await redis.sismember(READY_KEY(lobbyId), userId);
       if (isMember) {
         await redis.srem(READY_KEY(lobbyId), userId);
@@ -231,19 +233,15 @@ export default class LobbyStateService {
         await redis.sadd(READY_KEY(lobbyId), userId);
       }
 
-      // 5. Set 3s cooldown
       await redis.set(READY_COOLDOWN_KEY(lobbyId, userId), '1', 'EX', 3);
 
-      // 6. Check quorum (inside lock — no race condition)
       const readyCount = await redis.scard(READY_KEY(lobbyId));
       const lobbySize = (lobby.participants as string[]).length;
 
       if (readyCount >= lobbySize) {
-        // 8/8 → instant start, cancel grace timer
         await LobbyTimerService.cancelTransition(lobbyId);
         await LobbyTimerService.scheduleTransition(lobbyId, LOBBY_STATE.STARTING, 0);
       } else if (readyCount >= 6 && lobby.state === LOBBY_STATE.READY_CHECK) {
-        // ≥6 → enter grace period
         await LobbyTimerService.cancelTransition(lobbyId);
         await LobbyStateService.transitionPhase(lobbyId, LOBBY_STATE.READY_CHECK, LOBBY_STATE.GRACE_PERIOD);
         await LobbyTimerService.scheduleTransition(lobbyId, LOBBY_STATE.STARTING, 60_000);
@@ -349,6 +347,104 @@ export default class LobbyStateService {
 
   // ── Admin Controls ──
 
+  private static readonly PRE_PLAYING_STATES: LobbyState[] = [
+    LOBBY_STATE.WAITING,
+    LOBBY_STATE.READY_CHECK,
+    LOBBY_STATE.GRACE_PERIOD,
+    LOBBY_STATE.STARTING,
+  ];
+
+  private static readonly MIN_LOBBY_PLAYERS = 6;
+
+  private static async getPrePlayingLobbiesForTournament(tournamentId: string) {
+    return prisma.lobby.findMany({
+      where: {
+        state: { in: LobbyStateService.PRE_PLAYING_STATES },
+        round: { phase: { tournamentId } },
+      },
+      select: { id: true, name: true, participants: true, state: true },
+    });
+  }
+
+  private static async countCheckedInInLobby(tournamentId: string, userIds: string[]): Promise<number> {
+    if (!userIds.length) return 0;
+    return prisma.participant.count({
+      where: {
+        tournamentId,
+        userId: { in: userIds },
+        checkedIn: true,
+        isReserve: false,
+        eliminated: false,
+      },
+    });
+  }
+
+  /**
+   * At/after startTime: auto force-start lobbies with ≥6 checked-in main players.
+   * Skips lobbies that don't meet the check-in threshold.
+   */
+  static async autoStartCheckedInLobbies(tournamentId: string) {
+    const lobbies = await LobbyStateService.getPrePlayingLobbiesForTournament(tournamentId);
+    const started: string[] = [];
+    const skipped: Array<{ lobbyId: string; name: string; reason: string }> = [];
+
+    for (const lobby of lobbies) {
+      const userIds = (lobby.participants as string[]) || [];
+      const checkedInCount = await LobbyStateService.countCheckedInInLobby(tournamentId, userIds);
+
+      if (checkedInCount < LobbyStateService.MIN_LOBBY_PLAYERS) {
+        skipped.push({
+          lobbyId: lobby.id,
+          name: lobby.name,
+          reason: `Chỉ ${checkedInCount}/${userIds.length} đã check-in (cần tối thiểu ${LobbyStateService.MIN_LOBBY_PLAYERS})`,
+        });
+        continue;
+      }
+
+      try {
+        await LobbyStateService.forceStart(lobby.id);
+        started.push(lobby.id);
+        logger.info(`[AutoStart] Lobby ${lobby.id} (${lobby.name}): ${checkedInCount} checked-in → PLAYING`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        skipped.push({ lobbyId: lobby.id, name: lobby.name, reason: msg });
+      }
+    }
+
+    return {
+      started,
+      skipped,
+      startedCount: started.length,
+      skippedCount: skipped.length,
+    };
+  }
+
+  /**
+   * Admin override: force-start ALL pre-PLAYING lobbies regardless of check-in.
+   */
+  static async forceStartAllLobbies(tournamentId: string) {
+    const lobbies = await LobbyStateService.getPrePlayingLobbiesForTournament(tournamentId);
+    const started: string[] = [];
+    const failed: Array<{ lobbyId: string; name: string; reason: string }> = [];
+
+    for (const lobby of lobbies) {
+      try {
+        await LobbyStateService.forceStart(lobby.id);
+        started.push(lobby.id);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        failed.push({ lobbyId: lobby.id, name: lobby.name, reason: msg });
+      }
+    }
+
+    return {
+      started,
+      failed,
+      startedCount: started.length,
+      failedCount: failed.length,
+    };
+  }
+
 
   static async forceStart(lobbyId: string): Promise<void> {
     const lobby = await prisma.lobby.findUniqueOrThrow({ where: { id: lobbyId } });
@@ -357,8 +453,6 @@ export default class LobbyStateService {
     // Cancel existing timer and go straight to STARTING
     await LobbyTimerService.cancelTransition(lobbyId);
     await LobbyStateService.transitionPhase(lobbyId, currentState, LOBBY_STATE.STARTING);
-    // STARTING → PLAYING after 10s
-    await LobbyTimerService.scheduleTransition(lobbyId, LOBBY_STATE.PLAYING, 10_000);
 
     logger.info(`LobbyStateService.forceStart: lobby ${lobbyId} forced to STARTING`);
   }

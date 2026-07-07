@@ -39,15 +39,17 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
   const getPrizeRanks = (): string[] => {
     const ps = getCashPrizeStructure();
     const flex = getFlexCoinPrizeStructure();
+    const physical = getPhysicalPrizeStructure();
     const flexRanks = Object.keys(flex || {});
+    const physicalRanks = Object.keys(physical || {});
     if (ps && Object.keys(ps).length > 0) {
       const cashRanks = Array.isArray(ps)
         ? ps.map((_, i) => String(i + 1))
         : Object.keys(ps);
-      return Array.from(new Set([...cashRanks, ...flexRanks])).sort((a, b) => Number(a) - Number(b));
+      return Array.from(new Set([...cashRanks, ...flexRanks, ...physicalRanks])).sort((a, b) => Number(a) - Number(b));
     }
-    if (flexRanks.length > 0) {
-      return flexRanks.sort((a, b) => Number(a) - Number(b));
+    if (flexRanks.length > 0 || physicalRanks.length > 0) {
+      return Array.from(new Set([...flexRanks, ...physicalRanks])).sort((a, b) => Number(a) - Number(b));
     }
     // Default: 4 ranks with 40/30/20/10
     return ['1', '2', '3', '4'];
@@ -85,6 +87,18 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
     return {};
   };
 
+  const getPhysicalPrizeStructure = (): Record<string, string> => {
+    const ps: any = tournament.prizeStructure;
+    if (ps && !Array.isArray(ps) && typeof ps === "object" && ps.physical) {
+      return Object.fromEntries(
+        Object.entries(ps.physical as Record<string, unknown>)
+          .filter(([, v]) => typeof v === "string" && (v as string).trim().length > 0)
+          .map(([rank, v]) => [rank, (v as string).trim()])
+      );
+    }
+    return {};
+  };
+
   const rankSuffix = (rank: string) => {
     const num = parseInt(rank);
     if (isNaN(num)) return rank;
@@ -96,6 +110,7 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
 
   const prizeRanks = getPrizeRanks();
   const flexCoinPrizeStructure = getFlexCoinPrizeStructure();
+  const physicalPrizeStructure = getPhysicalPrizeStructure();
   const isTrusted = (tournament as any).organizer?.partnerSubscription?.plan === 'PRO' || (tournament as any).organizer?.partnerSubscription?.plan === 'ENTERPRISE';
   const isEscrow = !tournament.isCommunityMode && !isTrusted;
 
@@ -208,6 +223,9 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
                 {(tournament.hostFeePercent ?? 0) > 0 && (
                   <span className="text-[10px] text-muted-foreground">Host Fee: {((tournament.hostFeePercent ?? 0) * 100).toFixed(1)}%</span>
                 )}
+                {tournament.platformFeePercent !== null && tournament.platformFeePercent !== undefined && (
+                  <span className="text-[10px] text-muted-foreground">Platform Fee: {(tournament.platformFeePercent * 100).toFixed(1)}%</span>
+                )}
               </div>
             </div>
             <div className="flex items-start">
@@ -310,8 +328,9 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
               const totalPrizePool = tournament.budget || 0;
               const prizePercentage = getPrizePercentage(rank);
               const flexCoinAmount = Number(flexCoinPrizeStructure[rank] || 0);
+              const physicalPrize = physicalPrizeStructure[rank] || "";
               
-              if (prizePercentage === 0 && flexCoinAmount === 0) return null;
+              if (prizePercentage === 0 && flexCoinAmount === 0 && !physicalPrize) return null;
 
               const prizeAmount = totalPrizePool * prizePercentage;
 
@@ -327,6 +346,11 @@ export const TournamentDetailsTab: React.FC<TournamentDetailsTabProps> = ({ tour
                   {flexCoinAmount > 0 && (
                     <span className="text-xs font-semibold text-amber-500">
                       +{flexCoinAmount.toLocaleString()} F coin
+                    </span>
+                  )}
+                  {physicalPrize && (
+                    <span className="text-xs font-semibold text-orange-400 mt-1">
+                      + {physicalPrize}
                     </span>
                   )}
                 </Card>

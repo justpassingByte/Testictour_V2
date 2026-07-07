@@ -3,7 +3,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useTranslations } from "next-intl"
 
 import { ITournament } from '@/app/types/tournament';
-import { TournamentBracketTab } from "@/app/[locale]/tournaments/[id]/components/TournamentBracketTab";
 import { TournamentPhasesTab } from "@/app/[locale]/tournaments/[id]/components/TournamentPhasesTab";
 import { TournamentPlayersTab } from "@/app/[locale]/tournaments/[id]/components/TournamentPlayersTab";
 import { TournamentRulesTab } from "@/app/[locale]/tournaments/[id]/components/TournamentRulesTab";
@@ -30,12 +29,6 @@ export const TournamentTabsContent = memo(({
             {t("phases")}
           </TabsTrigger>
           <TabsTrigger 
-            value="bracket" 
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-1 py-3 text-sm font-medium transition-all shadow-none hover:text-primary/80 text-muted-foreground data-[state=active]:shadow-none"
-          >
-            {t("bracket")}
-          </TabsTrigger>
-          <TabsTrigger 
             value="players" 
             className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary px-1 py-3 text-sm font-medium transition-all shadow-none hover:text-primary/80 text-muted-foreground data-[state=active]:shadow-none"
           >
@@ -55,12 +48,9 @@ export const TournamentTabsContent = memo(({
           </TabsTrigger>
         </TabsList>
       </div>
-      <TabsContent value="bracket" className="space-y-4">
-        <TournamentBracketTab tournamentId={tournament.id} />
-      </TabsContent>
       <TabsContent value="phase" className="space-y-4">
         {tournament.phases && tournament.phases.length > 0 ? (
-          <TournamentPhasesTab phases={tournament.phases} />
+          <TournamentPhasesTab phases={tournament.phases} tournamentId={tournament.id} />
         ) : (
           <p className="text-muted-foreground text-center">{t("no_phases_available")}</p>
         )}

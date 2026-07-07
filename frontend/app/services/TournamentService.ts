@@ -40,7 +40,9 @@ export const TournamentService = {
     roundsTotal: number;
     entryFee: number;
     entryType?: string; // "usd" | "vnd" | "coins"
+    checkInTime?: string;
     registrationDeadline: Date;
+    checkInTime?: Date;
     prizeStructure?: PrizeStructure;
     hostFeePercent?: number;
     expectedParticipants?: number;
@@ -48,6 +50,7 @@ export const TournamentService = {
     config?: { phases: IPhaseConfig[] };
     isCommunityMode?: boolean;
     customPrizePool?: number;
+    platformFeePercent?: number;
     reservePlayersLimit?: number;
     absentFeePolicy?: string;
   }): Promise<ITournament> {
@@ -56,6 +59,7 @@ export const TournamentService = {
         ...data,
         startTime: data.startTime.toISOString(),
         registrationDeadline: data.registrationDeadline.toISOString(),
+        checkInTime: data.checkInTime ? data.checkInTime.toISOString() : undefined,
       });
 
       const tournament: ITournament = response.data;
@@ -136,5 +140,17 @@ export const TournamentService = {
       console.error('Error syncing matches:');
       throw new Error('Error syncing matches');
     }
-  }
+  },
+
+  /** Manually assign participants to groups/lobbies (bracket). Auto-runs ~5 min before start if skipped. */
+  async preAssignGroups(id: string): Promise<{ message: string }> {
+    const response = await api.post(`/tournaments/${id}/pre-assign`);
+    return response.data;
+  },
+
+  /** Force-start all pre-PLAYING lobbies (ignores check-in). */
+  async forceStartAllLobbies(id: string): Promise<{ startedCount: number; failedCount: number; started: string[]; failed: Array<{ lobbyId: string; name: string; reason: string }> }> {
+    const response = await api.post(`/tournaments/${id}/force-start-lobbies`);
+    return response.data;
+  },
 };

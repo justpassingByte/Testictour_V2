@@ -39,6 +39,28 @@ function isCoinEntryType(entryType?: string): boolean {
   return normalizeMiniTourEntryType(entryType) === 'coins';
 }
 
+function parseGuideTipsInput(input: unknown): Record<string, unknown> | undefined {
+  if (input === undefined || input === null || input === '') return undefined;
+
+  if (typeof input === 'object' && !Array.isArray(input)) {
+    return input as Record<string, unknown>;
+  }
+
+  if (typeof input !== 'string') {
+    throw new ApiError(400, 'guideTips must be a JSON object.');
+  }
+
+  try {
+    const parsed = JSON.parse(input);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('guideTips must be an object');
+    }
+    return parsed as Record<string, unknown>;
+  } catch {
+    throw new ApiError(400, 'guideTips must be valid JSON.');
+  }
+}
+
 // Configure Multer for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -73,6 +95,7 @@ export const createMiniTourLobby = asyncHandler(async (req: Request, res: Respon
     privateMode,
     totalMatches,
     region = 'APAC', // Major region: AMER | EMEA | APAC
+    guideTips,
   } = req.body;
 
   // Parse stringified values from FormData
@@ -84,6 +107,7 @@ export const createMiniTourLobby = asyncHandler(async (req: Request, res: Respon
   const parsedAutoStart: boolean = autoStart === 'true';
   const parsedPrivateMode: boolean = privateMode === 'true';
   const parsedTotalMatches = totalMatches ? Number(totalMatches) : 3; // Default to 3 matches
+  const parsedGuideTips = parseGuideTipsInput(guideTips);
 
   const maxPlayersNum = Number(maxPlayers); // Explicitly convert to number
   const normalizedEntryType = normalizeMiniTourEntryType(entryType);
@@ -190,7 +214,8 @@ export const createMiniTourLobby = asyncHandler(async (req: Request, res: Respon
       settings: { // Group these into a settings object
         autoStart: parsedAutoStart, // Use parsed boolean
         privateMode: parsedPrivateMode, // Use parsed boolean
-      },
+        ...(parsedGuideTips !== undefined && { guideTips: parsedGuideTips }),
+      } as any,
       status: "WAITING", // Initial status
       currentPlayers: 0, // Initial currentPlayers
       averageRating: 0,
@@ -302,6 +327,7 @@ export const updateMiniTourLobby = asyncHandler(async (req: Request, res: Respon
     autoStart,
     privateMode,
     totalMatches,
+    guideTips,
   } = req.body;
 
   // Repurposing validation and parsing from create function
@@ -309,10 +335,14 @@ export const updateMiniTourLobby = asyncHandler(async (req: Request, res: Respon
   const parsedAutoStart = autoStart === 'true';
   const parsedPrivateMode = privateMode === 'true';
   const parsedTotalMatches = totalMatches ? Number(totalMatches) : 3; // Default to 3 matches
+  const parsedGuideTips = parseGuideTipsInput(guideTips);
   const maxPlayersNum = Number(maxPlayers);
   const normalizedEntryType = normalizeMiniTourEntryType(entryType ?? lobby.entryType);
   const entryFeeNum = normalizedEntryType === 'free' ? 0 : Number(entryFee);
   const customLogoUrl = req.file ? `/uploads/miniTourLobbies/${req.file.filename}` : lobby.customLogoUrl;
+  const existingSettings = lobby.settings && typeof lobby.settings === 'object' && !Array.isArray(lobby.settings)
+    ? lobby.settings as Record<string, unknown>
+    : {};
 
   const dataToUpdate: any = {
     name: name || lobby.name,
@@ -326,8 +356,10 @@ export const updateMiniTourLobby = asyncHandler(async (req: Request, res: Respon
     customLogoUrl: customLogoUrl,
     rules: parsedRules,
     settings: {
+      ...existingSettings,
       autoStart: parsedAutoStart,
       privateMode: parsedPrivateMode,
+      ...(parsedGuideTips !== undefined && { guideTips: parsedGuideTips }),
     },
   };
 
@@ -1146,7 +1178,11 @@ export const fetchMatchFromGrimoire = asyncHandler(async (req: Request, res: Res
     .filter(Boolean) as string[];
 
   if (allPuuids.length === 0) {
-    throw new ApiError(400, 'No participants with PUUIDs found.');
+    return res.json({
+      success: true,
+      found: false,
+      message: 'Không có người chơi nào trong sảnh có liên kết tài khoản Riot (PUUID). Vui lòng dùng chức năng "Nhập kết quả thủ công" thay thế.',
+    });
   }
 
   // Pick 1-2 players for polling, use their actual region
@@ -1154,7 +1190,11 @@ export const fetchMatchFromGrimoire = asyncHandler(async (req: Request, res: Res
   const region = lobby.participants[0]?.user?.region;
 
   if (!region) {
-    throw new ApiError(400, 'No region found for participants. Ensure players have region set in their profile.');
+    return res.json({
+      success: true,
+      found: false,
+      message: 'Không tìm thấy region của người chơi. Vui lòng đảm bảo người chơi đã liên kết tài khoản Riot và có region hợp lệ, hoặc dùng nhập kết quả thủ công.',
+    });
   }
 
   // Use match startTime as search start (minus 5 min buffer)

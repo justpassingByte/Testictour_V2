@@ -39,7 +39,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import ReserveManagementTab from '@/components/ReserveManagementTab'
 import LobbyInterventionModal from '@/components/LobbyInterventionModal'
 import { MatchDetailModal } from '@/components/match/MatchDetailModal'
-import { ReservePlayerAPI } from '@/app/services/ParticipantService'
+import { ReservePlayerAPI, ParticipantService } from '@/app/services/ParticipantService'
+import { Switch } from "@/components/ui/switch"
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   pending: { label: "pending", color: "slate", icon: Clock },
@@ -79,6 +80,8 @@ export default function TournamentManagePage() {
   const [stats, setStats] = useState<{ topUnits: any[]; topTraits: any[]; avgDuration: string | null } | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
   const [roundControlLoading, setRoundControlLoading] = useState<Record<string, boolean>>({})
+  const [generatingBracket, setGeneratingBracket] = useState(false)
+  const [forceStartingAll, setForceStartingAll] = useState(false)
 
     // Lobby Intervention Modal state
   const [interventionModal, setInterventionModal] = useState<{ open: boolean; lobby: any | null }>({ open: false, lobby: null })
@@ -96,6 +99,7 @@ export default function TournamentManagePage() {
     status: "",
     startTime: "",
     registrationDeadline: "",
+    checkInTime: "",
   })
   const [editPhases, setEditPhases] = useState<any[]>([])
   const [deletedPhaseIds, setDeletedPhaseIds] = useState<string[]>([])
@@ -131,6 +135,7 @@ export default function TournamentManagePage() {
         status: t.status,
         startTime: t.startTime ? new Date(t.startTime).toISOString().slice(0, 16) : "",
         registrationDeadline: (t as any).registrationDeadline ? new Date((t as any).registrationDeadline).toISOString().slice(0, 16) : "",
+        checkInTime: (t as any).checkInTime ? new Date((t as any).checkInTime).toISOString().slice(0, 16) : "",
       })
       setEditPhases(t.phases?.map((p: any) => ({
         id: p.id,
@@ -139,8 +144,9 @@ export default function TournamentManagePage() {
         lobbySize: p.lobbySize || 8,
         numberOfRounds: p.numberOfRounds || 1,
         matchesPerRound: p.matchesPerRound || 1,
-        advancementType: p.advancementCondition?.type || "top_n_scores",
+        advancementType: p.advancementCondition?.type === 'checkmate' ? 'checkmate' : (p.advancementCondition?.type || "placement"),
         advancementValue: p.advancementCondition?.value || 4,
+        pointsToActivate: p.advancementCondition?.pointsToActivate || 20,
         lobbyAssignment: p.lobbyAssignment || (p.type === 'swiss' ? 'swiss' : 'none'),
       })) || [])
       setDeletedPhaseIds([])
@@ -212,12 +218,13 @@ export default function TournamentManagePage() {
         await api.post(`/tournaments/${tournamentId}/image`, formData)
       }
 
-      const { budget, startTime, registrationDeadline, ...restForm } = editForm
+      const { budget, startTime, registrationDeadline, checkInTime, ...restForm } = editForm
       const payload: any = { 
         ...restForm, 
         customPrizePool: budget,
         startTime: startTime ? new Date(startTime).toISOString() : undefined,
         registrationDeadline: registrationDeadline ? new Date(registrationDeadline).toISOString() : undefined,
+        checkInTime: checkInTime ? new Date(checkInTime).toISOString() : null,
       }
       const phasePayload: any = {}
 
@@ -228,9 +235,11 @@ export default function TournamentManagePage() {
             name: p.name,
             type: p.type,
             lobbySize: p.lobbySize,
-            numberOfRounds: p.numberOfRounds,
-            matchesPerRound: p.matchesPerRound,
-            advancementCondition: { type: p.advancementType, value: p.advancementValue },
+            numberOfRounds: p.type === 'checkmate' ? 1 : p.numberOfRounds,
+            matchesPerRound: p.type === 'checkmate' ? 1 : p.matchesPerRound,
+            advancementCondition: p.type === 'checkmate'
+              ? { type: 'checkmate', winCondition: 'checkmate_win', pointsToActivate: p.pointsToActivate || 20 }
+              : { type: p.advancementType, value: p.advancementValue },
             lobbyAssignment: p.lobbyAssignment
           }
         }))
@@ -323,6 +332,49 @@ export default function TournamentManagePage() {
     }
   };
 
+  const handleGenerateBracket = async () => {
+    setGeneratingBracket(true);
+    try {
+      const result = await TournamentService.preAssignGroups(tournamentId);
+      toast({
+        title: '✅ Bracket đã tạo',
+        description: result.message || 'Đã chia bảng và lobby cho người chơi.',
+      });
+      await refresh();
+    } catch (error: any) {
+      toast({
+        title: 'Tạo bracket thất bại',
+        description: error?.response?.data?.error || error?.response?.data?.message || error.message || 'Không thể tạo bracket.',
+        variant: 'destructive',
+      });
+    } finally {
+      setGeneratingBracket(false);
+    }
+  };
+
+  const handleForceStartAllLobbies = async () => {
+    if (!window.confirm('Force-start TẤT CẢ lobby đang chờ? Bỏ qua check-in và ready check. Chỉ dùng khi cần thiết.')) return;
+    setForceStartingAll(true);
+    try {
+      const result = await TournamentService.forceStartAllLobbies(tournamentId);
+      toast({
+        title: `✅ Đã start ${result.startedCount} lobby`,
+        description: result.failedCount > 0
+          ? `${result.failedCount} lobby thất bại.`
+          : 'Tất cả lobby pre-PLAYING đã chuyển sang PLAYING.',
+      });
+      await refresh();
+    } catch (error: any) {
+      toast({
+        title: 'Force start thất bại',
+        description: error?.response?.data?.error || error?.response?.data?.message || error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setForceStartingAll(false);
+    }
+  };
+
   const handleForceStartLobby = async (lobbyId: string) => {
     const key = 'lobby-' + lobbyId;
     setRoundControlLoading(prev => ({ ...prev, [key]: true }));
@@ -376,6 +428,23 @@ export default function TournamentManagePage() {
     }
   }
 
+  const handleToggleCheckIn = async (participant: IParticipant, checkedIn: boolean) => {
+    try {
+      await ParticipantService.checkIn(tournamentId, participant.id, checkedIn)
+      toast({
+        title: "Check-in Updated",
+        description: `${participant.inGameName || participant.user?.username || "Player"} marked as ${checkedIn ? "checked in" : "not checked in"}.`,
+      })
+      await refresh()
+    } catch (error: any) {
+      toast({
+        title: "Failed",
+        description: error?.response?.data?.message || "Could not update check-in status.",
+        variant: "destructive",
+      })
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
@@ -399,6 +468,9 @@ export default function TournamentManagePage() {
   const registeredCount = tournament.registered || totalParticipants
   const fillPercent = (registeredCount / tournament.maxPlayers) * 100
   const prizePool = (tournament.budget || 0);
+  const hasBracket = tournament.phases?.some(p =>
+    p.rounds?.some(r => r.lobbies && r.lobbies.length > 0)
+  ) ?? false
 
   return (
     <div className="p-6 lg:p-8 space-y-6">
@@ -470,6 +542,32 @@ export default function TournamentManagePage() {
             {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             <span className="hidden sm:inline ml-2">{t("sync")}</span>
           </Button>
+          {registeredCount > 0 && tournament.status !== 'COMPLETED' && tournament.status !== 'CANCELLED' && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-cyan-500/40 text-cyan-400 hover:bg-cyan-500/10"
+              onClick={handleGenerateBracket}
+              disabled={generatingBracket || hasBracket}
+              title={hasBracket ? 'Bracket đã được tạo (tự động hoặc thủ công)' : 'Chia bảng và lobby thủ công trước giờ thi đấu'}
+            >
+              {generatingBracket ? <Loader2 className="h-4 w-4 animate-spin" /> : <GitBranch className="h-4 w-4" />}
+              <span className="hidden sm:inline ml-2">{hasBracket ? 'Bracket OK' : 'Tạo Bracket'}</span>
+            </Button>
+          )}
+          {hasBracket && tournament.status !== 'COMPLETED' && tournament.status !== 'CANCELLED' && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-orange-500/40 text-orange-400 hover:bg-orange-500/10"
+              onClick={handleForceStartAllLobbies}
+              disabled={forceStartingAll}
+              title="Force-start tất cả lobby đang chờ (bỏ qua check-in)"
+            >
+              {forceStartingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+              <span className="hidden sm:inline ml-2">Force Start All</span>
+            </Button>
+          )}
           {tournament.status !== 'in_progress' && tournament.status !== 'COMPLETED' && (
             <Button
               size="sm"
@@ -685,6 +783,7 @@ export default function TournamentManagePage() {
                       <TableHead>{t("region")}</TableHead>
                       <TableHead>Nguồn</TableHead>
                       <TableHead>{t("total_score")}</TableHead>
+                      <TableHead>Check-in</TableHead>
                       <TableHead>{t("status")}</TableHead>
                       <TableHead className="text-right">{t("action")}</TableHead>
                     </TableRow>
@@ -733,6 +832,12 @@ export default function TournamentManagePage() {
                         <TableCell><Badge variant="outline" className="text-[10px]">{p.region || 'VN'}</Badge></TableCell>
                         <TableCell className="text-xs text-muted-foreground capitalize">{p.referralSource || 'Unknown'}</TableCell>
                         <TableCell className="font-semibold">{p.scoreTotal || 0}</TableCell>
+                        <TableCell>
+                          <Switch
+                            checked={Boolean(p.checkedIn)}
+                            onCheckedChange={(checked) => handleToggleCheckIn(p, checked)}
+                          />
+                        </TableCell>
                         <TableCell>
                           <Badge variant="outline" className={p.eliminated ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-green-500/10 text-green-400 border-green-500/20'}>
                             {p.eliminated ? t('eliminated') : t('active')}
@@ -1174,14 +1279,19 @@ export default function TournamentManagePage() {
                 <Label>{t("description")}</Label>
                 <Textarea value={editForm.description} onChange={(e) => setEditForm(p => ({ ...p, description: e.target.value }))} rows={3} disabled={isLocked} />
               </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Start Time</Label>
-                  <Input type="datetime-local" value={editForm.startTime} onChange={(e) => setEditForm(p => ({ ...p, startTime: e.target.value }))} disabled={isLocked} />
-                </div>
+              <div className="grid gap-4 md:grid-cols-3">
                 <div className="space-y-2">
                   <Label>Registration Deadline</Label>
                   <Input type="datetime-local" value={editForm.registrationDeadline} onChange={(e) => setEditForm(p => ({ ...p, registrationDeadline: e.target.value }))} disabled={isLocked} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Check-in Time</Label>
+                  <Input type="datetime-local" value={editForm.checkInTime} onChange={(e) => setEditForm(p => ({ ...p, checkInTime: e.target.value }))} disabled={isLocked} />
+                  <p className="text-[10px] text-muted-foreground">Để trống = mở check-in đúng giờ thi đấu.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Start Time</Label>
+                  <Input type="datetime-local" value={editForm.startTime} onChange={(e) => setEditForm(p => ({ ...p, startTime: e.target.value }))} disabled={isLocked} />
                 </div>
               </div>
               <div className="grid gap-4 md:grid-cols-4">
@@ -1262,7 +1372,12 @@ export default function TournamentManagePage() {
                             </div>
                             <div className="space-y-1.5 md:col-span-2">
                               <Label className="text-[11px] uppercase tracking-wide">Type</Label>
-                              <Select value={phase.type} onValueChange={(v) => setEditPhases(prev => prev.map((p, i) => i === index ? { ...p, type: v } : p))}>
+                              <Select value={phase.type} onValueChange={(v) => setEditPhases(prev => prev.map((p, i) => i === index ? {
+                                ...p,
+                                type: v,
+                                lobbyAssignment: v === 'swiss' ? 'swiss' : (v === 'elimination' || v === 'points' ? 'none' : p.lobbyAssignment),
+                                advancementType: v === 'checkmate' ? 'checkmate' : (v === 'elimination' ? 'placement' : (v === 'points' || v === 'swiss' ? 'top_n_scores' : p.advancementType)),
+                              } : p))}>
                                 <SelectTrigger className="bg-black/40"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="elimination">Group Elimination (Loại theo bảng - BO1)</SelectItem>
@@ -1297,34 +1412,57 @@ export default function TournamentManagePage() {
 
                             <div className="space-y-1.5">
                               <Label className="text-[11px] uppercase tracking-wide text-orange-400">Matches to Play (Thể thức thi đấu)</Label>
-                              <Input type="number" min={1} value={phase.matchesPerRound} onChange={(e) => {
-                                const val = parseInt(e.target.value) || 1;
-                                setEditPhases(prev => prev.map((p, i) => i === index ? {
-                                  ...p,
-                                  matchesPerRound: val,
-                                  numberOfRounds: 1
-                                } : p));
-                              }} className="bg-black/40 border-orange-500/50" />
-                              <p className="text-[9px] text-muted-foreground mt-0.5 px-1">
-                                {phase.type === 'elimination' && "Số trận mỗi bảng (mặc định 1 trận)."}
-                                {phase.type === 'points' && "Số trận đánh tích luỹ điểm của Phase (Vd: đánh 3 trận tổng)."}
-                                {(phase.type !== 'elimination' && phase.type !== 'points') && "Số trận của phase thi đấu (xào lobby sau mỗi trận)."}
-                              </p>
+                              {phase.type === 'checkmate' ? (
+                                <div className="rounded-md border border-yellow-500/30 bg-yellow-500/5 px-3 py-2 text-[10px] text-muted-foreground">
+                                  Checkmate đánh liên tục cho đến khi có người đạt ngưỡng điểm và thắng trận (Top 1). Không giới hạn số trận cố định.
+                                </div>
+                              ) : (
+                                <>
+                                  <Input type="number" min={1} value={phase.matchesPerRound} onChange={(e) => {
+                                    const val = parseInt(e.target.value) || 1;
+                                    setEditPhases(prev => prev.map((p, i) => i === index ? {
+                                      ...p,
+                                      matchesPerRound: val,
+                                      numberOfRounds: 1
+                                    } : p));
+                                  }} className="bg-black/40 border-orange-500/50" />
+                                  <p className="text-[9px] text-muted-foreground mt-0.5 px-1">
+                                    {phase.type === 'elimination' && "Số trận mỗi bảng (mặc định 1 trận BO1)."}
+                                    {phase.type === 'points' && "Số trận đánh tích luỹ điểm của Phase (VD: đánh 3 trận tổng)."}
+                                    {(phase.type !== 'elimination' && phase.type !== 'points') && "Số trận của phase thi đấu (xào lobby sau mỗi trận)."}
+                                  </p>
+                                </>
+                              )}
                             </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-[11px] uppercase tracking-wide">Advancement Mechanism</Label>
-                              <Select value={phase.advancementType} onValueChange={(v) => setEditPhases(prev => prev.map((p, i) => i === index ? { ...p, advancementType: v } : p))}>
-                                <SelectTrigger className="bg-black/40"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="top_n_scores">Top N Scores</SelectItem>
-                                  <SelectItem value="placement">By Placement</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-[11px] uppercase tracking-wide">Advance Target</Label>
-                              <Input type="number" min={1} value={phase.advancementValue} onChange={(e) => setEditPhases(prev => prev.map((p, i) => i === index ? { ...p, advancementValue: parseInt(e.target.value) || 4 } : p))} className="bg-black/40" />
-                            </div>
+                            {phase.type === 'checkmate' ? (
+                              <div className="space-y-1.5">
+                                <Label className="text-[11px] uppercase tracking-wide text-yellow-400">Ngưỡng Checkmate (điểm)</Label>
+                                <Input type="number" min={1} max={20} value={phase.pointsToActivate || 20} onChange={(e) => setEditPhases(prev => prev.map((p, i) => i === index ? { ...p, pointsToActivate: parseInt(e.target.value) || 20 } : p))} className="bg-black/40 border-yellow-500/50" />
+                                <p className="text-[9px] text-muted-foreground px-1">Cần tích đủ điểm này rồi thắng 1 trận (Top 1) để vô địch.</p>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="space-y-1.5">
+                                  <Label className="text-[11px] uppercase tracking-wide">Cách chọn người đi tiếp</Label>
+                                  <Select value={phase.advancementType} onValueChange={(v) => setEditPhases(prev => prev.map((p, i) => i === index ? { ...p, advancementType: v } : p))}>
+                                    <SelectTrigger className="bg-black/40"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="placement">Theo hạng từng lobby (By Placement)</SelectItem>
+                                      <SelectItem value="top_n_scores">Theo điểm tổng toàn phase (Top N Scores)</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  <p className="text-[9px] text-muted-foreground px-1">
+                                    {phase.advancementType === 'placement'
+                                      ? "Mỗi lobby chọn top N (VD: lobby 8 người → top 4 đi tiếp). Phù hợp BO1."
+                                      : "Xếp hạng tất cả theo tổng điểm, chọn top N toàn phase. Phù hợp points/swiss."}
+                                  </p>
+                                </div>
+                                <div className="space-y-1.5">
+                                  <Label className="text-[11px] uppercase tracking-wide">{phase.advancementType === 'placement' ? 'Top N mỗi lobby' : 'Top N toàn phase'}</Label>
+                                  <Input type="number" min={1} value={phase.advancementValue} onChange={(e) => setEditPhases(prev => prev.map((p, i) => i === index ? { ...p, advancementValue: parseInt(e.target.value) || 4 } : p))} className="bg-black/40" />
+                                </div>
+                              </>
+                            )}
                             {index > 0 && (
                               <div className="space-y-1.5">
                                 <Label className="text-[11px] uppercase tracking-wide">Carry Over Scores</Label>

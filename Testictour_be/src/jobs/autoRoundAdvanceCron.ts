@@ -180,4 +180,39 @@ cron.schedule('* * * * *', async () => {
     logger.error(`[RecoveryCron] Error: ${error instanceof Error ? error.message : String(error)}`);
   }
 });
+
+// Auto-start cron: at/after tournament startTime, force-start lobbies with enough checked-in players
+cron.schedule('* * * * *', async () => {
+  try {
+    const now = new Date();
+    const tournaments = await prisma.tournament.findMany({
+      where: {
+        startTime: { lte: now },
+        status: { in: ['pending', 'UPCOMING', 'REGISTRATION', 'in_progress'] },
+      },
+      select: { id: true, name: true },
+    });
+
+    if (tournaments.length === 0) return;
+
+    const LobbyStateService = (await import('../services/LobbyStateService')).default;
+
+    for (const tournament of tournaments) {
+      try {
+        const result = await LobbyStateService.autoStartCheckedInLobbies(tournament.id);
+        if (result.startedCount > 0) {
+          logger.info(
+            `[AutoStartCron] Tournament "${tournament.name}" (${tournament.id}): started ${result.startedCount} lobby/lobbies`
+          );
+        }
+      } catch (error) {
+        logger.error(
+          `[AutoStartCron] Failed for tournament ${tournament.id}: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+  } catch (error) {
+    logger.error(`[AutoStartCron] Error: ${error instanceof Error ? error.message : String(error)}`);
+  }
+});
  

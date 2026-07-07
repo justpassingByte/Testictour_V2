@@ -177,6 +177,12 @@ router.post('/:id/pre-assign', auth('admin'), async (req: Request, res: Response
   }
 });
 
+// Force-start all pre-PLAYING lobbies (admin/partner) — ignores check-in
+router.post('/:id/force-start-lobbies', auth('admin', 'partner'), TournamentController.forceStartAllLobbies);
+
+// Auto-start lobbies that have enough checked-in players (admin/partner manual trigger)
+router.post('/:id/auto-start-lobbies', auth('admin', 'partner'), TournamentController.autoStartCheckedInLobbies);
+
 // ── Scoreboard Export (Public) ────────────────────────────────────────────
 // Returns full structured scoreboard data: each phase → group/lobby → match → placement + points
 // Used for exporting scoreboard CSV with complete per-match data
@@ -219,6 +225,52 @@ router.get('/:id/scoreboard-export', async (req: Request, res: Response, next: N
       return res.status(404).json({ success: false, message: 'Tournament not found' });
     }
 
+    // Collect all user IDs from lobby rosters + match results for a single lookup
+    const userIdSet = new Set<string>();
+    tournament.phases.forEach((phase: any) => {
+      phase.rounds.forEach((round: any) => {
+        round.lobbies.forEach((lobby: any) => {
+          const roster = Array.isArray(lobby.participants) ? lobby.participants : [];
+          roster.forEach((id: string) => userIdSet.add(id));
+          lobby.matches.forEach((match: any) => {
+            match.matchResults.forEach((r: any) => userIdSet.add(r.userId));
+          });
+        });
+      });
+    });
+
+    const users = userIdSet.size
+      ? await prisma.user.findMany({
+          where: { id: { in: Array.from(userIdSet) } },
+          select: {
+            id: true,
+            username: true,
+            riotGameName: true,
+            riotGameTag: true,
+            discordId: true,
+          },
+        })
+      : [];
+
+    const userMap = new Map<string, {
+      id: string;
+      username: string;
+      riotGameName: string;
+      riotGameTag: string;
+      discordId: string | null;
+    }>(users.map((u: any) => [u.id, u]));
+
+    const mapUserFields = (userId: string) => {
+      const user = userMap.get(userId);
+      return {
+        userId,
+        username: user?.username || 'Unknown',
+        discordId: user?.discordId || '',
+        riotGameName: user?.riotGameName || '',
+        riotGameTag: user?.riotGameTag || '',
+      };
+    };
+
     // Helper to get group letter from roundNumber
     const groupNameFromNumber = (num: number) => String.fromCharCode(64 + num);
 
@@ -227,15 +279,18 @@ router.get('/:id/scoreboard-export', async (req: Request, res: Response, next: N
       const groups = phase.rounds.map((round: any) => {
         const groupLetter = groupNameFromNumber(round.roundNumber);
         const lobbies = round.lobbies.map((lobby: any) => {
+          const rosterIds = Array.isArray(lobby.participants) ? lobby.participants : [];
+          const participants = rosterIds.map((userId: string) => mapUserFields(userId));
+
           const matches = lobby.matches.map((match: any, matchIdx: number) => {
-            const results = match.matchResults.map((r: any) => ({
-              userId: r.userId,
-              username: r.user?.username || 'Unknown',
-              riotGameName: r.user?.riotGameName || '',
-              riotGameTag: r.user?.riotGameTag || '',
-              placement: r.placement,
-              points: r.points,
-            }));
+            const results = match.matchResults.map((r: any) => {
+              const fields = mapUserFields(r.userId);
+              return {
+                ...fields,
+                placement: r.placement,
+                points: r.points,
+              };
+            });
             // Sort by placement for cleaner output
             results.sort((a: any, b: any) => a.placement - b.placement);
             return {
@@ -252,6 +307,7 @@ router.get('/:id/scoreboard-export', async (req: Request, res: Response, next: N
             lobbyName: lobby.name,
             state: lobby.state,
             completedMatchesCount: lobby.completedMatchesCount,
+            participants,
             matches,
           };
         });

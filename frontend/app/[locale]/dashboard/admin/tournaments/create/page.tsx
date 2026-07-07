@@ -25,9 +25,21 @@ interface PhaseFormData {
   numberOfRounds: number
   advancementType: string
   advancementValue: number
+  pointsToActivate: number
   matchesPerRound: number
   carryOverScores: boolean
   lobbyAssignment: string
+}
+
+function buildAdvancementCondition(phase: PhaseFormData) {
+  if (phase.type === 'checkmate') {
+    return {
+      type: 'checkmate',
+      winCondition: 'checkmate_win',
+      pointsToActivate: phase.pointsToActivate || 20,
+    }
+  }
+  return { type: phase.advancementType, value: phase.advancementValue }
 }
 
 export default function CreateTournamentPage() {
@@ -47,8 +59,10 @@ export default function CreateTournamentPage() {
     entryType: "VND", // "VND" or "USD" - the currency that host/admin enters
     customPrizePool: 0,
     hostFeePercent: 0.1,
+    platformFeePercent: 0,
     startTime: "",
     registrationDeadline: "",
+    checkInTime: "",
     image: "",
     isCommunityMode: false,
   })
@@ -72,10 +86,11 @@ export default function CreateTournamentPage() {
   }
 
   const [phases, setPhases] = useState<PhaseFormData[]>([
-    { name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "top_n_scores", advancementValue: 4, matchesPerRound: 1, carryOverScores: false, lobbyAssignment: "none" }
+    { name: "Phase 1", type: "elimination", lobbySize: 8, numberOfRounds: 1, advancementType: "placement", advancementValue: 4, pointsToActivate: 20, matchesPerRound: 1, carryOverScores: false, lobbyAssignment: "none" }
   ])
   const [prizeDistribution, setPrizeDistribution] = useState<Record<string, number>>({ "1": 40, "2": 30, "3": 20, "4": 10 })
   const [flexCoinDistribution, setFlexCoinDistribution] = useState<Record<string, number>>({ "1": 0, "2": 0, "3": 0, "4": 0 })
+  const [physicalPrizeDistribution, setPhysicalPrizeDistribution] = useState<Record<string, string>>({ "1": "", "2": "", "3": "", "4": "" })
 
   const updateForm = (field: string, value: any) => {
     setForm(prev => ({ ...prev, [field]: value }))
@@ -87,8 +102,9 @@ export default function CreateTournamentPage() {
       type: "elimination",
       lobbySize: 8,
       numberOfRounds: 1,
-      advancementType: "top_n_scores",
+      advancementType: "placement",
       advancementValue: 4,
+      pointsToActivate: 20,
       matchesPerRound: 1,
       carryOverScores: false,
       lobbyAssignment: "none",
@@ -116,9 +132,9 @@ export default function CreateTournamentPage() {
         name: p.name,
         type: p.type,
         lobbySize: p.lobbySize,
-        numberOfRounds: p.numberOfRounds,
-        matchesPerRound: p.matchesPerRound,
-        advancementCondition: { type: p.advancementType, value: p.advancementValue },
+        numberOfRounds: p.type === 'checkmate' ? 1 : p.numberOfRounds,
+        matchesPerRound: p.type === 'checkmate' ? 1 : p.matchesPerRound,
+        advancementCondition: buildAdvancementCondition(p),
         lobbyAssignment: p.lobbyAssignment,
         carryOverScores: p.carryOverScores,
       }))
@@ -126,6 +142,11 @@ export default function CreateTournamentPage() {
       // VND mode: Backend lưu entryFee trực tiếp bằng VND — không cần quy đổi USD
       const entryFeeVnd = form.entryType === "VND" ? form.entryFee : Math.round(form.entryFee * usdToVndRate)
       const customPrizePoolVnd = form.entryType === "VND" ? form.customPrizePool : Math.round(form.customPrizePool * usdToVndRate)
+      const physicalPrizes = Object.fromEntries(
+        Object.entries(physicalPrizeDistribution)
+          .map(([rank, prize]) => [rank, prize.trim()] as [string, string])
+          .filter(([, prize]) => prize.length > 0)
+      )
 
       await TournamentService.create({
         name: form.name,
@@ -139,7 +160,9 @@ export default function CreateTournamentPage() {
         entryType: "vnd",
         customPrizePool: customPrizePoolVnd > 0 ? customPrizePoolVnd : undefined,
         registrationDeadline: new Date(form.registrationDeadline),
+        checkInTime: form.checkInTime ? new Date(form.checkInTime) : undefined,
         hostFeePercent: form.hostFeePercent,
+        platformFeePercent: form.platformFeePercent > 0 ? form.platformFeePercent : undefined,
         prizeStructure: {
           cash: Object.fromEntries(Object.entries(prizeDistribution).map(([rank, percent]) => [rank, percent / 100])),
           flexCoin: Object.fromEntries(
@@ -147,6 +170,7 @@ export default function CreateTournamentPage() {
               .map(([rank, amount]) => [rank, Math.max(0, Number(amount) || 0)] as [string, number])
               .filter(([, amount]) => amount > 0)
           ),
+          physical: physicalPrizes,
         },
         expectedParticipants: form.maxPlayers,
         config: { phases: phaseConfigs as any },
@@ -253,12 +277,17 @@ export default function CreateTournamentPage() {
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="startTime">{t("start_date")} *</Label>
-                <Input id="startTime" type="datetime-local" value={form.startTime} onChange={(e) => updateForm("startTime", e.target.value)} required />
-              </div>
-              <div className="space-y-2">
                 <Label htmlFor="registrationDeadline">{t("registration_deadline")} *</Label>
                 <Input id="registrationDeadline" type="datetime-local" value={form.registrationDeadline} onChange={(e) => updateForm("registrationDeadline", e.target.value)} required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="checkInTime">Check-in Time (Thời gian điểm danh)</Label>
+                <Input id="checkInTime" type="datetime-local" value={form.checkInTime} onChange={(e) => updateForm("checkInTime", e.target.value)} />
+                <p className="text-[10px] text-muted-foreground">Để trống = mở check-in đúng giờ thi đấu. Player phải đăng ký trước mới check-in được.</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="startTime">{t("start_date")} *</Label>
+                <Input id="startTime" type="datetime-local" value={form.startTime} onChange={(e) => updateForm("startTime", e.target.value)} required />
               </div>
             </div>
           </CardContent>
@@ -365,8 +394,23 @@ export default function CreateTournamentPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="hostFeePercent">Host Fee (%)</Label>
+                <Label htmlFor="hostFeePercent">Host Fee (decimal)</Label>
                 <Input id="hostFeePercent" type="number" min={0} max={1} step={0.01} value={form.hostFeePercent} onChange={(e) => updateForm("hostFeePercent", parseFloat(e.target.value) || 0)} />
+                <p className="text-[10px] text-muted-foreground">0.10 = 10% deducted from entry-fee pool.</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="platformFeePercent">Platform Fee Override (decimal)</Label>
+                <Input
+                  id="platformFeePercent"
+                  type="number"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={form.platformFeePercent}
+                  onChange={(e) => updateForm("platformFeePercent", parseFloat(e.target.value) || 0)}
+                  placeholder="Use plan default if 0"
+                />
+                <p className="text-[10px] text-muted-foreground">0 = use subscription plan. 0.05 = 5% platform fee.</p>
               </div>
             </div>
             
@@ -407,6 +451,12 @@ export default function CreateTournamentPage() {
                       />
                       <span className="text-[11px] font-bold text-amber-400 whitespace-nowrap">F coin</span>
                     </div>
+                    <Input
+                      value={physicalPrizeDistribution[rank] ?? ""}
+                      onChange={(e) => setPhysicalPrizeDistribution(prev => ({ ...prev, [rank]: e.target.value }))}
+                      placeholder="Hiện vật / physical prize"
+                      className="text-center text-xs"
+                    />
                   </div>
                 ))}
               </div>
@@ -489,6 +539,8 @@ export default function CreateTournamentPage() {
                         updatePhase(index, "type", v);
                         if (v === 'swiss') updatePhase(index, "lobbyAssignment", 'swiss');
                         if (v === 'elimination' || v === 'points') updatePhase(index, "lobbyAssignment", 'none');
+                        if (v === 'elimination') updatePhase(index, "advancementType", 'placement');
+                        if (v === 'points' || v === 'swiss') updatePhase(index, "advancementType", 'top_n_scores');
                       }}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
@@ -524,31 +576,54 @@ export default function CreateTournamentPage() {
 
                     <div className="space-y-2 relative">
                       <Label className="text-orange-400 font-medium tracking-wide">Matches to Play (Thể thức thi đấu)</Label>
-                      <Input type="number" min={1} value={phase.matchesPerRound} onChange={(e) => {
-                        const val = parseInt(e.target.value) || 1;
-                        updatePhase(index, "matchesPerRound", val);
-                        updatePhase(index, "numberOfRounds", 1);
-                      }} className="border-orange-500/50 focus-visible:ring-orange-500/30" />
-                      <p className="text-[10px] text-muted-foreground mt-1">
-                        {phase.type === 'elimination' && "Số trận mỗi bảng (mặc định 1 trận)."}
-                        {phase.type === 'points' && "Số trận đánh tích luỹ điểm của Phase (Vd: đánh 3 trận tổng)."}
-                        {(phase.type !== 'elimination' && phase.type !== 'points') && "Số trận của phase thi đấu (xào lobby sau mỗi trận)."}
-                      </p>
+                      {phase.type === 'checkmate' ? (
+                        <div className="rounded-md border border-yellow-500/30 bg-yellow-500/5 px-3 py-2 text-[11px] text-muted-foreground">
+                          Checkmate đánh liên tục cho đến khi có người đạt ngưỡng điểm <strong>và</strong> thắng trận (Top 1). Không giới hạn số trận cố định.
+                        </div>
+                      ) : (
+                        <>
+                          <Input type="number" min={1} value={phase.matchesPerRound} onChange={(e) => {
+                            const val = parseInt(e.target.value) || 1;
+                            updatePhase(index, "matchesPerRound", val);
+                            updatePhase(index, "numberOfRounds", 1);
+                          }} className="border-orange-500/50 focus-visible:ring-orange-500/30" />
+                          <p className="text-[10px] text-muted-foreground mt-1">
+                            {phase.type === 'elimination' && "Số trận mỗi bảng (mặc định 1 trận BO1)."}
+                            {phase.type === 'points' && "Số trận đánh tích luỹ điểm của Phase (VD: đánh 3 trận tổng)."}
+                            {(phase.type !== 'elimination' && phase.type !== 'points') && "Số trận của phase thi đấu (xào lobby sau mỗi trận)."}
+                          </p>
+                        </>
+                      )}
                     </div>
-                    <div className="space-y-2">
-                      <Label>Advancement</Label>
-                      <Select value={phase.advancementType} onValueChange={(v) => updatePhase(index, "advancementType", v)}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="top_n_scores">Top N Scores</SelectItem>
-                          <SelectItem value="placement">By Placement</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Advance Top</Label>
-                      <Input type="number" min={1} value={phase.advancementValue} onChange={(e) => updatePhase(index, "advancementValue", parseInt(e.target.value))} />
-                    </div>
+                    {phase.type === 'checkmate' ? (
+                      <div className="space-y-2">
+                        <Label className="text-yellow-400 font-medium">Ngưỡng Checkmate (điểm)</Label>
+                        <Input type="number" min={1} max={20} value={phase.pointsToActivate} onChange={(e) => updatePhase(index, "pointsToActivate", parseInt(e.target.value) || 20)} className="border-yellow-500/50" />
+                        <p className="text-[10px] text-muted-foreground">Người chơi cần tích đủ điểm này, sau đó thắng 1 trận (Top 1) để vô địch. Mặc định: 20 điểm.</p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="space-y-2">
+                          <Label>Cách chọn người đi tiếp</Label>
+                          <Select value={phase.advancementType} onValueChange={(v) => updatePhase(index, "advancementType", v)}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="placement">Theo hạng từng lobby (By Placement)</SelectItem>
+                              <SelectItem value="top_n_scores">Theo điểm tổng toàn phase (Top N Scores)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-[10px] text-muted-foreground">
+                            {phase.advancementType === 'placement'
+                              ? "Mỗi lobby chọn top N (VD: lobby 8 người → top 4 đi tiếp). Phù hợp BO1 / elimination."
+                              : "Xếp hạng tất cả người chơi theo tổng điểm, chọn top N toàn phase. Phù hợp points/swiss nhiều trận."}
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>{phase.advancementType === 'placement' ? 'Top N mỗi lobby' : 'Top N toàn phase'}</Label>
+                          <Input type="number" min={1} value={phase.advancementValue} onChange={(e) => updatePhase(index, "advancementValue", parseInt(e.target.value))} />
+                        </div>
+                      </>
+                    )}
                     {index > 0 && (
                       <div className="space-y-2">
                         <Label>Carry Over Scores</Label>

@@ -28,6 +28,36 @@ export class ParticipantService {
     }
   }
 
+  static async guestJoin(
+    tournamentId: string,
+    guestName: string,
+    email: string,
+    additionalInformation?: string,
+    referralSource?: string,
+    joinAsReserve?: boolean,
+  ): Promise<{ participant: IParticipant; checkoutUrl: string | null; requiresPayment: boolean; transactionId?: string }> {
+    try {
+      const response = await api.post(`/tournaments/${tournamentId}/guest-join`, {
+        guestName,
+        email,
+        discordId: additionalInformation,
+        additionalInformation,
+        referralSource,
+        joinAsReserve
+      });
+      const data = response.data;
+      return {
+        participant: data.participant,
+        checkoutUrl: data.checkoutUrl ?? null,
+        requiresPayment: data.requiresPayment ?? false,
+        transactionId: data.transactionId,
+      };
+    } catch (err: any) {
+      const message = err?.message || 'Error during guest registration';
+      throw new Error(message);
+    }
+  }
+
   static async list(tournamentId: string): Promise<IParticipant[]> {
     try {
       const response = await api.get(`/tournaments/${tournamentId}/participants`);
@@ -58,6 +88,18 @@ export class ParticipantService {
       console.error('Error removing participant:');
       throw new Error('Error removing participant');
     }
+  }
+
+  static async checkIn(
+    tournamentId: string,
+    participantId: string,
+    checkedIn?: boolean
+  ): Promise<IParticipant> {
+    const response = await api.post(
+      `/tournaments/${tournamentId}/participants/${participantId}/check-in`,
+      checkedIn === undefined ? {} : { checkedIn }
+    );
+    return response.data.participant;
   }
 }
 

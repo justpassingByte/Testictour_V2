@@ -139,6 +139,9 @@ model Tournament {
   // Sync status
   lastSyncTime DateTime?
   syncStatus   String?   @default("IDLE") // e.g., IDLE, SYNCING, SUCCESS, FAILED
+
+  // Platform fee override (if set, overrides plan config)
+  platformFeePercent Float? // If null, uses SubscriptionPlanConfig for this organizer
 }
 
 model Phase {
@@ -179,6 +182,8 @@ model Participant {
   isReserve       Boolean        @default(false) // true = reserve player (backup), false = main player
   isAbsent        Boolean        @default(false) // New: marks if the player was a no-show
   referralSource  String? // New: How did they hear about the tournament
+  checkedIn       Boolean  @default(false) // Check-in status
+  checkedInAt     DateTime? // When player checked in
   rewards         Reward[]
   roundOutcomes   RoundOutcome[]
 

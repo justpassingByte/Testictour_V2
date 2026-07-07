@@ -30,6 +30,24 @@ export default class PrizeCalculationService {
     return {};
   }
 
+  static getPhysicalPrizeStructure(prizeStructure: any): Record<string, string> {
+    if (
+      prizeStructure &&
+      !Array.isArray(prizeStructure) &&
+      typeof prizeStructure === 'object' &&
+      prizeStructure.physical &&
+      typeof prizeStructure.physical === 'object'
+    ) {
+      return Object.fromEntries(
+        Object.entries(prizeStructure.physical as Record<string, unknown>)
+          .filter(([, value]) => typeof value === 'string' && value.trim().length > 0)
+          .map(([rank, value]) => [rank, (value as string).trim()])
+      );
+    }
+
+    return {};
+  }
+
   /**
    * Adjusts the prize structure percentages so that total payout <= totalDistributablePrizePool,
    * prioritizing top ranks. This function does NOT calculate fees.

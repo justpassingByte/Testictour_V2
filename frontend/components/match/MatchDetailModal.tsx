@@ -82,6 +82,12 @@ interface MatchDetail {
     region?: string
   }
   results: MatchResultEntry[]
+  lobbyParticipants?: Array<{
+    id: string
+    riotGameName?: string
+    username?: string
+    puuid?: string
+  }>
 }
 
 export function MatchDetailModal({ matchId, open, onOpenChange, onSaved }: MatchDetailModalProps) {
@@ -101,8 +107,19 @@ export function MatchDetailModal({ matchId, open, onOpenChange, onSaved }: Match
     try {
       const res = await api.get(`/${matchId}/detail`)
       if (res.data?.success) {
-        setDetail(res.data)
-        setEditResults(res.data.results || [])
+        const payload = res.data
+        setDetail(payload)
+        const seededResults =
+          payload.results?.length > 0
+            ? payload.results
+            : (payload.lobbyParticipants || []).map((user: any, index: number) => ({
+                matchId: payload.match?.id || "",
+                userId: user.id,
+                placement: index + 1,
+                points: 0,
+                user,
+              }))
+        setEditResults(seededResults || [])
       } else {
         setError("Failed to load match details")
       }
@@ -333,7 +350,7 @@ export function MatchDetailModal({ matchId, open, onOpenChange, onSaved }: Match
                       disabled={saving}
                     >
                       <Edit3 className="h-3.5 w-3.5" />
-                      {t("edit") || "Edit"}
+                      {detail.results.length === 0 ? "Enter Results Manually" : (t("edit") || "Edit")}
                     </Button>
                   ) : (
                     <div className="flex gap-1.5">
@@ -386,7 +403,14 @@ export function MatchDetailModal({ matchId, open, onOpenChange, onSaved }: Match
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(editing ? editResults : detail.results)
+                  {(editing ? editResults : detail.results).length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-8 text-muted-foreground text-sm">
+                        No results yet. Click &quot;Enter Results Manually&quot; to add placements and points.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                  (editing ? editResults : detail.results)
                     .sort((a, b) => a.placement - b.placement)
                     .map((result, index) => {
                       const playerName = result.user?.riotGameName || result.user?.username || `User ${result.userId.slice(-6)}`
@@ -444,7 +468,8 @@ export function MatchDetailModal({ matchId, open, onOpenChange, onSaved }: Match
                           </TableCell>
                         </TableRow>
                       )
-                    })}
+                    })
+                  )}
                 </TableBody>
               </Table>
 

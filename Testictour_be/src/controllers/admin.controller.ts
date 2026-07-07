@@ -3,8 +3,11 @@ import { PrismaClient } from '@prisma/client';
 import ApiError from '../utils/ApiError';
 import asyncHandler from '../utils/asyncHandler';
 import bcrypt from 'bcrypt';
+import crypto from 'crypto';
 import * as xlsx from 'xlsx';
 import UserService from '../services/UserService';
+import GrimoireService from '../services/GrimoireService';
+import { getPlatformIdentifier } from '../utils/RegionMapper';
 
 const prisma = new PrismaClient();
 
@@ -162,32 +165,83 @@ export const getUserDetail = asyncHandler(async (req: Request, res: Response, ne
 });
 
 export const createUser = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-  const { username, email, password, role } = req.body; // Added role
+  const {
+    username,
+    email,
+    password,
+    role,
+    isGuest,
+    riotGameName,
+    riotGameTag,
+    region,
+    puuid,
+    discordId,
+  } = req.body;
+
+  const normalizedRole = isGuest ? 'guest' : (role || 'user');
+  const displayName = String(riotGameName || username || '').trim();
+  const tagLine = String(riotGameTag || '').replace(/^#/, '').trim();
+  const platformRegion = getPlatformIdentifier(region || 'vn2');
+
+  if (!displayName) {
+    return next(new ApiError(400, 'Player in-game name is required'));
+  }
+
+  if (!isGuest && (!email || !password)) {
+    return next(new ApiError(400, 'Email and password are required for login accounts'));
+  }
+
+  const baseUsername = String(username || displayName).trim();
+  const safeUsername = baseUsername.replace(/\s+/g, '_');
+  const finalEmail = isGuest
+    ? (email || `${safeUsername.toLowerCase()}-${Date.now()}@guest.testictour.local`)
+    : email;
+  const finalPassword = isGuest ? crypto.randomBytes(18).toString('hex') : password;
 
   // Check if user already exists
-  const existingUser = await prisma.user.findUnique({ where: { email } });
+  const existingUser = await prisma.user.findFirst({
+    where: {
+      OR: [
+        { email: finalEmail },
+        { username: safeUsername },
+        ...(puuid ? [{ puuid: String(puuid) }] : []),
+      ],
+    },
+  });
   if (existingUser) {
-    return next(new ApiError(400, 'User with this email already exists'));
+    return next(new ApiError(400, 'Player with this email, username, or PUUID already exists'));
   }
 
   // Hash password
-  const hashedPassword = await bcrypt.hash(password, 10);
+  const hashedPassword = await bcrypt.hash(finalPassword, 10);
+
+  let resolvedPuuid = puuid ? String(puuid) : null;
+  if (!resolvedPuuid && displayName && tagLine && platformRegion) {
+    try {
+      resolvedPuuid = await GrimoireService.fetchPuuid(displayName, tagLine, platformRegion);
+    } catch (error: any) {
+      console.warn(`Could not fetch PUUID for admin-created player ${displayName}#${tagLine}: ${error.message}`);
+    }
+  }
 
   const newUser = await prisma.user.create({
     data: {
-      username,
-      email,
+      username: safeUsername,
+      email: finalEmail,
       password: hashedPassword,
-      role: role || 'user', // Use provided role or default to 'user'
-      riotGameName: username, // Default for now, can be updated later
-      riotGameTag: 'NA1', // Default
-      region: 'NA',
-      balance: { create: { amount: 0 } }, // Initialize balance for new user
+      role: normalizedRole,
+      riotGameName: displayName,
+      riotGameTag: tagLine || 'VN2',
+      region: platformRegion,
+      puuid: resolvedPuuid,
+      discordId: discordId || null,
+      referrer: isGuest ? 'guest' : null,
+      balance: { create: { amount: 0, coins: 0 } },
     },
-    select: { id: true, username: true, email: true, role: true },
+    select: { id: true, username: true, email: true, role: true, riotGameName: true, riotGameTag: true, region: true, puuid: true },
   });
 
-  res.status(201).json({ message: 'User created successfully', user: newUser });
+  res.status(201).json({ message: 'Player created successfully', user: newUser });
 });
 
 export const updateUser = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {

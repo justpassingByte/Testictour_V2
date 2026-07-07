@@ -39,7 +39,11 @@ const MatchController = {
   },
   async updateResults(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await MatchService.updateResults(req.params.matchId, req.body);
+      const user = req.user!;
+      const result = await MatchService.updateResults(req.params.matchId, req.body, {
+        id: user.id,
+        role: user.role,
+      });
       res.json({ result });
     } catch (err) {
       next(err);

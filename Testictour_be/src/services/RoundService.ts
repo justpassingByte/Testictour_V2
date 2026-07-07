@@ -280,10 +280,23 @@ export default class RoundService {
     const users = allUserIds.size > 0
       ? await prisma.user.findMany({
         where: { id: { in: Array.from(allUserIds) } },
-        select: { id: true, username: true, riotGameName: true, riotGameTag: true, rank: true }
+        select: { id: true, username: true, riotGameName: true, riotGameTag: true, rank: true, discordId: true }
       })
       : [];
     const userMap = new Map(users.map(u => [u.id, u]));
+
+    const mapBracketPlayer = (userId: string) => {
+      const user = userMap.get(userId);
+      if (!user) return { id: userId, username: 'Unknown' };
+      return {
+        id: user.id,
+        username: user.username,
+        discordId: user.discordId || '',
+        riotGameName: user.riotGameName,
+        riotGameTag: user.riotGameTag,
+        rank: user.rank,
+      };
+    };
 
     // Build bracket response — lightweight: no match records loaded, use completedMatchesCount for slot status
     const phases = (tournament.phases as any[]).map((phase: any) => {
@@ -310,7 +323,7 @@ export default class RoundService {
                 // Hide players for future matches in Swiss/MultiMatch rounds
                 players: m > completed
                   ? []
-                  : (lobby.participants as string[]).map(userId => userMap.get(userId) || { id: userId, username: 'Unknown' }),
+                  : (lobby.participants as string[]).map(mapBracketPlayer),
                 roundId: round.id,
               });
             }
@@ -360,7 +373,7 @@ export default class RoundService {
                         fetchedResult: lobby.fetchedResult,
                         completedMatchesCount: m,
                         roundId: round.id,
-                        players: (lobby.participants as string[]).map(userId => userMap.get(userId) || { id: userId, username: 'Unknown' })
+                        players: (lobby.participants as string[]).map(mapBracketPlayer)
                       }))
                     : templateLobbies.map((lobby: any) => ({
                         id: `${lobby.id}_m${m}`,
@@ -394,7 +407,7 @@ export default class RoundService {
                       // Hide players for future matches in Swiss/MultiMatch rounds
                       players: m > completed
                         ? []
-                        : (lobby.participants as string[]).map(userId => userMap.get(userId) || { id: userId, username: 'Unknown' }),
+                        : (lobby.participants as string[]).map(mapBracketPlayer),
                     };
                   }),
                 });
@@ -416,7 +429,7 @@ export default class RoundService {
                 state: lobby.state,
                 fetchedResult: lobby.fetchedResult,
                 completedMatchesCount: lobby.completedMatchesCount || 0,
-                players: (lobby.participants as string[]).map(userId => userMap.get(userId) || { id: userId, username: 'Unknown' })
+                players: (lobby.participants as string[]).map(mapBracketPlayer)
               }))
             });
           }
@@ -579,7 +592,7 @@ export default class RoundService {
       allUserIds.size > 0
         ? prisma.user.findMany({
           where: { id: { in: Array.from(allUserIds) } },
-          select: { id: true, username: true, riotGameName: true, riotGameTag: true, rank: true, region: true }
+          select: { id: true, username: true, riotGameName: true, riotGameTag: true, rank: true, region: true, discordId: true }
         })
         : [],
       prisma.participant.findMany({
@@ -750,9 +763,14 @@ export default class RoundService {
         status = 'pending';
       }
 
+      const user = userMap.get(player.userId);
       return {
         id: player.id,
         name: player.name,
+        username: user?.username || '',
+        discordId: user?.discordId || '',
+        riotGameName: user?.riotGameName || '',
+        riotGameTag: user?.riotGameTag || '',
         region: player.region,
         lobbyName: player.lobbyName,
         placements: player.placements,
@@ -2224,26 +2242,20 @@ export default class RoundService {
         continue;
       }
 
-      // Kiểm tra xem người chơi có đạt top 1 trong trận đấu gần nhất không
       // Lấy kết quả trận đấu gần nhất của người chơi trong round hiện tại
-      const isTop1InLatestMatch = await tx.matchResult.findFirst({
+      const latestMatchResult = await tx.matchResult.findFirst({
         where: {
           userId: participant.userId,
-          match: {
-            lobby: {
-              roundId: round.id
-            }
-          },
-          placement: 1 // Check for placement 1 directly in the query
+          match: { lobby: { roundId: round.id } }
         },
-        orderBy: {
-          id: 'desc'
-        },
+        orderBy: { id: 'desc' },
         take: 1
-      }).then(result => !!result); // Convert result to boolean
+      });
+      const isTop1InLatestMatch = latestMatchResult?.placement === 1;
+      const latestMatchPoints = latestMatchResult?.points || 0;
+      const scoreBeforeLatestMatch = (latestRoundOutcome.scoreInRound || 0) - latestMatchPoints;
 
       // Debug log cho kết quả trận đấu
-      logger.debug(`[Advancement] Player ${participant.userId} (Round ${round.id}): scoreInRound = ${latestRoundOutcome.scoreInRound}, isTop1InLatestMatch = ${isTop1InLatestMatch}, pointsToActivate = ${pointsToActivate}`);
 
       // Kiểm tra cả hai điều kiện: top 1 trong trận đấu gần nhất VÀ đủ điểm trong vòng hiện tại
       if (isTop1InLatestMatch && latestRoundOutcome.scoreInRound >= pointsToActivate) {

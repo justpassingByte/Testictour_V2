@@ -215,7 +215,7 @@ export default class MatchResultService {
           }
         }
 
-        // After processing all participants for the match, perform checkmate logic if applicable.
+          // After processing all participants for the match, perform checkmate logic if applicable.
         if (phase.type === 'checkmate') {
           const lobbyParticipantPuids = matchData.info.participants.map((p: any) => p.puuid);
           const lobbyParticipants = await tx.participant.findMany({
@@ -225,9 +225,25 @@ export default class MatchResultService {
           const winnerResult = matchData.info.participants.find((p: any) => p.placement === 1);
           const winnerParticipant = lobbyParticipants.find(p => p.userId === winnerResult?.puuid);
 
-          if (winnerParticipant?.checkmateActive) {
+          // Get points earned in this match by the winner
+          const winnerPointsFromThisMatch = winnerResult ? (pointsMapping && winnerResult.placement <= pointsMapping.length ? pointsMapping[winnerResult.placement - 1] : 0) : 0;
+          
+          // Get winner's score BEFORE this match
+          let winnerScoreBeforeMatch = 0;
+          if (winnerParticipant) {
+             const allMatchesInRound = await tx.matchResult.findMany({
+               where: { userId: winnerParticipant.userId, match: { lobby: { roundId: round.id } } }
+             });
+             const currentScore = allMatchesInRound.reduce((s, r) => s + (r.points || 0), 0);
+             winnerScoreBeforeMatch = currentScore - winnerPointsFromThisMatch;
+          }
+
+          const pointsToActivate = (phase.advancementCondition as any)?.pointsToActivate || 20;
+
+          // Check if they had enough points BEFORE this match
+          if (winnerParticipant && winnerScoreBeforeMatch >= pointsToActivate) {
             // WINNER FOUND!
-            logger.info(`CHECKMATE WINNER! Participant ${winnerParticipant.userId} won the tournament!`);
+            logger.info(`CHECKMATE WINNER! Participant ${winnerParticipant.userId} won the tournament (Score before match: ${winnerScoreBeforeMatch} >= ${pointsToActivate})!`);
             await tx.tournament.update({
               where: { id: tournamentId },
               data: { status: 'completed', endTime: new Date() }

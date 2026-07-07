@@ -1,138 +1,87 @@
 "use client"
-import React from 'react';
+
+import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { TableIcon, Trophy, SortAsc, Star, Swords, BarChart2, RefreshCw, Info, ShieldCheck } from "lucide-react"
+import { TableIcon, Trophy, Info, ShieldCheck, BookOpen, ChevronRight, BarChart2, RefreshCw } from "lucide-react"
 import { useTranslations } from "next-intl"
-import { ITournament } from '@/app/types/tournament';
+import { ITournament } from "@/app/types/tournament"
+import { getPhaseRuleContent, PHASE_RULE_COLOR_MAP } from "./rules/rules-shared"
 
 interface TournamentRulesTabProps {
-  tournament: ITournament;
+  tournament: ITournament
 }
-
-const ICON_MAP: Record<string, React.ReactNode> = {
-  swiss: <BarChart2 className="h-4 w-4" />,
-  elimination: <Swords className="h-4 w-4" />,
-  elimination_bo: <Swords className="h-4 w-4" />,
-  checkmate: <Trophy className="h-4 w-4" />,
-  points: <Star className="h-4 w-4" />,
-  round_robin: <RefreshCw className="h-4 w-4" />,
-};
-
-const COLOR_MAP: Record<string, string> = {
-  swiss: 'text-blue-400',
-  elimination: 'text-red-400',
-  elimination_bo: 'text-red-400',
-  checkmate: 'text-yellow-400',
-  points: 'text-green-400',
-  round_robin: 'text-purple-400',
-};
 
 export const TournamentRulesTab = ({ tournament }: TournamentRulesTabProps) => {
   const t = useTranslations("common")
-  const phases = tournament?.phases || [];
+  const phases = tournament?.phases || []
 
   return (
     <div className="space-y-6">
+      {/* Per-phase quick links — avoid dumping all tiebreak rules here */}
+      {phases.length > 0 && (
+        <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/10 overflow-hidden">
+          <CardHeader className="pb-4 border-b border-white/5 bg-muted/20">
+            <CardTitle className="text-lg font-bold flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-primary" />
+              {t("rules_by_phase")}
+            </CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">{t("rules_by_phase_desc")}</p>
+          </CardHeader>
+          <CardContent className="p-4 space-y-2">
+            {phases.map((phase) => {
+              const ruleContent = getPhaseRuleContent(t, t.raw.bind(t), phase.type)
+              const colorClass = PHASE_RULE_COLOR_MAP[ruleContent.type] || "text-primary"
+              const isLive = phase.status === "in_progress" || phase.status === "PLAYING"
+
+              return (
+                <Link
+                  key={phase.id}
+                  href={`/tournaments/${tournament.id}/phases/${phase.phaseNumber}/rules`}
+                  className="flex items-center justify-between gap-3 p-3 rounded-xl bg-muted/15 border border-white/5 hover:border-primary/30 hover:bg-primary/5 transition-all group"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-sm">
+                        {t("stage_n", { number: phase.phaseNumber })}: {phase.name}
+                      </span>
+                      <Badge variant="outline" className={`${colorClass} text-[10px] uppercase`}>
+                        {ruleContent.label}
+                      </Badge>
+                      {isLive && (
+                        <Badge className="bg-red-500/10 text-red-500 border-red-500/30 text-[9px] animate-pulse">
+                          {t("live")}
+                        </Badge>
+                      )}
+                    </div>
+                    {ruleContent.desc && (
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{ruleContent.desc}</p>
+                    )}
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary shrink-0" />
+                </Link>
+              )
+            })}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Tournament-wide general rules */}
       <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/10 overflow-hidden">
         <CardHeader className="pb-4 border-b border-white/5 bg-muted/20">
           <div className="flex items-center justify-between">
             <div className="space-y-1">
               <CardTitle className="text-xl font-bold flex items-center gap-2">
                 <ShieldCheck className="h-5 w-5 text-primary" />
-                {t("rules_tiebreak_title")}
+                {t("additional_tournament_rules")}
               </CardTitle>
-              <p className="text-xs text-muted-foreground italic">
-                {t("rules_tiebreak_subtitle")}
-              </p>
+              <p className="text-xs text-muted-foreground italic">{t("rules_tiebreak_subtitle")}</p>
             </div>
             <Trophy className="h-10 w-10 text-primary/20" />
           </div>
         </CardHeader>
-        
-        <CardContent className="p-6 space-y-8">
-          {/* Active Phases Rules */}
-          <div className="space-y-6">
-            {phases.map((phase, phaseIdx) => {
-              let type = (phase.type || '').toLowerCase();
-              // Note: 'elimination_bo' kept in maps as fallback for legacy tournament data
-              // but new tournaments now store 'points' directly
 
-              const icon = ICON_MAP[type] || <Star className="h-4 w-4" />;
-              const colorClass = COLOR_MAP[type] || 'text-primary';
-              
-              // Get translation data using flat keys
-              const label = t(`rules_tiebreak_${type}_label`);
-              const desc = t(`rules_tiebreak_${type}_desc`);
-              const items = t.raw(`rules_tiebreak_${type}_items`);
-              
-              const finalItems = Array.isArray(items) ? items : [];
-
-              return (
-                <div key={phase.id || phaseIdx} className="relative group">
-                  {/* Phase Side Indicator */}
-                  <div className={`absolute -left-6 top-0 bottom-0 w-1 rounded-full bg-current opacity-20 ${colorClass}`} />
-                  
-                  <div className="space-y-4">
-                    {/* Header */}
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-lg bg-current/10 ${colorClass}`}>
-                        {icon}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-bold text-lg">
-                            {t("rules_phase_info", { number: phaseIdx + 1 })}
-                          </h4>
-                          <Badge variant="outline" className={`${colorClass} border-current/30 bg-current/5 text-[10px] uppercase font-bold tracking-wider`}>
-                            {label}
-                          </Badge>
-                          {phase.matchesPerRound && phase.matchesPerRound > 1 && (
-                            <Badge variant="secondary" className="text-[10px] bg-primary/10 text-primary border-primary/20">
-                              {t("matches_n_per_round", { count: phase.matchesPerRound })}
-                            </Badge>
-                          )}
-                          {phase.lobbyAssignment && (
-                            <Badge variant="outline" className="text-[10px] bg-cyan-500/10 text-cyan-400 border-cyan-500/20 uppercase tracking-widest">
-                                {phase.lobbyAssignment === 'none' ? 'No Shuffle' : `Shuffle: ${phase.lobbyAssignment}`}
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-0.5">
-                          {desc}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Tiebreaks Grid */}
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="sm:col-span-2">
-                        <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest flex items-center gap-2 mb-3">
-                          <SortAsc className="h-3 w-3" />
-                          {t("rules_tiebreak_priority")}
-                        </p>
-                      </div>
-                      {finalItems.map((item: any, i: number) => (
-                        <div key={i} className="flex gap-3 p-3 rounded-xl bg-muted/20 border border-white/5 hover:border-white/10 transition-colors">
-                          <span className={`flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-black ${colorClass} bg-current/10`}>
-                            {i + 1}
-                          </span>
-                          <div className="space-y-0.5">
-                            <p className="text-sm font-bold text-foreground/90">{item.label}</p>
-                            <p className="text-xs text-muted-foreground leading-tight">{item.desc}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="h-px bg-white/5 w-full" />
-
-          {/* General Additional Rules */}
+        <CardContent className="p-6">
           <div className="grid gap-6 md:grid-cols-2">
             <div className="space-y-4">
               <h4 className="text-sm font-bold uppercase tracking-widest text-primary flex items-center gap-2">
@@ -141,20 +90,36 @@ export const TournamentRulesTab = ({ tournament }: TournamentRulesTabProps) => {
               </h4>
               <div className="space-y-3">
                 <div className="p-3 rounded-lg bg-white/5 border border-white/5">
-                  <p className="text-sm font-semibold flex items-center gap-2"><RefreshCw className="h-4 w-4 text-cyan-400"/> Random Assignment</p>
-                  <p className="text-xs text-muted-foreground mt-1">{t("random_assignment_desc", { fallback: "Players are completely randomly reassigned to new lobbies before each match." })}</p>
+                  <p className="text-sm font-semibold flex items-center gap-2">
+                    <RefreshCw className="h-4 w-4 text-cyan-400" /> Random Assignment
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t("random_assignment_desc", { fallback: "Players are completely randomly reassigned to new lobbies before each match." })}
+                  </p>
                 </div>
                 <div className="p-3 rounded-lg bg-white/5 border border-white/5">
-                  <p className="text-sm font-semibold flex items-center gap-2"><BarChart2 className="h-4 w-4 text-cyan-400"/> Swiss / Seeded Assignment</p>
-                  <p className="text-xs text-muted-foreground mt-1">{t("seeded_assignment_desc", { fallback: "Players with the same amount of points (or nearest) are placed in the same lobbies. Ensures competitive parity." })}</p>
+                  <p className="text-sm font-semibold flex items-center gap-2">
+                    <BarChart2 className="h-4 w-4 text-cyan-400" /> Swiss / Seeded Assignment
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t("seeded_assignment_desc", { fallback: "Players with the same amount of points are placed in the same lobbies." })}
+                  </p>
                 </div>
                 <div className="p-3 rounded-lg bg-white/5 border border-white/5">
-                  <p className="text-sm font-semibold flex items-center gap-2"><TableIcon className="h-4 w-4 text-cyan-400" /> Snake Assignment</p>
-                  <p className="text-xs text-muted-foreground mt-1">{t("snake_assignment_desc", { fallback: "Players are distributed using a zigzag draft order based on points, balancing average power level per lobby." })}</p>
+                  <p className="text-sm font-semibold flex items-center gap-2">
+                    <TableIcon className="h-4 w-4 text-cyan-400" /> Snake Assignment
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t("snake_assignment_desc", { fallback: "Players are distributed using a zigzag draft order based on points." })}
+                  </p>
                 </div>
                 <div className="p-3 rounded-lg bg-white/5 border border-white/5">
-                   <p className="text-sm font-semibold flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-cyan-400" /> No Shuffle (Fixed Lobbies)</p>
-                   <p className="text-xs text-muted-foreground mt-1">{t("no_shuffle_assignment_desc", { fallback: "Players stay in the exact same lobby against the same opponents for the entire BoX series." })}</p>
+                  <p className="text-sm font-semibold flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-cyan-400" /> No Shuffle (Fixed Lobbies)
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t("no_shuffle_assignment_desc", { fallback: "Players stay in the same lobby for the entire BoX series." })}
+                  </p>
                 </div>
               </div>
             </div>
@@ -162,7 +127,7 @@ export const TournamentRulesTab = ({ tournament }: TournamentRulesTabProps) => {
             <div className="space-y-4">
               <h4 className="text-sm font-bold uppercase tracking-widest text-primary flex items-center gap-2">
                 <Info className="h-4 w-4" />
-                {t("additional_tournament_rules")}
+                {t("general_rules")}
               </h4>
               <ul className="space-y-2">
                 {[1, 2, 3, 4].map((num) => (
@@ -177,5 +142,5 @@ export const TournamentRulesTab = ({ tournament }: TournamentRulesTabProps) => {
         </CardContent>
       </Card>
     </div>
-  );
-};
+  )
+}

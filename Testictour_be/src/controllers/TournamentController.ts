@@ -150,6 +150,14 @@ const TournamentController = {
         await ensurePaidPartner(user.id, req.body.maxPlayers);
       }
 
+      if (req.body.platformFeePercent !== undefined && req.body.platformFeePercent !== null) {
+        const fee = parseFloat(req.body.platformFeePercent);
+        if (Number.isNaN(fee) || fee < 0 || fee > 1) {
+          throw new ApiError(400, 'platformFeePercent must be a number between 0 and 1');
+        }
+        req.body.platformFeePercent = fee;
+      }
+
         const data = await TournamentService.create({
         name: req.body.name,
         startTime: new Date(req.body.startTime),
@@ -168,6 +176,8 @@ const TournamentController = {
         expectedParticipants: req.body.expectedParticipants,
         isCommunityMode: req.body.isCommunityMode,
         customPrizePool: req.body.customPrizePool,
+        prizeStructure: req.body.prizeStructure,
+        platformFeePercent: req.body.platformFeePercent,
         discordUrl: req.body.discordUrl,
         sponsors: req.body.sponsors,
         reservePlayersLimit: req.body.reservePlayersLimit ?? 0,
@@ -340,7 +350,31 @@ const TournamentController = {
 
   addParticipant: asyncHandler(async (req, res, next) => {
     // Placeholder
-  })
+  }),
+
+  forceStartAllLobbies: asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    await ensureOwnership(req, id);
+    const LobbyStateService = (await import('../services/LobbyStateService')).default;
+    const result = await LobbyStateService.forceStartAllLobbies(id);
+    res.json({
+      success: true,
+      message: `Force-started ${result.startedCount} lobby/lobbies`,
+      ...result,
+    });
+  }),
+
+  autoStartCheckedInLobbies: asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    await ensureOwnership(req, id);
+    const LobbyStateService = (await import('../services/LobbyStateService')).default;
+    const result = await LobbyStateService.autoStartCheckedInLobbies(id);
+    res.json({
+      success: true,
+      message: `Auto-started ${result.startedCount} lobby/lobbies with checked-in players`,
+      ...result,
+    });
+  }),
 };
 
 export default TournamentController;

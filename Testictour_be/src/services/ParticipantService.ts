@@ -11,6 +11,108 @@ import crypto from 'crypto';
 import logger from '../utils/logger';
 
 export default class ParticipantService {
+  static async adminAssign(tournamentId: string, userId: string, joinAsReserve?: boolean) {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const [tournament, user] = await Promise.all([
+        tx.tournament.findUnique({ where: { id: tournamentId } }),
+        tx.user.findUnique({ where: { id: userId } }),
+      ]);
+
+      if (!tournament) throw new ApiError(404, 'Tournament not found');
+      if (!user) throw new ApiError(404, 'User not found');
+
+      if (tournament.status !== 'UPCOMING' && tournament.status !== 'pending' && tournament.status !== 'REGISTRATION') {
+        throw new ApiError(400, 'Tournament is no longer accepting assignments');
+      }
+
+      if (tournament.region && user.region) {
+        const userMajorRegion = getMajorRegion(user.region);
+        if (userMajorRegion !== tournament.region) {
+          throw new ApiError(403, `Region mismatch: user is in ${userMajorRegion}, but this tournament is for ${tournament.region}.`);
+        }
+      }
+
+      const existing = await tx.participant.findFirst({ where: { tournamentId, userId } });
+      if (existing) throw new ApiError(409, 'User already joined this tournament');
+
+      const currentCount = tournament.actualParticipantsCount || 0;
+      const mainSlotsFull = currentCount >= tournament.maxPlayers;
+      const isReserve = !!joinAsReserve || mainSlotsFull;
+
+      if (isReserve) {
+        const reserveLimit = (tournament as any).reservePlayersLimit || 0;
+        if (reserveLimit <= 0) throw new ApiError(400, 'Tournament does not accept reserve players');
+
+        const reserveCount = await tx.participant.count({ where: { tournamentId, isReserve: true } });
+        if (reserveCount >= reserveLimit) throw new ApiError(400, 'All reserve slots are full');
+      } else {
+        const slotReserved = await tx.tournament.updateMany({
+          where: {
+            id: tournamentId,
+            actualParticipantsCount: tournament.actualParticipantsCount,
+          },
+          data: { actualParticipantsCount: currentCount + 1 },
+        });
+
+        if (slotReserved.count === 0) throw new ApiError(400, 'Tournament is full');
+      }
+
+      const participant = await tx.participant.create({
+        data: {
+          tournamentId,
+          userId,
+          paid: true,
+          isReserve,
+          referralSource: 'admin_assign',
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              riotGameName: true,
+              riotGameTag: true,
+              email: true,
+              discordId: true,
+              puuid: true,
+              rank: true,
+              region: true,
+            },
+          },
+        },
+      });
+
+      return participant;
+    });
+  }
+
+  static async guestJoin(tournamentId: string, guestName: string, email: string, contactInfo?: string, referralSource?: string, joinAsReserve?: boolean) {
+    if (!guestName || !email) {
+      throw new ApiError(400, "Tên và email là bắt buộc đối với khách đăng ký.");
+    }
+
+    // Try to find if this email already has a user, or create a new "Shadow User"
+    let user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      const crypto = require('crypto');
+      const randomPassword = crypto.randomBytes(8).toString('hex');
+      user = await prisma.user.create({
+        data: {
+          username: `guest_${crypto.randomUUID().split('-')[0]}`,
+          email,
+          password: randomPassword,
+          riotGameName: guestName,
+          riotGameTag: 'GUEST',
+          region: 'APAC',
+          discordId: contactInfo
+        }
+      });
+    }
+
+    // Now delegate to regular join logic
+    return this.join(tournamentId, user.id, contactInfo, referralSource, joinAsReserve);
+  }
+
   static async join(tournamentId: string, userId: string, discordId?: string, referralSource?: string, joinAsReserve?: boolean) {
     // ── Phase 1: validate + reserve slot + create participant (in transaction) ──
     const { participant, tournament } = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -505,6 +607,86 @@ export default class ParticipantService {
 
   static async update(participantId: string, data: any) {
     return prisma.participant.update({ where: { id: participantId }, data });
+  }
+
+  static async checkIn(
+    tournamentId: string,
+    participantId: string,
+    actorId: string,
+    actorRole: string,
+    checkedIn?: boolean
+  ) {
+    const participant = await prisma.participant.findUnique({
+      where: { id: participantId },
+      include: {
+        tournament: {
+          select: {
+            organizerId: true,
+            checkInTime: true,
+            startTime: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    if (!participant || participant.tournamentId !== tournamentId) {
+      throw new ApiError(404, 'Participant not found');
+    }
+
+    const isAdmin = actorRole === 'admin';
+    const isPartnerOwner = actorRole === 'partner' && participant.tournament.organizerId === actorId;
+    const isSelf = participant.userId === actorId;
+
+    if (!isAdmin && !isPartnerOwner && !isSelf) {
+      throw new ApiError(403, 'Not authorized to update check-in for this participant');
+    }
+
+    const nextCheckedIn = checkedIn !== undefined ? Boolean(checkedIn) : true;
+
+    if (isSelf && !isAdmin && !isPartnerOwner) {
+      if (!nextCheckedIn) {
+        throw new ApiError(403, 'Players cannot undo their own check-in');
+      }
+      if (participant.isReserve) {
+        throw new ApiError(403, 'Reserve players cannot check in. Only registered main-slot players can check in.');
+      }
+      if (participant.checkedIn) {
+        return participant;
+      }
+
+      const now = new Date();
+      const checkInOpens = participant.tournament.checkInTime || participant.tournament.startTime;
+      if (checkInOpens && now < checkInOpens) {
+        throw new ApiError(400, 'Check-in has not opened yet');
+      }
+      if (now > participant.tournament.startTime) {
+        throw new ApiError(400, 'Check-in window has closed');
+      }
+    }
+
+    return prisma.participant.update({
+      where: { id: participantId },
+      data: {
+        checkedIn: nextCheckedIn,
+        checkedInAt: nextCheckedIn ? new Date() : null,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            riotGameName: true,
+            riotGameTag: true,
+            puuid: true,
+            rank: true,
+            region: true,
+            email: true,
+            discordId: true,
+          },
+        },
+      },
+    });
   }
 
   static async remove(participantId: string) {

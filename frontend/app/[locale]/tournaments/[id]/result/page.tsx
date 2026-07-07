@@ -16,8 +16,6 @@ import { SyncStatus } from "@/components/sync-status"
 import { useTranslations } from "next-intl"
 import api from "@/app/lib/apiConfig"
 import { TournamentService } from "@/app/services/TournamentService"
-import { useCurrency } from "@/app/contexts/currency-context"
-import { formatCurrency } from "@/lib/utils"
 
 interface FinalResult {
   rank: number
@@ -28,7 +26,7 @@ interface FinalResult {
   averagePlacement: number
   firstPlaces: number
   topFourRate: number
-  prize?: string
+  eliminated?: boolean
 }
 
 interface RoundResult {
@@ -47,15 +45,9 @@ interface TournamentInfo {
 
 export default function TournamentResultsPage({ params }: { params: { id: string } }) {
   const t = useTranslations("common")
-    const { currency, usdToVndRate } = useCurrency()
-  // VND mode: số tiền từ backend đã là VND
-  const displayMoney = (amount: number) => {
-    const displayAmount = currency === "USD" && usdToVndRate > 0 ? amount / usdToVndRate : amount;
-    return formatCurrency(displayAmount, currency);
-  };
-
   const [tournament, setTournament] = useState<TournamentInfo | null>(null)
   const [finalResults, setFinalResults] = useState<FinalResult[]>([])
+  const [topFour, setTopFour] = useState<FinalResult[]>([])
   const [roundResults, setRoundResults] = useState<RoundResult[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
@@ -91,8 +83,8 @@ export default function TournamentResultsPage({ params }: { params: { id: string
       setLeaderboardPage(1)
       
       const sorted = leaderboardRes.data || []
-      setFinalResults(sorted.map((p: any, i: number) => ({
-        rank: i + 1,
+      const mapParticipant = (p: any, rank: number): FinalResult => ({
+        rank,
         userId: p.userId || p.id,
         player: p.user?.riotGameName || p.user?.username || p.inGameName || "Unknown",
         region: p.region || p.user?.region || "N/A",
@@ -100,8 +92,11 @@ export default function TournamentResultsPage({ params }: { params: { id: string
         averagePlacement: p.stats?.averagePlacement || 0,
         firstPlaces: p.stats?.firstPlaces || 0,
         topFourRate: p.stats?.topFourRate ? p.stats.topFourRate * 100 : 0,
-        prize: undefined,
-      })))
+        eliminated: Boolean(p.eliminated),
+      })
+
+      setFinalResults(sorted.map((p: any, i: number) => mapParticipant(p, i + 1)))
+      setTopFour(sorted.slice(0, 4).map((p: any, i: number) => mapParticipant(p, i + 1)))
 
       // Build round-by-round from phases
       if (tourDetails.phases?.length) {
@@ -151,7 +146,7 @@ export default function TournamentResultsPage({ params }: { params: { id: string
         averagePlacement: p.stats?.averagePlacement || 0,
         firstPlaces: p.stats?.firstPlaces || 0,
         topFourRate: p.stats?.topFourRate ? p.stats.topFourRate * 100 : 0,
-        prize: undefined,
+        eliminated: Boolean(p.eliminated),
       }))
       setFinalResults(prev => [...prev, ...newResults])
       setLeaderboardPage(nextPage)
@@ -195,9 +190,12 @@ export default function TournamentResultsPage({ params }: { params: { id: string
     )
   }
 
-    const prizeDisplay = typeof tournament?.prizePool === "number"
-    ? displayMoney(tournament.prizePool)
-    : String(tournament?.prizePool || "N/A")
+  const rankEmoji = (rank: number) => {
+    if (rank === 1) return "🥇"
+    if (rank === 2) return "🥈"
+    if (rank === 3) return "🥉"
+    return `#${rank}`
+  }
 
   return (
     <div className="container py-8">
@@ -223,19 +221,54 @@ export default function TournamentResultsPage({ params }: { params: { id: string
           <p className="text-muted-foreground">{t("performance_metrics")}</p>
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20">
-            <CardContent className="pt-6">
-              <div className="flex items-center">
-                <Trophy className="h-8 w-8 text-yellow-500 mr-3" />
-                <div>
-                  <p className="text-2xl font-bold">{finalResults[0]?.player || "—"}</p>
-                  <p className="text-xs text-muted-foreground">{t("champion")}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        {/* Top 4 horizontal stats */}
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((rank) => {
+            const player = topFour.find((p) => p.rank === rank)
+            return (
+              <Card key={rank} className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20">
+                <CardContent className="pt-6">
+                  <div className="flex items-start justify-between gap-2 mb-3">
+                    <span className="text-2xl">{rankEmoji(rank)}</span>
+                    <Badge variant="outline" className="text-[10px]">
+                      {rank === 1 ? t("champion") : `${t("rank")} ${rank}`}
+                    </Badge>
+                  </div>
+                  {player ? (
+                    <div className="space-y-2">
+                      <p className="font-bold text-lg leading-tight">{player.player}</p>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <p className="text-muted-foreground">{t("total_points")}</p>
+                          <p className="font-semibold">{player.totalPoints}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">{t("avg_placement")}</p>
+                          <p className="font-semibold">
+                            {player.averagePlacement > 0 ? player.averagePlacement.toFixed(2) : "—"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">1st Places</p>
+                          <p className="font-semibold">{player.firstPlaces}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Top 4 %</p>
+                          <p className="font-semibold">{player.topFourRate.toFixed(1)}%</p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">—</p>
+                  )}
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+
+        {/* Tournament meta */}
+        <div className="grid gap-4 md:grid-cols-3">
           <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20">
             <CardContent className="pt-6">
               <div className="flex items-center">
@@ -261,10 +294,10 @@ export default function TournamentResultsPage({ params }: { params: { id: string
           <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20">
             <CardContent className="pt-6">
               <div className="flex items-center">
-                <Trophy className="h-8 w-8 text-primary mr-3" />
+                <Trophy className="h-8 w-8 text-yellow-500 mr-3" />
                 <div>
-                  <p className="text-2xl font-bold">{prizeDisplay}</p>
-                  <p className="text-xs text-muted-foreground">{t("prize_pool")}</p>
+                  <p className="text-2xl font-bold">{finalResults.filter((r) => !r.eliminated).length}</p>
+                  <p className="text-xs text-muted-foreground">Active Finishers</p>
                 </div>
               </div>
             </CardContent>
@@ -345,8 +378,11 @@ export default function TournamentResultsPage({ params }: { params: { id: string
                     </TableHeader>
                     <TableBody>
                       {sortedResults.map((result) => (
-                        <TableRow key={result.userId} className="hover:bg-muted/50">
-                          <TableCell className="font-medium">
+                        <TableRow
+                          key={result.userId}
+                          className={`hover:bg-muted/50 ${result.eliminated ? "opacity-60" : ""}`}
+                        >
+                          <TableCell className={`font-medium ${result.eliminated ? "line-through" : ""}`}>
                             <div className="flex items-center">
                               {result.rank === 1 && <Trophy className="h-4 w-4 text-yellow-500 mr-1" />}
                               {result.rank === 2 && <Medal className="h-4 w-4 text-gray-400 mr-1" />}
@@ -354,16 +390,23 @@ export default function TournamentResultsPage({ params }: { params: { id: string
                               #{result.rank}
                             </div>
                           </TableCell>
-                          <TableCell>
+                          <TableCell className={result.eliminated ? "line-through" : ""}>
                             <Link href={`/players/${result.userId}`} className="hover:text-primary font-medium">
                               {result.player}
                             </Link>
+                            {result.eliminated && (
+                              <Badge variant="outline" className="ml-2 text-[10px] border-red-500/30 text-red-400">
+                                Eliminated
+                              </Badge>
+                            )}
                           </TableCell>
-                          <TableCell className="text-center">
+                          <TableCell className={`text-center ${result.eliminated ? "line-through" : ""}`}>
                             {result.region !== "N/A" && <Badge variant="outline">{result.region}</Badge>}
                           </TableCell>
-                          <TableCell className="text-center font-bold">{result.totalPoints}</TableCell>
-                          <TableCell className="text-center">
+                          <TableCell className={`text-center font-bold ${result.eliminated ? "line-through" : ""}`}>
+                            {result.totalPoints}
+                          </TableCell>
+                          <TableCell className={`text-center ${result.eliminated ? "line-through" : ""}`}>
                             {result.averagePlacement > 0 ? result.averagePlacement.toFixed(2) : "—"}
                           </TableCell>
                         </TableRow>

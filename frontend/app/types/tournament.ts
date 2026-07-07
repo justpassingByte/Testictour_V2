@@ -140,11 +140,17 @@ export interface IParticipant {
   referralSource?: string;
   isReserve?: boolean;
   isAbsent?: boolean;
+  checkedIn?: boolean;
+  checkedInAt?: string;
 }
 
 export interface PlayerRoundStats {
   id: string;
   name: string;
+  username?: string;
+  discordId?: string;
+  riotGameName?: string;
+  riotGameTag?: string;
   region: string;
   lobbyName: string;
   placements: number[];
@@ -231,6 +237,7 @@ export interface ITournament extends ITournamentTemplate {
   reservePlayersLimit?: number;
   absentFeePolicy?: string;
   reserveCount?: number;
+  platformFeePercent?: number | null;
   // Schedule fields
   checkInTime?: string;          // Thời gian điểm danh
   lobbyCreationTime?: string;    // Thời gian tạo lobby

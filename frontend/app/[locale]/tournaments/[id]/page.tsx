@@ -8,6 +8,7 @@ import { PointSystemCard } from "@/app/[locale]/tournaments/[id]/components/Poin
 import TabsContentClientWrapper from "@/app/[locale]/tournaments/[id]/components/TabsContentClientWrapper"
 import TournamentInfoClient from "@/app/[locale]/tournaments/[id]/components/TournamentInfoClient"
 import TournamentSidebarClient from "@/app/[locale]/tournaments/[id]/components/TournamentSidebarClient"
+import { CustomPhysicalPrizesBanner } from "@/app/[locale]/tournaments/[id]/components/CustomPhysicalPrizesBanner"
 
 // Server-side data fetching — lightweight, no participants
 async function getTournamentDetail(id: string) {
@@ -31,6 +32,10 @@ export default async function TournamentPage({ params }: { params: { id: string 
   return (
     <div className="container py-8">
       <TournamentHeaderClient tournament={tournament} />
+
+      <div className="mt-6">
+        <CustomPhysicalPrizesBanner tournament={tournament} />
+      </div>
 
       <div className="mt-8 grid gap-8 md:grid-cols-3">
         <div className="col-span-3 md:col-span-2">
