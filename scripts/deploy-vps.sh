@@ -13,6 +13,19 @@ die() { echo "[deploy ERROR] $*" >&2; exit 1; }
 
 cd "$PROJECT_DIR" || die "Project dir not found: $PROJECT_DIR"
 
+# Load .env for compose variable substitution (NEXT_PUBLIC_* build args)
+if [[ -f .env ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env
+  set +a
+fi
+
+if [[ "${NEXT_PUBLIC_API_URL:-}" == *"localhost"* ]]; then
+  log "WARNING: NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}"
+  log "Browser will call localhost — set https://api.testictour.com in .env and rebuild frontend!"
+fi
+
 # ── 1. Pull latest code ─────────────────────────────────────────────────────
 if [[ "$SKIP_GIT_PULL" != "1" ]]; then
   log "git pull..."
@@ -42,7 +55,13 @@ if [[ "$SKIP_BUILD" != "1" ]]; then
   export DOCKER_BUILDKIT=1
   export COMPOSE_DOCKER_CLI_BUILD=1
   log "Building: $SERVICES ..."
-  $COMPOSE build $SERVICES
+  # Frontend bakes NEXT_PUBLIC_* at build time — no-cache when public URL changed
+  if [[ "${FORCE_FRONTEND_REBUILD:-0}" == "1" ]]; then
+    $COMPOSE build --no-cache frontend
+    $COMPOSE build $SERVICES
+  else
+    $COMPOSE build $SERVICES
+  fi
 fi
 
 log "Starting containers..."
@@ -71,3 +90,5 @@ fi
 
 log "Deploy done."
 $COMPOSE ps backend frontend worker
+
+log "Run ./scripts/diagnose-vps.sh to verify production URLs"

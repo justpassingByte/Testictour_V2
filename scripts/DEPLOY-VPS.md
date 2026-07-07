@@ -42,3 +42,23 @@ Manual: GitHub → Actions → Deploy to VPS → Run workflow
 ```bash
 SKIP_BUILD=1 ./scripts/deploy-vps.sh
 ```
+
+## 5. Login CORS / localhost:4000
+
+Frontend build cũ nhúng `http://localhost:4000` vào JS → login từ `https://testictour.com` fail.
+
+```bash
+cd /data/projects/Testictour_V2
+git pull
+chmod +x scripts/fix-frontend-api-url.sh
+./scripts/fix-frontend-api-url.sh
+```
+
+Đảm bảo `.env` có:
+
+```env
+NEXT_PUBLIC_API_URL=https://api.testictour.com
+NEXT_PUBLIC_BACKEND_URL=https://api.testictour.com
+FRONTEND_URL=https://testictour.com
+```
+

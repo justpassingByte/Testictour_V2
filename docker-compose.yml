@@ -32,8 +32,8 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - DIRECT_URL=${DATABASE_URL}
       - JWT_SECRET=${JWT_SECRET}
-      - FRONTEND_URL=http://localhost:3002
-      - API_URL=http://localhost:4000/api
+      - FRONTEND_URL=${FRONTEND_URL:-https://testictour.com}
+      - API_URL=${API_URL:-https://api.testictour.com/api}
       - BACKEND_SERVICE_URL=http://testictour-backend:4000
       - GRIMOIRE_API_URL=http://grimoire-backend:3001
       # Gateway Variables
@@ -61,8 +61,8 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.frontend
       args:
-        - NEXT_PUBLIC_API_URL=http://localhost:4000
-        - NEXT_PUBLIC_BACKEND_URL=http://localhost:4000
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+        - NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL:-http://localhost:4000}
     container_name: testictour-frontend
     restart: unless-stopped
     # Nginx sẽ trỏ vào port 3002
@@ -73,8 +73,8 @@ services:
       - BACKEND_URL=http://testictour-backend:4000
       - INTERNAL_BACKEND_URL=http://testictour-backend:4000/api
       # Client-side fetch — must use public domain accessible from browser
-      - NEXT_PUBLIC_API_URL=http://localhost:4000
-      - NEXT_PUBLIC_BACKEND_URL=http://localhost:4000
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+      - NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL:-http://localhost:4000}
     depends_on:
       - backend
     networks:
