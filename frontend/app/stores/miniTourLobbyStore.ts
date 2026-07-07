@@ -1,8 +1,18 @@
 import { create } from 'zustand';
 import { toast } from '@/components/ui/use-toast';
 import MiniTourLobbyService from "@/app/services/MiniTourLobbyService";
+import type { GuideTips } from "@/app/types/guide";
 // import { MatchService } from '@/services/MatchService'; // No longer needed for syncMatch
 // import { useBalanceStore } from "./balanceStore";
+
+const SUPPORTED_LOCALES = new Set(["en", "vi", "ko", "zh"]);
+
+function withCurrentLocale(path: string) {
+  if (typeof window === "undefined") return path;
+
+  const firstSegment = window.location.pathname.split("/").filter(Boolean)[0];
+  return SUPPORTED_LOCALES.has(firstSegment) ? `/${firstSegment}${path}` : path;
+}
 
 export interface MiniTourLobbyParticipant {
   id: string;
@@ -71,6 +81,8 @@ export interface MiniTourLobby {
   settings: {
     autoStart: boolean;
     privateMode: boolean;
+    guideTips?: GuideTips;
+    tips?: string;
   };
 }
 
@@ -195,7 +207,7 @@ export const useMiniTourLobbyStore = create<MiniTourLobbyState & MiniTourLobbyAc
     try {
       const response = await MiniTourLobbyService.createLobby(formData);
       set({ lobby: response });
-      router.push(`/dashboard/partner/lobbies/${response.id}`);
+      router.push(withCurrentLocale(`/minitour/lobbies/${response.id}`));
       toast({
         title: "Thành công",
         description: "Sảnh đã được tạo thành công!",
@@ -219,7 +231,7 @@ export const useMiniTourLobbyStore = create<MiniTourLobbyState & MiniTourLobbyAc
     try {
       const response = await MiniTourLobbyService.updateLobby(lobbyId, formData);
       set({ lobby: response });
-      router.push(`/dashboard/partner/minitours/${lobbyId}`);
+      router.push(withCurrentLocale(`/minitour/lobbies/${lobbyId}`));
       toast({
         title: "Thành công",
         description: "Sảnh đã được cập nhật thành công!",

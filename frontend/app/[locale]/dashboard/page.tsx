@@ -28,17 +28,7 @@ export default function DashboardPage() {
           router.push('/dashboard/player');
           break;
         default:
-          // Fallback if role is not recognized or player dashboard
-          // For players, we might just render PlayerDashboardClient directly if this page is specific to them
-          // For now, let's assume 'user' role is the default rendering here.
-          // If it's not a known role, or we are explicitly rendering the PlayerDashboardClient here:
-          if (currentUser.role === 'user') {
-            // This component already handles rendering PlayerDashboardClient if user.role is 'user'
-            // So, no explicit redirect needed if we're going to render it below.
-          } else {
-            // If it's an unknown role, redirect to home or a forbidden page
-            router.push('/');
-          }
+          router.push('/');
           break;
       }
     } else if (!isLoading && currentUser === null) {

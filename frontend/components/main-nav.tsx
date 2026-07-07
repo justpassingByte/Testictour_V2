@@ -91,12 +91,12 @@ export function MainNav({
   ];
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-transparent backdrop-blur supports-[backdrop-filter]:bg-transparent">
+    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur-sm">
       <div className="container flex h-16 items-center justify-between">
         <div className="flex items-center">
           <Link href="/" className="flex items-center mr-6 gap-2">
             <img src="/logo.png" alt="TesTicTour Logo" className="h-8 w-8 object-contain rounded-md" />
-            <span className="text-2xl font-bold tracking-tighter gradient-text">TesTicTour</span>
+            <span className="text-2xl font-bold tracking-tighter text-foreground">TesTicTour</span>
           </Link>
 
           {/* Desktop Navigation */}
@@ -160,7 +160,7 @@ export function MainNav({
       </div>
 
       {/* Mobile Menu */}
-      <div className={`md:hidden ${isOpen ? "block" : "hidden"} py-4 px-6 space-y-2 bg-transparent border-b`}>
+      <div className={`md:hidden ${isOpen ? "block" : "hidden"} py-4 px-6 space-y-2 bg-background border-b`}>
         {navItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
           return (

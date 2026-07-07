@@ -46,28 +46,17 @@ export function DashboardSidebar({ userRole }: DashboardSidebarProps) {
   const t = useTranslations('common');
   const { clearUser } = useUserStore();
 
-  console.log("DashboardSidebar rendered:");
-  console.log("  userRole prop:", userRole);
-
   const navItems = getNavItems(t);
 
-  // Ensure userRole is one of the expected keys or default to 'player'
   const validRoles = Object.keys(navItems);
   const effectiveUserRole = validRoles.includes(userRole) ? userRole : 'player';
 
-  console.log("  effectiveUserRole:", effectiveUserRole);
-  
   const filteredNavItems = navItems[effectiveUserRole as keyof typeof navItems] || [];
-  
-  console.log("  filteredNavItems length:", filteredNavItems.length);
-  if (filteredNavItems.length > 0) {
-    console.log("  First item label:", filteredNavItems[0].label);
-  }
 
   return (
     <aside className="w-64 bg-background border-r p-4 flex flex-col">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold tracking-tight gradient-text">{t("dashboard.title") || "Dashboard"}</h2>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">{t("dashboard.title") || "Dashboard"}</h2>
       </div>
       <nav className="flex-1 space-y-2">
         {filteredNavItems.map((item) => {
@@ -80,8 +69,10 @@ export function DashboardSidebar({ userRole }: DashboardSidebarProps) {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted",
-                isActive ? "bg-muted text-primary" : "text-muted-foreground",
+                "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                isActive
+                  ? "bg-primary/10 text-primary border-l-2 border-primary pl-[10px] font-semibold"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground font-medium",
               )}
             >
               {item.icon}

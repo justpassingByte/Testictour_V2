@@ -353,7 +353,13 @@ export default function AdminPartnersPage() {
         </SheetContent>
       </Sheet>
 
-      <AddUserModal open={openAddUser} onClose={() => setOpenAddUser(false)} onCreate={handleCreateUser} />
+      <AddUserModal
+        open={openAddUser}
+        onClose={() => setOpenAddUser(false)}
+        onCreate={handleCreateUser}
+        defaultGuest={false}
+        defaultRole="partner"
+      />
       <EditUserModal 
         open={openEditUser} 
         onClose={() => setOpenEditUser(false)} 

@@ -105,7 +105,7 @@ export function TournamentCard({ tournament, index }: { tournament: ITournament;
       </CardContent>
       <CardFooter className="flex justify-between p-6 pt-0">
         <Link href={`/tournaments/${tournament.id}`}>
-          <Button variant="ghost" className="btn-zodiac flex items-center justify-center gap-1 px-6">
+          <Button variant="ghost" className="bg-primary text-primary-foreground hover:bg-primary/90 flex items-center justify-center gap-1 px-6">
             {t('view')}
             <ArrowRight className="ml-1 h-4 w-4" />
           </Button>

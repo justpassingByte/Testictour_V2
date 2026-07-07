@@ -4,75 +4,74 @@
 
 @layer base {
   :root {
-    /* LIGHT MODE - Celestial Gods */
-    --background: 45 30% 98%;
-    --foreground: 220 50% 15%;
+    /* Neutral base */
+    --background: 0 0% 100%;
+    --foreground: 224 71% 4%;
     --card: 0 0% 100%;
-    /* Pure solid white */
-    --card-foreground: 220 50% 15%;
-    --popover: 45 30% 98%;
-    --popover-foreground: 220 50% 15%;
+    --card-foreground: 224 71% 4%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 71% 4%;
 
-    --primary: 43 90% 55%;
-    --primary-foreground: 220 50% 15%;
+    /* Indigo brand */
+    --primary: 239 84% 67%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 195 60% 85%;
-    --secondary-foreground: 220 50% 15%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 9% 46%;
 
-    --muted: 45 20% 90%;
-    --muted-foreground: 220 20% 40%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
 
-    --accent: 180 80% 45%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 220 14% 96%;
+    --accent-foreground: 224 71% 4%;
 
     --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 43 40% 80%;
-    --input: 45 20% 90%;
-    --ring: 43 90% 55%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 239 84% 67%;
+    --radius: 0.5rem;
 
-    --radius: 0.75rem;
-    --live-update: 43 90% 55%;
+    /* Semantic tournament states */
+    --live-update: 142 76% 36%;
     --eliminated: 0 84% 60%;
-    --advanced: 43 90% 55%;
+    --advanced: 142 76% 36%;
 
-    --font-heading: var(--font-outfit), sans-serif;
-    --font-sans: var(--font-inter), sans-serif;
+    --font-heading: var(--font-inter), system-ui, sans-serif;
+    --font-sans: var(--font-inter), system-ui, sans-serif;
   }
 
   .dark {
-    /* DARK MODE - Deep Space & Zodiac */
-    --background: 240 60% 4%;
-    --foreground: 45 30% 98%;
-    --card: 240 40% 12%;
-    /* Solid dark slate/purple so cards stand out from the dark stars! NO TRANSPARENCY */
-    --card-foreground: 45 30% 98%;
-    --popover: 240 60% 6%;
-    --popover-foreground: 45 30% 98%;
+    --background: 224 71% 4%;
+    --foreground: 210 40% 98%;
+    --card: 222 47% 8%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 47% 8%;
+    --popover-foreground: 210 40% 98%;
 
-    --primary: 280 80% 65%;
+    --primary: 239 84% 67%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 70% 15%;
-    --secondary-foreground: 45 30% 98%;
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
 
-    --muted: 240 40% 15%;
-    --muted-foreground: 240 20% 70%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
 
-    --accent: 43 90% 65%;
-    --accent-foreground: 240 60% 4%;
+    --accent: 217 33% 17%;
+    --accent-foreground: 210 40% 98%;
 
-    --destructive: 350 80% 60%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
 
-    --border: 280 60% 30%;
-    --input: 240 40% 15%;
-    --ring: 280 80% 65%;
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: 239 84% 67%;
 
-    --live-update: 43 90% 65%;
-    --eliminated: 350 80% 60%;
-    --advanced: 43 90% 65%;
+    --live-update: 142 76% 36%;
+    --eliminated: 0 84% 60%;
+    --advanced: 142 76% 36%;
   }
 }
 
@@ -82,279 +81,78 @@
   }
 
   body {
-    @apply bg-background text-foreground font-sans;
+    @apply bg-background text-foreground font-sans antialiased;
   }
 
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
+  h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-heading);
-    letter-spacing: 0.05em;
+    letter-spacing: -0.02em;
   }
 }
 
-/* Light Mode Background - TFT HD */
-html,
+/* ── Background — subtle dot grid ──────────────────────────────────────── */
 body {
-  background: url('/bg_tft17.jpg') center center / cover no-repeat fixed !important;
+  background-color: hsl(var(--background));
+  background-image: radial-gradient(hsl(var(--border)) 1px, transparent 1px);
+  background-size: 24px 24px;
 }
 
-/* Dark Mode Background - TFT HD */
-.dark html,
 .dark body {
-  background: url('/bg_tft17.jpg') center center / cover no-repeat fixed !important;
+  background-image: radial-gradient(hsl(217 33% 20%) 1px, transparent 1px);
 }
 
-/* Base Glassmorphism - Cosmic Glass (REMOVED BLUR & Glass entirely per request) */
-.glassmorphic {
-  @apply bg-card border border-white/10 shadow-lg;
-}
+/* ── Scrollbar ──────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { @apply bg-transparent; }
+::-webkit-scrollbar-thumb { @apply bg-border rounded-full; }
+::-webkit-scrollbar-thumb:hover { @apply bg-muted-foreground/40; }
 
-.dark .glassmorphic {
-  @apply bg-card border border-primary/20;
-  box-shadow: 0 0 15px rgba(150, 100, 255, 0.1);
-}
+.custom-scrollbar::-webkit-scrollbar { width: 5px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { border-radius: 999px; background: hsl(var(--border)); }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.4); }
 
-/* --- FORCE REMOVE ALL TRANSPARENCY AND BLUR --- */
-/* Exempt region dropdown overlays from this rule */
-[class*="backdrop-blur"]:not([class*="z-[200]"]) {
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-}
+/* ── Utility classes ────────────────────────────────────────────────────── */
 
-/* Custom scrollbar for region dropdowns */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 5px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: rgba(255,255,255,0.12);
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255,255,255,0.22);
-}
-
-
-/* Force solid card backgrounds matching the design */
-.bg-card\/40,
-.bg-card\/60,
-.bg-card\/80,
-.bg-card\/95 {
-  background-color: hsl(var(--card)) !important;
-}
-
-/* Force Navbar and critical headers to be 100% solid so they are not transparent */
-header,
-footer {
-  background-color: hsl(var(--background)) !important;
-}
-
-/* Ensure any other overlay sections have proper dark background to keep text readable instead of being fully transparent */
-/* Removed the transparent !important hack */
-
-/* ----------------------------------------------- */
-
-/* Space Scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  @apply bg-transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  @apply bg-primary/40 rounded-full transition-colors hover:bg-primary/80;
-}
-
-/* NEW BUTTON VIBE - Cosmic Magic Button */
-.btn-zodiac {
-  position: relative;
-  overflow: hidden;
-  border-radius: 9999px !important;
-  background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--accent)) 100%) !important;
-  color: white !important;
-  font-weight: bold;
-  letter-spacing: 0.05em;
-  transition: all 0.3s ease;
-  border: 1px solid rgba(255, 255, 255, 0.3) !important;
-  box-shadow: 0 0 15px hsla(var(--primary), 0.3), inset 0 0 10px hsla(var(--accent), 0.2);
-}
-
-.btn-zodiac:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 0 25px hsla(var(--primary), 0.6), inset 0 0 15px hsla(var(--accent), 0.5);
-  border-color: rgba(255, 255, 255, 0.6) !important;
-}
-
-.btn-zodiac::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
-  transition: left 0.5s ease;
-}
-
-.btn-zodiac:hover::before {
-  left: 100%;
-}
-
-/* Animations - Cosmic Glows and Floating */
-@keyframes pulse-glow {
-
-  0%,
-  100% {
-    box-shadow: 0 0 10px hsla(var(--primary), 0.5), 0 0 20px hsla(var(--primary), 0.3);
-  }
-
-  50% {
-    box-shadow: 0 0 20px hsla(var(--primary), 0.8), 0 0 40px hsla(var(--primary), 0.5);
-  }
-}
-
-.animate-pulse-glow {
-  animation: pulse-glow 3s ease-in-out infinite;
-}
-
-@keyframes astrolabe-spin {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.animate-spin-slow {
-  animation: astrolabe-spin 20s linear infinite;
-}
-
-/* Cosmic Hover Cards */
-.card-hover-effect {
-  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-.card-hover-effect:hover {
-  transform: translateY(-5px) scale(1.02);
-  box-shadow: 0 15px 35px -10px hsla(var(--primary), 0.3), 0 8px 10px -6px hsla(var(--primary), 0.2);
-  border-color: hsla(var(--primary), 0.5);
-}
-
-/* Divine/Cosmic Text Gradients */
+/* Gradient text — indigo to violet */
 .gradient-text {
   @apply bg-clip-text text-transparent font-bold;
-  background-image: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--accent)) 100%);
+  background-image: linear-gradient(135deg, hsl(var(--primary)) 0%, #818cf8 100%);
 }
 
-.dark .gradient-text {
-  background-image: linear-gradient(135deg, hsl(43, 90%, 65%) 0%, hsl(280, 80%, 65%) 100%);
-}
-
-/* Utilities */
-@layer utilities {
-  .modern-shadow {
-    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
-  }
-}
-
-.card,
-.panel {
-  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+/* Card shadow */
+.card, .panel {
   border-radius: var(--radius);
 }
 
-/* Animations */
+/* ── Animations ─────────────────────────────────────────────────────────── */
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-    filter: blur(4px);
-  }
-
-  to {
-    opacity: 1;
-    filter: blur(0);
-  }
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-
-.animate-fade-in {
-  animation: fadeIn 0.8s ease-out forwards;
-}
+.animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
 
 @keyframes slideUp {
-  from {
-    transform: translateY(30px);
-    opacity: 0;
-    filter: blur(4px);
-  }
-
-  to {
-    transform: translateY(0);
-    opacity: 1;
-    filter: blur(0);
-  }
+  from { transform: translateY(16px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
 }
-
-.animate-slide-up {
-  animation: slideUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
+.animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 
 @keyframes fadeInUp {
-  from {
-    transform: translateY(15px);
-    opacity: 0;
-  }
-
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
+  from { transform: translateY(10px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
 }
+.animate-fade-in-up { animation: fadeInUp 0.4s ease-out forwards; animation-fill-mode: both; }
 
-.animate-fade-in-up {
-  animation: fadeInUp 0.6s ease-out forwards;
-  animation-fill-mode: both;
-}
-
-.animate-pulse-subtle {
-  animation: pulseSlight 3s ease-in-out infinite;
-}
-
+.animate-pulse-subtle { animation: pulseSlight 3s ease-in-out infinite; }
 @keyframes pulseSlight {
-
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.7;
-  }
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.7; }
 }
 
-/* Live update starlight glint */
+/* Live tournament indicator */
 @keyframes glow {
-
-  0%,
-  100% {
-    box-shadow: 0 0 8px hsla(var(--live-update), 0.4), 0 0 15px hsla(var(--live-update), 0.2);
-  }
-
-  50% {
-    box-shadow: 0 0 15px hsla(var(--live-update), 0.8), 0 0 30px hsla(var(--live-update), 0.4);
-  }
+  0%, 100% { box-shadow: 0 0 4px hsl(var(--live-update) / 0.4); }
+  50%       { box-shadow: 0 0 8px hsl(var(--live-update) / 0.7); }
 }
-
-.animate-glow {
-  animation: glow 2s ease-in-out infinite;
-}
+.animate-glow { animation: glow 2s ease-in-out infinite; }

@@ -19,8 +19,8 @@ const config: Config = {
     },
     extend: {
       fontFamily: {
-        sans: ["var(--font-sans)", "sans-serif"],
-        heading: ["var(--font-heading)", "sans-serif"],
+        sans: ["var(--font-inter)", "system-ui", "sans-serif"],
+        heading: ["var(--font-inter)", "system-ui", "sans-serif"],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -56,8 +56,7 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        'glow-accent': '0 0% 100% 0.7, 192 100% 54% 0.6',
-        "live-update": "hsl(var(--live-update))",
+"live-update": "hsl(var(--live-update))",
         eliminated: "hsl(var(--eliminated))",
         advanced: "hsl(var(--advanced))",
       },

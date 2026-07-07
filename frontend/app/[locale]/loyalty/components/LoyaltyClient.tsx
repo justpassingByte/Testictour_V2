@@ -639,7 +639,7 @@ function QuestCard({ quest, isWeekly = false }: { quest: any; isWeekly?: boolean
 
   return (
     <Card className={`
-      card-hover-effect bg-card/95 dark:bg-card/40 shadow-sm backdrop-blur-lg border border-white/20 overflow-hidden
+      transition-all hover:shadow-md hover:-translate-y-1 bg-card/95 dark:bg-card/40 shadow-sm backdrop-blur-lg border border-white/20 overflow-hidden
       ${quest.completed ? "opacity-75" : ""}
     `}>
       {quest.completed && <div className="h-1 bg-gradient-to-r from-green-400 to-emerald-600" />}
@@ -697,7 +697,7 @@ function AchievementCard({ achievement }: { achievement: ReturnType<typeof build
 
   return (
     <Card className={`
-      card-hover-effect overflow-hidden relative
+      transition-all hover:shadow-md hover:-translate-y-1 overflow-hidden relative
       ${achievement.unlocked
         ? "bg-card/60 dark:bg-card/40 backdrop-blur-lg border border-white/20"
         : "bg-muted/30 border border-border/50 opacity-70 hover:opacity-100"

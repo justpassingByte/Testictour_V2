@@ -159,7 +159,7 @@ export function LobbiesTab({ round, allPlayers, tournamentId }: LobbiesTabProps)
               {/* View Lobby button — show for all states so users can ready up */}
               {(isLive || isDone || lobby.fetchedResult || lobby.state === 'WAITING') && (
                 <div className="mt-4 flex justify-end">
-                  <Button asChild variant={isLive ? "default" : "outline"} size="sm" className={`gap-1.5 ${isLive ? 'btn-zodiac px-6' : ''}`}>
+                  <Button asChild variant={isLive ? "default" : "outline"} size="sm" className={`gap-1.5 ${isLive ? 'bg-primary text-primary-foreground hover:bg-primary/90 px-6' : ''}`}>
                     <Link href={`/tournaments/${tournamentId}/lobbies/${lobby.id}`}>
                       <ExternalLink className="h-3.5 w-3.5" />
                       {isLive ? t("join_lobby_live") : (lobby.state === 'WAITING' ? t("enter_lobby_area") : t("view_all_results"))}

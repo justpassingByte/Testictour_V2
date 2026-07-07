@@ -249,6 +249,8 @@ export default function UserManagementTab() {
         open={openAddUser}
         onClose={() => setOpenAddUser(false)}
         onCreate={handleCreateUser}
+        defaultGuest={false}
+        defaultRole="partner"
       />
       <UserImportModal
         open={openImportModal}

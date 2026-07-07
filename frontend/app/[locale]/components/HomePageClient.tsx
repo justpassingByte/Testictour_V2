@@ -80,7 +80,7 @@ export default function HomePageClient({ tournaments, lobbies }: HomePageClientP
                   {t('hero_description')}
                 </p>
                 <div className="flex flex-col sm:flex-row items-center sm:gap-6 gap-4 pt-4 lg:pt-6">
-                  <Button asChild className="btn-zodiac text-base px-8 py-6 rounded-full shadow-[0_0_15px_rgba(255,255,255,0.1)] hover:shadow-[0_0_25px_rgba(255,255,255,0.2)] transition-all duration-300 hover:scale-105 text-white">
+                  <Button asChild className="bg-primary text-primary-foreground hover:bg-primary/90 text-base px-8 py-6 rounded-full shadow-[0_0_15px_rgba(255,255,255,0.1)] hover:shadow-[0_0_25px_rgba(255,255,255,0.2)] transition-all duration-300 hover:scale-105 text-white">
                     <Link href="/tournaments" className="flex items-center group">
                       Browse <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
                     </Link>
@@ -278,7 +278,7 @@ function FeaturedTournamentCard({ tournament, index }: { tournament: ITournament
         </div>
       </CardContent>
       <CardFooter className="p-6 pt-0 flex justify-center">
-        <Button asChild className="btn-zodiac w-auto">
+        <Button asChild className="bg-primary text-primary-foreground hover:bg-primary/90 w-auto">
           <Link href={`/tournaments/${tournament.id}`}>{t('view_tournament')}
             <ArrowRight className="ml-3 h-4 w-4" />
           </Link>
@@ -309,7 +309,7 @@ function MiniTourLobbyCard({ lobby, index }: { lobby: MiniTourLobby, index: numb
 
   return (
     <Card
-      className="overflow-hidden card-hover-effect bg-card shadow-sm border border-white/10 animate-fade-in-up"
+      className="overflow-hidden transition-all hover:shadow-md hover:-translate-y-1 bg-card shadow-sm border border-white/10 animate-fade-in-up"
       style={{ animationDelay: `${index * 100}ms` }}
     >
       <div className="h-1 bg-gradient-to-r from-primary/50 to-primary" />
@@ -361,7 +361,7 @@ function MiniTourLobbyCard({ lobby, index }: { lobby: MiniTourLobby, index: numb
         </div>
 
         <div className="flex pt-2 justify-center">
-          <Button asChild className={`btn-zodiac w-auto ${lobby.status === "IN_PROGRESS" ? "opacity-90" : ""}`}>
+          <Button asChild className={`bg-primary text-primary-foreground hover:bg-primary/90 w-auto ${lobby.status === "IN_PROGRESS" ? "opacity-90" : ""}`}>
             <Link href={`/minitour/lobbies/${lobby.id}`}>
               {lobby.status === "WAITING"
                 ? t('join_lobby', { defaultValue: 'Join Lobby' })

@@ -531,7 +531,7 @@ function MultiMatchView({
                         <div className="flex shrink-0 items-center justify-end gap-2">
                           {detailHref && (
                             <NextLink href={detailHref}>
-                              <Button size="sm" className="btn-zodiac text-white font-semibold text-xs h-8 shadow-md">
+                              <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90 text-white font-semibold text-xs h-8 shadow-md">
                                 <Eye className="h-3.5 w-3.5 mr-1" />
                                 {t('view_detail')}
                               </Button>
@@ -683,7 +683,7 @@ function RegularGroupsView({
 
                   return (
                     <NextLink href={href}>
-                      <Button size="sm" variant={isPending ? "secondary" : "default"} className="btn-zodiac text-white font-semibold text-xs h-8 shadow-md">
+                      <Button size="sm" variant={isPending ? "secondary" : "default"} className="bg-primary text-primary-foreground hover:bg-primary/90 text-white font-semibold text-xs h-8 shadow-md">
                         {group.status === "completed" || group.status === "FINISHED" ? t("view_all_results")
                           : group.status === "in_progress" || group.status === "PLAYING" ? t("live_scoreboard")
                             : t("view_all_details")}

@@ -118,7 +118,7 @@ export default function PlayersClient() {
             {featured.map((player, index) => (
               <Card
                 key={player.id}
-                className={`card-hover-effect ${
+                className={`transition-all hover:shadow-md hover:-translate-y-1 ${
                   index === 0 ? "border-yellow-500/50 bg-yellow-500/5" :
                   index === 1 ? "border-gray-400/50 bg-gray-400/5" :
                   "border-amber-700/50 bg-amber-700/5"
@@ -339,7 +339,7 @@ export default function PlayersClient() {
 function PlayerCard({ player, showWins = false }: { player: LeaderboardPlayer; showWins?: boolean }) {
   const t = useTranslations('common')
   return (
-    <Card className="card-hover-effect">
+    <Card className="transition-all hover:shadow-md hover:-translate-y-1">
       <CardHeader className="pb-3">
         <div className="flex items-center space-x-3">
           <Avatar className="h-12 w-12">

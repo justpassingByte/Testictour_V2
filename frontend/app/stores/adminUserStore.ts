@@ -111,7 +111,18 @@ interface AdminUserState {
   fetchUsers: () => Promise<void>;
   fetchUserDetail: (id: string) => Promise<void>;
   fetchPartnerDetail: (id: string) => Promise<void>; // Added
-  createUser: (data: { username: string; email: string; password: string; role: string }) => Promise<void>;
+  createUser: (data: {
+    username: string;
+    email?: string;
+    password?: string;
+    role: string;
+    isGuest?: boolean;
+    riotGameName?: string;
+    riotGameTag?: string;
+    region?: string;
+    puuid?: string;
+    discordId?: string;
+  }) => Promise<void>;
   updateUser: (id: string, data: Partial<AdminUserDetail>) => Promise<void>;
   updateTransactionStatus: (id: string, status: string, note?: string) => Promise<void>;
   banUser: (id: string) => Promise<void>;

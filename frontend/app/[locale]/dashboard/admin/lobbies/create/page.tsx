@@ -20,6 +20,65 @@ import { useMiniTourLobbyStore, MiniTourLobby } from "@/app/stores/miniTourLobby
 import { useToast } from "@/components/ui/use-toast"
 import api from "@/app/lib/apiConfig"
 import { RegionSelector } from "@/components/ui/RegionSelector"
+import type { GuideTips } from "@/app/types/guide"
+import { GuideTipsBuilder } from "@/components/guide/GuideTipsBuilder"
+import { GuideTipsRenderer } from "@/components/guide/GuideTipsRenderer"
+
+const emptyGuideTips: GuideTips = {
+  overview: {
+    title: "",
+    description: "",
+    conditions: [],
+    focus: [],
+  },
+  stages: [],
+}
+
+function readGuideTips(settings: MiniTourLobby["settings"] | undefined, rules?: string[]): GuideTips {
+  const rawGuideTips = (settings as any)?.guideTips
+
+  if (rawGuideTips && typeof rawGuideTips === "object") {
+    return rawGuideTips as GuideTips
+  }
+
+  if (typeof rawGuideTips === "string") {
+    try {
+      const parsed = JSON.parse(rawGuideTips)
+      if (parsed && typeof parsed === "object") return parsed as GuideTips
+    } catch {
+      return {
+        ...emptyGuideTips,
+        overview: {
+          ...emptyGuideTips.overview,
+          description: rawGuideTips,
+        },
+      }
+    }
+  }
+
+  const legacyTips = (settings as any)?.tips
+  if (typeof legacyTips === "string" && legacyTips.trim()) {
+    return {
+      ...emptyGuideTips,
+      overview: {
+        ...emptyGuideTips.overview,
+        description: legacyTips,
+      },
+    }
+  }
+
+  if (rules?.length) {
+    return {
+      ...emptyGuideTips,
+      overview: {
+        ...emptyGuideTips.overview,
+        description: rules.join("\n"),
+      },
+    }
+  }
+
+  return emptyGuideTips
+}
 
 export default function CreateOrEditLobbyPage() {
   const router = useRouter()
@@ -50,6 +109,7 @@ export default function CreateOrEditLobbyPage() {
   })
 
   const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [guideTips, setGuideTips] = useState<GuideTips>(emptyGuideTips)
   const [newTagInput, setNewTagInput] = useState<string>("")
   const [selectedImage, setSelectedImage] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
@@ -80,6 +140,7 @@ export default function CreateOrEditLobbyPage() {
               region: (existingLobby as any).region || "APAC",
             })
             setSelectedTags(existingLobby.tags || [])
+            setGuideTips(readGuideTips(existingLobby.settings, existingLobby.rules))
             if (existingLobby.customLogoUrl) {
               setImagePreview(existingLobby.customLogoUrl)
             }
@@ -147,6 +208,7 @@ export default function CreateOrEditLobbyPage() {
         formData.append(key, String(value))
       })
       formData.append("tags", selectedTags.join(','))
+      formData.append("guideTips", JSON.stringify(guideTips))
       if (selectedImage) {
         formData.append("customLogo", selectedImage)
       }
@@ -229,9 +291,10 @@ export default function CreateOrEditLobbyPage() {
 
         <form onSubmit={handleSubmit}>
           <Tabs defaultValue="basic" className="space-y-6">
-            <TabsList className="grid grid-cols-4 w-full">
+            <TabsList className="grid grid-cols-2 md:grid-cols-5 w-full">
               <TabsTrigger value="basic">Basic Info</TabsTrigger>
               <TabsTrigger value="settings">Settings</TabsTrigger>
+              <TabsTrigger value="guide">Guide</TabsTrigger>
               <TabsTrigger value="branding">Branding</TabsTrigger>
               <TabsTrigger value="review">Review</TabsTrigger>
             </TabsList>
@@ -547,6 +610,19 @@ export default function CreateOrEditLobbyPage() {
               </Card>
             </TabsContent>
 
+            <TabsContent value="guide" className="space-y-6">
+              <section className="space-y-4">
+                <div className="space-y-1">
+                  <h2 className="flex items-center text-xl font-semibold">
+                    <Trophy className="mr-2 h-5 w-5 text-primary" />
+                    Tips / Guide Builder
+                  </h2>
+                  <p className="text-sm text-muted-foreground">Nhập guide theo từng block để frontend render rõ ràng và responsive.</p>
+                </div>
+                <GuideTipsBuilder value={guideTips} onChange={setGuideTips} />
+              </section>
+            </TabsContent>
+
             <TabsContent value="branding" className="space-y-6">
               <Card>
                 <CardHeader>
@@ -726,6 +802,11 @@ export default function CreateOrEditLobbyPage() {
                       <p className="text-sm text-muted-foreground">{lobbyData.rules}</p>
                     </div>
                   )}
+
+                  <div className="space-y-2">
+                    <h3 className="font-semibold">Guide Preview</h3>
+                    <GuideTipsRenderer guideTips={guideTips} />
+                  </div>
                 </CardContent>
               </Card>
 

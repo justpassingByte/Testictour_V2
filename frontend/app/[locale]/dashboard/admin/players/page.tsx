@@ -10,9 +10,11 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Search, ArrowUpDown, Loader2, Users, Trophy, Target, TrendingUp, Wallet, History, Coins } from "lucide-react"
+import { Search, ArrowUpDown, Loader2, Users, Trophy, Target, TrendingUp, Wallet, History, Coins, Plus, UserPlus, Gamepad2 } from "lucide-react"
 import api from "@/app/lib/apiConfig"
 import { useTranslations } from "next-intl"
+import AddUserModal, { AddUserData } from "@/components/dashboard/admin/AddUserModal"
+import { toast } from "@/components/ui/use-toast"
 
 interface PlayerDetail {
   id: string
@@ -43,10 +45,12 @@ export default function AdminPlayersPage() {
   const setRoleFilter = useAdminUserStore((s) => s.setRoleFilter)
   const banUser = useAdminUserStore((s) => s.banUser)
   const updateUser = useAdminUserStore((s) => s.updateUser)
+  const createUser = useAdminUserStore((s) => s.createUser)
 
   const [searchQuery, setSearchQuery] = useState("")
   const [sortBy, setSortBy] = useState("username")
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
+  const [openAddUser, setOpenAddUser] = useState(false)
 
   // Player detail sheet
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -58,10 +62,47 @@ export default function AdminPlayersPage() {
   const [balanceType, setBalanceType] = useState<"deposit" | "withdraw">("deposit")
   const [balanceAmount, setBalanceAmount] = useState("")
   const [balanceUpdating, setBalanceUpdating] = useState(false)
+  const [tournaments, setTournaments] = useState<any[]>([])
+  const [lobbies, setLobbies] = useState<any[]>([])
+  const [assignmentOptionsLoading, setAssignmentOptionsLoading] = useState(false)
+  const [selectedTournamentId, setSelectedTournamentId] = useState("")
+  const [selectedLobbyId, setSelectedLobbyId] = useState("")
+  const [joinAsReserve, setJoinAsReserve] = useState(false)
+  const [assigningTournament, setAssigningTournament] = useState(false)
+  const [assigningLobby, setAssigningLobby] = useState(false)
 
   useEffect(() => {
     setRoleFilter("")
   }, [setRoleFilter])
+
+  useEffect(() => {
+    if (!sheetOpen) return
+
+    const fetchAssignmentOptions = async () => {
+      setAssignmentOptionsLoading(true)
+      try {
+        const [tournamentRes, lobbyRes] = await Promise.all([
+          api.get("/tournaments"),
+          api.get("/minitour-lobbies"),
+        ])
+        setTournaments(tournamentRes.data?.tournaments || [])
+        setLobbies(lobbyRes.data?.data || [])
+      } catch (error) {
+        console.error("Failed to fetch assignment options:", error)
+        toast({ title: "Load failed", description: "Could not load tournaments or lobbies.", variant: "destructive" })
+      } finally {
+        setAssignmentOptionsLoading(false)
+      }
+    }
+
+    fetchAssignmentOptions()
+  }, [sheetOpen])
+
+  const handleCreatePlayer = async (data: AddUserData) => {
+    await createUser({ ...data, role: data.role || "user" })
+    setOpenAddUser(false)
+    toast({ title: "Player created", description: `${data.riotGameName || data.username} has been created.` })
+  }
 
   const handlePlayerClick = async (id: string) => {
     setSheetOpen(true)
@@ -135,6 +176,48 @@ export default function AdminPlayersPage() {
     }
   }
 
+  const handleAssignTournament = async () => {
+    if (!selectedPlayer || !selectedTournamentId) return
+
+    setAssigningTournament(true)
+    try {
+      await api.post(`/tournaments/${selectedTournamentId}/assign-player`, {
+        userId: selectedPlayer.id,
+        joinAsReserve,
+      })
+      toast({ title: "Assigned", description: `${selectedPlayer.username} has been assigned to the tournament.` })
+      setSelectedTournamentId("")
+      setJoinAsReserve(false)
+    } catch (error: any) {
+      toast({
+        title: "Assign failed",
+        description: error?.message || "Could not assign player to tournament.",
+        variant: "destructive",
+      })
+    } finally {
+      setAssigningTournament(false)
+    }
+  }
+
+  const handleAssignLobby = async () => {
+    if (!selectedPlayer || !selectedLobbyId) return
+
+    setAssigningLobby(true)
+    try {
+      await api.post(`/minitour-lobbies/${selectedLobbyId}/assign-player`, { userId: selectedPlayer.id })
+      toast({ title: "Assigned", description: `${selectedPlayer.username} has been assigned to the lobby.` })
+      setSelectedLobbyId("")
+    } catch (error: any) {
+      toast({
+        title: "Assign failed",
+        description: error?.message || "Could not assign player to lobby.",
+        variant: "destructive",
+      })
+    } finally {
+      setAssigningLobby(false)
+    }
+  }
+
   const filteredUsers = users
     .filter((u) => {
       const matchesSearch =
@@ -179,9 +262,14 @@ export default function AdminPlayersPage() {
 
   return (
     <div className="p-6 lg:p-8 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">{t("players_and_users", { defaultValue: "Players & Users" })}</h1>
-        <p className="text-muted-foreground text-sm">{t("manage_user_accounts", { defaultValue: "Manage all user accounts. Click a row to view details." })}</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">{t("players_and_users", { defaultValue: "Players & Users" })}</h1>
+          <p className="text-muted-foreground text-sm">{t("manage_user_accounts", { defaultValue: "Manage all user accounts. Click a row to view details." })}</p>
+        </div>
+        <Button onClick={() => setOpenAddUser(true)}>
+          <Plus className="mr-2 h-4 w-4" /> Create Player
+        </Button>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">
@@ -456,6 +544,67 @@ export default function AdminPlayersPage() {
                   </CardContent>
                 </Card>
 
+                <Card className="bg-card/60 border-white/10">
+                  <CardContent className="p-4 space-y-4">
+                    <div>
+                      <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Assignments</h4>
+                      <p className="text-xs text-muted-foreground">Assign this player to active tournaments or MiniTour lobbies.</p>
+                    </div>
+                    {assignmentOptionsLoading ? (
+                      <div className="flex items-center justify-center py-6 text-muted-foreground">
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading options...
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                            <Trophy className="h-3.5 w-3.5" /> Tournament
+                          </label>
+                          <div className="flex gap-2">
+                            <Select value={selectedTournamentId} onValueChange={setSelectedTournamentId}>
+                              <SelectTrigger className="min-w-0 flex-1"><SelectValue placeholder="Select tournament" /></SelectTrigger>
+                              <SelectContent>
+                                {tournaments.map((tournament) => (
+                                  <SelectItem key={tournament.id} value={tournament.id}>
+                                    {tournament.name} ({tournament.registered || tournament.actualParticipantsCount || 0}/{tournament.maxPlayers})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Button onClick={handleAssignTournament} disabled={!selectedTournamentId || assigningTournament}>
+                              {assigningTournament ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+                            </Button>
+                          </div>
+                          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <input type="checkbox" checked={joinAsReserve} onChange={(e) => setJoinAsReserve(e.target.checked)} /> Assign as reserve
+                          </label>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                            <Gamepad2 className="h-3.5 w-3.5" /> MiniTour Lobby
+                          </label>
+                          <div className="flex gap-2">
+                            <Select value={selectedLobbyId} onValueChange={setSelectedLobbyId}>
+                              <SelectTrigger className="min-w-0 flex-1"><SelectValue placeholder="Select lobby" /></SelectTrigger>
+                              <SelectContent>
+                                {lobbies.map((lobby) => (
+                                  <SelectItem key={lobby.id} value={lobby.id}>
+                                    {lobby.name} ({lobby.currentPlayers}/{lobby.maxPlayers})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Button onClick={handleAssignLobby} disabled={!selectedLobbyId || assigningLobby}>
+                              {assigningLobby ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
                 {/* Recent Transactions */}
                 {selectedPlayer.transactions && selectedPlayer.transactions.length > 0 && (
                   <div className="space-y-3">
@@ -512,6 +661,12 @@ export default function AdminPlayersPage() {
           )}
         </SheetContent>
       </Sheet>
+
+      <AddUserModal
+        open={openAddUser}
+        onClose={() => setOpenAddUser(false)}
+        onCreate={handleCreatePlayer}
+      />
     </div>
   )
 }

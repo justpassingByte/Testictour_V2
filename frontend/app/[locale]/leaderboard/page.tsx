@@ -1,5 +1,4 @@
 import { Suspense } from "react"
-import { getTranslations } from 'next-intl/server';
 
 export const metadata = {
   title: "Global Leaderboard - TesTicTour",
@@ -10,8 +9,6 @@ export const metadata = {
 import LeaderboardClient from "./components/LeaderboardClient"
 
 export default async function LeaderboardPage() {
-  const t = await getTranslations('common');
-  
   return (
     <Suspense fallback={<LeaderboardSkeleton />}>
       <LeaderboardClient />

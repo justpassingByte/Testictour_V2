@@ -25,13 +25,13 @@ const RedditIcon = ({ className }: { className?: string }) => (
 export async function Footer() {
   const locale = await getLocale()
   return (
-    <footer className="border-t bg-background/50 backdrop-blur supports-[backdrop-filter]:bg-background/20 mt-12">
+    <footer className="border-t bg-background mt-12">
       <div className="container py-12 md:py-16">
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 md:gap-12">
           {/* Brand & Social */}
           <div className="flex flex-col gap-4 lg:col-span-2">
             <Link href="/" className="flex items-center">
-              <span className="text-2xl font-bold tracking-tighter gradient-text">TesticTour</span>
+              <span className="text-2xl font-bold tracking-tighter text-foreground">TesticTour</span>
             </Link>
             <p className="text-sm text-muted-foreground leading-relaxed max-w-sm">
               The premier tournament platform for Teamfight Tactics players. Join competitions, track your performance, and climb the leaderboards.
@@ -80,14 +80,14 @@ export async function Footer() {
 
           <div className="flex flex-col gap-3">
             <h2 className="font-semibold text-foreground">Community & Partners</h2>
-            <Link href="/organize" className="text-sm text-[#D4B263] hover:text-[#f4d17f] transition-colors font-medium">Partner Program</Link>
+            <Link href="/organize" className="text-sm text-primary hover:text-primary/80 transition-colors font-medium">Partner Program</Link>
             <Link href="https://discord.com/invite/R3rez3qDbf" target="_blank" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Join Discord</Link>
             <Link href="/jobs" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Careers / Jobs</Link>
           </div>
 
           <div className="flex flex-col gap-3">
             <h2 className="font-semibold text-foreground">Legal</h2>
-            <Link href="/terms/escrow" className="text-sm text-[#D4B263] hover:text-[#f4d17f] transition-colors font-medium">
+            <Link href="/terms/escrow" className="text-sm text-primary hover:text-primary/80 transition-colors font-medium">
               {locale === 'vi' ? 'Quy Định Ký Quỹ Giải Đấu' : 'Tournament Escrow Policy'}
             </Link>
             <Link href="/terms/privacy" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Privacy Policy</Link>

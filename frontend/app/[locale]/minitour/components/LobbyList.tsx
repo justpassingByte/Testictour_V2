@@ -54,7 +54,7 @@ function LobbyCard({ lobby }: { lobby: MiniTourLobby }) {
     : "/hero-bg.png";
 
   return (
-    <Card className={`card-hover-effect overflow-hidden flex flex-col ${getThemeStyle(lobby.theme)}`}>
+    <Card className={`transition-all hover:shadow-md hover:-translate-y-1 overflow-hidden flex flex-col ${getThemeStyle(lobby.theme)}`}>
       <div className="relative w-full h-32 bg-muted">
         <Image src={bannerSrc} alt={lobby.name} fill className="object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
@@ -139,7 +139,7 @@ function LobbyCard({ lobby }: { lobby: MiniTourLobby }) {
         <div className="space-y-2">
           <Button
             asChild
-            className={lobby.status === "WAITING" ? "w-full btn-zodiac text-white font-semibold" : "w-full"}
+            className={lobby.status === "WAITING" ? "w-full bg-primary text-primary-foreground hover:bg-primary/90 text-white font-semibold" : "w-full"}
             disabled={lobby.status === "COMPLETED" || lobby.status === "CANCELLED" || lobby.status === "IN_PROGRESS"}
             variant={lobby.status === "IN_PROGRESS" ? "outline" : "default"}
           >
